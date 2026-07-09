@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 
 let db: Database.Database
 
@@ -136,7 +136,7 @@ export function getDeviceId(): string {
   const stmt = db.prepare("SELECT value FROM sync_metadata WHERE key = 'device_id'")
   const row = stmt.get() as { value: string } | undefined
   if (row && row.value) return row.value
-  const deviceId = uuidv4()
+  const deviceId = randomUUID()
   db.prepare("UPDATE sync_metadata SET value = ? WHERE key = 'device_id'").run(deviceId)
   return deviceId
 }
@@ -158,7 +158,7 @@ export function addToOutbox(
   version: number = 1,
 ) {
   const deviceId = getDeviceId()
-  const id = uuidv4()
+  const id = randomUUID()
   db.prepare(`
     INSERT INTO sync_outbox (id, entity_type, entity_id, operation, payload, version, device_id, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
