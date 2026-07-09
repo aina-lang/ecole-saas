@@ -8,8 +8,13 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 jest.mock('bcrypt');
-jest.mock('otplib');
-jest.mock('qrcode');
+jest.mock('otplib', () => ({
+  generateSecret: jest.fn(),
+  verify: jest.fn(),
+}));
+jest.mock('qrcode', () => ({
+  toDataURL: jest.fn(),
+}));
 
 describe('AuthService', () => {
   let service: AuthService;

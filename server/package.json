@@ -85,7 +85,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(otplib|@otplib|@scure|bcrypt)/)"
+      "/node_modules/(?!(otplib|@otplib|@scure|@noble|bcrypt)/)"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
