@@ -16,6 +16,12 @@ interface Api {
     onStatusChanged: (callback: (status: any) => void) => () => void
     onProgress: (callback: (progress: any) => void) => () => void
   }
+  window: {
+    minimize: () => void
+    toggleMaximize: () => void
+    close: () => void
+    isMaximized: () => Promise<boolean>
+  }
 }
 
 declare global {

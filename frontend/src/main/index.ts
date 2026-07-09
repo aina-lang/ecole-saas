@@ -14,7 +14,11 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 600,
     show: false,
+    frame: false,
     autoHideMenuBar: true,
+    transparent: true,
+    backgroundColor: '#00000000',
+    ...(process.platform === 'win32' ? { roundedCorners: true } : {}),
     title: 'Ecole SaaS - Gestion Scolaire',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -95,6 +99,21 @@ function setupIPC() {
     addToOutbox(entry.entityType, entry.entityId, entry.operation, entry.payload, entry.version || 1)
     return { success: true }
   })
+
+  ipcMain.on('window:minimize', () => {
+    mainWindow?.minimize()
+  })
+
+  ipcMain.on('window:toggle-maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
+  })
+
+  ipcMain.on('window:close', () => {
+    mainWindow?.close()
+  })
+
+  ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
 }
 
 app.whenReady().then(async () => {

@@ -35,6 +35,8 @@ client.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error)
 )
 
+export const UNAUTHORIZED_EVENT = 'auth:unauthorized'
+
 client.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -42,7 +44,14 @@ client.interceptors.response.use(
       _retry?: boolean
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const url = originalRequest.url ?? ''
+    const isAuthEndpoint = url.startsWith('/auth/')
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isAuthEndpoint
+    ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
@@ -57,7 +66,7 @@ client.interceptors.response.use(
         isRefreshing = false
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
-        window.location.href = '/login'
+        window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
         return Promise.reject(error)
       }
 
@@ -75,7 +84,7 @@ client.interceptors.response.use(
         processQueue(error)
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
-        window.location.href = '/login'
+        window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
         return Promise.reject(error)
       } finally {
         isRefreshing = false

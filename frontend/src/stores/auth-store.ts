@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import client from '../api/client'
+import client, { UNAUTHORIZED_EVENT } from '../api/client'
 
 interface User {
   id: string
@@ -11,6 +11,15 @@ interface User {
   isActive: boolean
 }
 
+interface RegisterPayload {
+  schoolName: string
+  subdomain: string
+  adminEmail: string
+  adminFirstName: string
+  adminLastName: string
+  adminPassword: string
+}
+
 interface AuthState {
   user: User | null
   accessToken: string | null
@@ -19,6 +28,7 @@ interface AuthState {
   isAuthenticated: boolean
   onboardingCompleted: boolean
   login: (email: string, password: string) => Promise<void>
+  register: (payload: RegisterPayload) => Promise<void>
   logout: () => void
   refreshAuth: () => Promise<void>
   setUser: (user: User) => void
@@ -63,7 +73,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAuthenticated: false
     })
 
-    window.location.href = '/login'
+    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+  },
+
+  register: async (payload: RegisterPayload) => {
+    await client.post('/auth/register', payload)
   },
 
   refreshAuth: async () => {

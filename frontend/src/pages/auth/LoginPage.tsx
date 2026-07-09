@@ -13,7 +13,7 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthShell } from '@/components/auth/AuthShell'
 import { useAuthStore } from '@/stores/auth-store'
 
 const loginSchema = z.object({
@@ -44,26 +44,14 @@ export function LoginPage() {
     try {
       await login(values.email, values.password)
       navigate('/dashboard', { replace: true })
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Email ou mot de passe incorrect'
-      setError(message)
+    } catch {
+      setError('Identifiant ou mot de passe incorrect')
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 dark:from-gray-900 dark:to-gray-800">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="items-center space-y-4 pb-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <span className="text-xl font-bold text-primary-foreground">E</span>
-          </div>
-          <CardTitle className="text-center text-2xl">École SaaS</CardTitle>
-          <p className="text-center text-sm text-muted-foreground">
-            Connectez-vous à votre espace de gestion scolaire
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
+    <AuthShell title="Connexion" subtitle="Connectez-vous à votre espace de gestion scolaire">
+      <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
@@ -154,8 +142,6 @@ export function LoginPage() {
               Créer un compte
             </Link>
           </p>
-        </CardContent>
-      </Card>
-    </div>
+    </AuthShell>
   )
 }

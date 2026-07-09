@@ -24,7 +24,7 @@ export function AppLayout() {
   const title = routeTitles[basePath] || 'École SaaS'
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <Sidebar />
 
       <div

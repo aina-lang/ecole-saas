@@ -1,7 +1,10 @@
-import { BrowserRouter } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '../../components/ui/sonner'
 import { AppRouter } from '../../router'
+import { TitleBar } from '../../components/layout/TitleBar'
+import { UNAUTHORIZED_EVENT } from '../../api/client'
 import './global.css'
 
 const queryClient = new QueryClient({
@@ -14,11 +17,29 @@ const queryClient = new QueryClient({
   }
 })
 
+function AuthListener(): null {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const handler = () => navigate('/login', { replace: true })
+    window.addEventListener(UNAUTHORIZED_EVENT, handler)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handler)
+  }, [navigate])
+
+  return null
+}
+
 function App(): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppRouter />
+        <div className="flex h-screen flex-col overflow-hidden rounded-[14px] bg-background shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+          <TitleBar />
+          <div className="flex-1 overflow-hidden">
+            <AppRouter />
+            <AuthListener />
+          </div>
+        </div>
         <Toaster position="top-right" richColors />
       </BrowserRouter>
     </QueryClientProvider>
