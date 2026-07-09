@@ -7,11 +7,13 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { authenticator } from 'otplib';
+import * as OTPLib from 'otplib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { LoginDto } from './dto/login.dto';
 import { toDataURL } from 'qrcode';
+
+const authenticator = OTPLib.authenticator;
 
 @Injectable()
 export class AuthService {
@@ -175,8 +177,9 @@ export class AuthService {
 
   async setupTwoFactor(userId: string) {
     const secret = authenticator.generateSecret();
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const otpauth = authenticator.keyuri(user.email, 'Ecole-SaaS', secret);
+    const user_ = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user_) throw new UnauthorizedException('Utilisateur non trouvé');
+    const otpauth = authenticator.keyuri(user_.email, 'Ecole-SaaS', secret);
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -188,8 +191,9 @@ export class AuthService {
   }
 
   async verifyTwoFactor(userId: string, token: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const isValid = authenticator.verify({ token, secret: user.twoFactorSecret });
+    const user_ = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user_) throw new UnauthorizedException('Utilisateur non trouvé');
+    const isValid = authenticator.verify({ token, secret: user_.twoFactorSecret });
     if (!isValid) throw new UnauthorizedException('Code 2FA invalide');
 
     await this.prisma.user.update({

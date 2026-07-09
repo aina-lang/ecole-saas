@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsInt, Min, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateSubjectDto {

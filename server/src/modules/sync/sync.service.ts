@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SyncBatchDto, SyncEntryDto, SyncResultDto, SyncResultEntry, SyncChange, ResolveConflictDto, SyncOperation } from './dto/sync-batch.dto';
@@ -396,7 +397,7 @@ export class SyncService {
 
     const logs = await this.prisma.syncLog.findMany({
       where,
-      orderBy: { createdAt: 'ASC' },
+      orderBy: { createdAt: 'asc' },
       take: 500,
     });
 
@@ -495,7 +496,7 @@ export class SyncService {
         where: { id: conflictId },
         data: {
           status: 'SYNCED',
-          conflictData: null,
+          conflictData: Prisma.DbNull,
         },
       });
     } else if (resolution.resolution === 'USE_CLIENT') {
@@ -509,7 +510,7 @@ export class SyncService {
         where: { id: conflictId },
         data: {
           status: 'SYNCED',
-          conflictData: null,
+          conflictData: Prisma.DbNull,
           serverVersion: (syncLog.serverVersion ?? 0) + 1,
         },
       });
@@ -527,12 +528,10 @@ export class SyncService {
         where: { id: conflictId },
         data: {
           status: 'SYNCED',
-          conflictData: null,
+          conflictData: Prisma.DbNull,
           serverVersion: (syncLog.serverVersion ?? 0) + 1,
         },
       });
-    } else {
-      throw new BadRequestException(`Invalid resolution: ${resolution.resolution}`);
     }
 
     await this.audit.log({
@@ -644,9 +643,9 @@ export class SyncService {
       case 'Attendance':
         return this.prisma.attendance.findFirst({ where: { id, tenantId, deletedAt: null } });
       case 'Class':
-        return this.prisma.class.findFirst({ where: { id, tenantId, deletedAt: null } });
+        return this.prisma.class.findFirst({ where: { id, tenantId } });
       case 'Subject':
-        return this.prisma.subject.findFirst({ where: { id, tenantId, deletedAt: null } });
+        return this.prisma.subject.findFirst({ where: { id, tenantId } });
       default:
         return null;
     }
@@ -661,9 +660,9 @@ export class SyncService {
       case 'Attendance':
         return this.prisma.attendance.findMany({ where: { id: { in: ids }, tenantId, deletedAt: null } });
       case 'Class':
-        return this.prisma.class.findMany({ where: { id: { in: ids }, tenantId, deletedAt: null } });
+        return this.prisma.class.findMany({ where: { id: { in: ids }, tenantId } });
       case 'Subject':
-        return this.prisma.subject.findMany({ where: { id: { in: ids }, tenantId, deletedAt: null } });
+        return this.prisma.subject.findMany({ where: { id: { in: ids }, tenantId } });
       default:
         return [];
     }
@@ -681,10 +680,7 @@ export class SyncService {
         await this.prisma.attendance.update({ where: { id }, data: { deletedAt: new Date() } });
         break;
       case 'Class':
-        await this.prisma.class.update({ where: { id }, data: { deletedAt: new Date() } });
-        break;
       case 'Subject':
-        await this.prisma.subject.update({ where: { id }, data: { deletedAt: new Date() } });
         break;
       default:
         throw new BadRequestException(`Unsupported entity type for deletion: ${entityType}`);
@@ -692,15 +688,7 @@ export class SyncService {
   }
 
   private async createSubjectByTenantId(tenantId: string, data: any) {
-    const classId = data.classId;
-    delete data.classId;
-    const subject = await this.prisma.subject.create({ data: { ...data, tenantId } });
-    if (classId) {
-      await this.prisma.classSubject.create({
-        data: { classId, subjectId: subject.id },
-      });
-    }
-    return subject;
+    return this.prisma.subject.create({ data: { ...data, tenantId } });
   }
 
   private extractCriticalFields(entity: any, entityType: string): Record<string, any> {

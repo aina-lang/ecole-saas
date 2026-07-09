@@ -1,11 +1,9 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["rowLevelSecurity"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum SubscriptionPlan {
@@ -174,12 +172,11 @@ model User {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   refreshToken     String?
-  studentLinks     StudentParent[]
+  studentLinks     StudentParent[]  @relation("parentLinks")
   teacher          Teacher?
   messagesSent     Message[]        @relation("sentMessages")
-  messagesReceived Message[]        @relation("receivedMessages")
+  messagesReceived MessageRecipient[]
   auditLogs        AuditLog[]
-  parentStudents   StudentParent[]
 
   @@unique([tenantId, email])
   @@map("users")
@@ -215,7 +212,7 @@ model Student {
   version            Int              @default(1)
   updatedBy          String?
   deviceId           String?
-  parents            StudentParent[]
+  parents            StudentParent[]  @relation("studentParents")
   grades             Grade[]
   attendances        Attendance[]
   payments           Payment[]
@@ -225,11 +222,11 @@ model Student {
 }
 
 model StudentParent {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   studentId String
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student @relation("studentParents", fields: [studentId], references: [id], onDelete: Cascade)
   parentId  String
-  parent    User    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  parent    User    @relation("parentLinks", fields: [parentId], references: [id], onDelete: Cascade)
   relation  String?
   isPrimary Boolean @default(false)
 
@@ -272,11 +269,11 @@ model Subject {
 }
 
 model Teacher {
-  id        String       @id @default(cuid())
+  id        String    @id @default(cuid())
   tenantId  String
-  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId    String       @unique
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   specialty String?
   classes   Class[]
   subjects  Subject[]
@@ -324,7 +321,6 @@ model Attendance {
   date      DateTime
   status    AttendanceStatus @default(PRESENT)
   justification String?
-  justifiedUntil DateTime?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   deletedAt DateTime?
@@ -400,7 +396,7 @@ model MessageRecipient {
   messageId String
   message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
   userId    String
-  user      User          @relation("receivedMessages", fields: [userId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
   status    MessageStatus @default(SENT)
   readAt    DateTime?
   createdAt DateTime      @default(now())
@@ -456,11 +452,12 @@ model SyncDevice {
   id            String   @id @default(cuid())
   tenantId      String
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deviceId      String
+  deviceId      String   @unique
   deviceName    String?
   lastSyncAt    DateTime?
   lastSyncTimestamp DateTime?
   createdAt     DateTime @default(now())
+  syncLogs      SyncLog[]
 
   @@unique([tenantId, deviceId])
   @@map("sync_devices")
@@ -487,16 +484,17 @@ model SyncLog {
 }
 
 model SyncJob {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  jobType   String
-  payload   Json
-  status    String   @default("PENDING")
-  priority  Int      @default(0)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobType    String
+  payload    Json
+  status     String    @default("PENDING")
+  priority   Int       @default(0)
+  retryCount Int       @default(0)
+  createdAt  DateTime  @default(now())
   processedAt DateTime?
-  error     String?
+  error      String?
 
   @@map("sync_jobs")
 }

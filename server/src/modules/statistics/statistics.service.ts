@@ -199,7 +199,7 @@ export class StatisticsService {
       if (!subjectMap.has(g.subjectId)) {
         subjectMap.set(g.subjectId, { name: g.subject.name, values: [], coeffs: [] });
       }
-      const entry = subjectMap.get(g.subjectId);
+      const entry = subjectMap.get(g.subjectId)!;
       entry.values.push(g.value);
       entry.coeffs.push(g.coefficient);
     }
@@ -221,7 +221,7 @@ export class StatisticsService {
       if (!classMap.has(g.student.classId)) {
         classMap.set(g.student.classId, { values: [] });
       }
-      classMap.get(g.student.classId).values.push((g.value / g.maxValue) * 20);
+      classMap.get(g.student.classId)!.values.push((g.value / g.maxValue) * 20);
     }
 
     const classAverages = Array.from(classMap.entries()).map(([classId, data]) => ({

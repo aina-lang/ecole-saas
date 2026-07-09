@@ -78,7 +78,7 @@ export class StudentsService {
         class: { select: { id: true, name: true } },
         parents: {
           include: {
-            parent: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true } },
+            parent: { select: { id: true, firstName: true, lastName: true, email: true } },
           },
         },
       },

@@ -4,6 +4,12 @@ import { AuditService } from '../audit/audit.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 
+interface SubjectAverage {
+  subject: any;
+  average: number;
+  count: number;
+}
+
 @Injectable()
 export class GradesService {
   constructor(
@@ -137,7 +143,7 @@ export class GradesService {
     });
     const studentIds = new Set(students.map((s) => s.id));
 
-    const created = [];
+    const created: any[] = [];
     for (const grade of grades) {
       if (!studentIds.has(grade.studentId)) continue;
 
@@ -235,7 +241,7 @@ export class GradesService {
     };
   }
 
-  async calculateAveragesBySubject(studentId: string, tenantId: string) {
+  async calculateAveragesBySubject(studentId: string, tenantId: string): Promise<SubjectAverage[]> {
     const grades = await this.prisma.grade.findMany({
       where: { studentId, tenantId, deletedAt: null },
       include: { subject: { select: { id: true, name: true, coefficient: true } } },
@@ -247,13 +253,13 @@ export class GradesService {
       if (!subjectMap.has(g.subjectId)) {
         subjectMap.set(g.subjectId, { subject: g.subject, values: [], maxValues: [], coefficients: [] });
       }
-      const entry = subjectMap.get(g.subjectId);
+      const entry = subjectMap.get(g.subjectId)!;
       entry.values.push(g.value);
       entry.maxValues.push(g.maxValue);
       entry.coefficients.push(g.coefficient);
     }
 
-    const result = [];
+    const result: SubjectAverage[] = [];
     for (const [, entry] of subjectMap) {
       const weightedSum = entry.values.reduce((sum, v, i) => sum + (v / entry.maxValues[i]) * 20 * entry.coefficients[i], 0);
       const totalWeight = entry.coefficients.reduce((a, b) => a + b, 0);
