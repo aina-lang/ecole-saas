@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { SyncPage } from '@/pages/sync/SyncPage'
 import { StudentRoutes } from '@/pages/students/StudentRoutes'
@@ -14,9 +15,14 @@ import { AdminRoutes } from '@/pages/administration/AdminRoutes'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const onboardingCompleted = useAuthStore((s) => s.onboardingCompleted)
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  if (!onboardingCompleted) {
+    return <Navigate to="/onboarding" replace />
   }
 
   return <>{children}</>
@@ -26,6 +32,7 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/onboarding" element={<OnboardingPage />} />
       <Route
         path="/"
         element={

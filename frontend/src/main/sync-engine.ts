@@ -134,7 +134,7 @@ export async function performSync(): Promise<{
   let errors = 0
 
   try {
-    const db = getDatabase()
+    const db = await getDatabase()
     const deviceId = getDeviceId()
     const lastSyncTimestamp = getLastSyncTimestamp()
 

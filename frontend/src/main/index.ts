@@ -97,14 +97,14 @@ function setupIPC() {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.ecole-saas')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  getDatabase()
+  await getDatabase()
   setupIPC()
   createWindow()
   startSyncScheduler(30000)

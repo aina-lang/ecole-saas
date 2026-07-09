@@ -17,10 +17,12 @@ interface AuthState {
   refreshToken: string | null
   tenantId: string | null
   isAuthenticated: boolean
+  onboardingCompleted: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   refreshAuth: () => Promise<void>
   setUser: (user: User) => void
+  completeOnboarding: () => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -29,6 +31,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshToken: localStorage.getItem('refreshToken'),
   tenantId: localStorage.getItem('tenantId'),
   isAuthenticated: !!localStorage.getItem('accessToken'),
+  onboardingCompleted: localStorage.getItem('onboardingCompleted') === 'true',
 
   login: async (email: string, password: string) => {
     const { data } = await client.post('/auth/login', { email, password })
@@ -90,5 +93,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user: User) => {
     set({ user })
+  },
+
+  completeOnboarding: () => {
+    localStorage.setItem('onboardingCompleted', 'true')
+    set({ onboardingCompleted: true })
   }
 }))

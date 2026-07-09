@@ -1,23 +1,38 @@
-import Database from 'better-sqlite3'
+import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import { app } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 
-let db: Database.Database
+let db: SqlJsDatabase
+let dbPath: string
 
-export function getDatabase(): Database.Database {
-  if (!db) {
-    const dbPath = join(app.getPath('userData'), 'ecole-saas.db')
-    db = new Database(dbPath)
-    db.pragma('journal_mode = WAL')
-    db.pragma('foreign_keys = ON')
-    initializeSchema()
+export async function getDatabase(): Promise<SqlJsDatabase> {
+  if (db) return db
+
+  const SQL = await initSqlJs()
+  dbPath = join(app.getPath('userData'), 'ecole-saas.db')
+
+  if (existsSync(dbPath)) {
+    const buffer = readFileSync(dbPath)
+    db = new SQL.Database(buffer)
+  } else {
+    db = new SQL.Database()
   }
+
+  initializeSchema()
+  saveDatabase()
   return db
 }
 
+function saveDatabase() {
+  const data = db.export()
+  const buffer = Buffer.from(data)
+  writeFileSync(dbPath, buffer)
+}
+
 function initializeSchema() {
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS sync_outbox (
       id TEXT PRIMARY KEY,
       entity_type TEXT NOT NULL,
@@ -133,21 +148,27 @@ function initializeSchema() {
 }
 
 export function getDeviceId(): string {
-  const stmt = db.prepare("SELECT value FROM sync_metadata WHERE key = 'device_id'")
-  const row = stmt.get() as { value: string } | undefined
-  if (row && row.value) return row.value
+  const stmt = db.exec("SELECT value FROM sync_metadata WHERE key = 'device_id'")
+  if (stmt.length > 0 && stmt[0].values.length > 0 && stmt[0].values[0][0]) {
+    return stmt[0].values[0][0] as string
+  }
   const deviceId = randomUUID()
-  db.prepare("UPDATE sync_metadata SET value = ? WHERE key = 'device_id'").run(deviceId)
+  db.run("UPDATE sync_metadata SET value = ? WHERE key = 'device_id'", [deviceId])
+  saveDatabase()
   return deviceId
 }
 
 export function setLastSyncTimestamp(timestamp: string) {
-  db.prepare("UPDATE sync_metadata SET value = ? WHERE key = 'last_sync_timestamp'").run(timestamp)
+  db.run("UPDATE sync_metadata SET value = ? WHERE key = 'last_sync_timestamp'", [timestamp])
+  saveDatabase()
 }
 
 export function getLastSyncTimestamp(): string | null {
-  const row = db.prepare("SELECT value FROM sync_metadata WHERE key = 'last_sync_timestamp'").get() as { value: string } | undefined
-  return row?.value || null
+  const stmt = db.exec("SELECT value FROM sync_metadata WHERE key = 'last_sync_timestamp'")
+  if (stmt.length > 0 && stmt[0].values.length > 0 && stmt[0].values[0][0]) {
+    return stmt[0].values[0][0] as string
+  }
+  return null
 }
 
 export function addToOutbox(
@@ -159,158 +180,219 @@ export function addToOutbox(
 ) {
   const deviceId = getDeviceId()
   const id = randomUUID()
-  db.prepare(`
-    INSERT INTO sync_outbox (id, entity_type, entity_id, operation, payload, version, device_id, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-  `).run(id, entityType, entityId, operation, JSON.stringify(payload), version, deviceId)
+  db.run(
+    'INSERT INTO sync_outbox (id, entity_type, entity_id, operation, payload, version, device_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, entityType, entityId, operation, JSON.stringify(payload), version, deviceId, 'pending'],
+  )
+  saveDatabase()
   return id
 }
 
 export function getPendingEntries(limit: number = 500): any[] {
-  return db.prepare(`
-    SELECT * FROM sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?
-  `).all(limit)
+  const stmt = db.exec(
+    `SELECT * FROM sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ${limit}`,
+  )
+  return parseResults(stmt)
 }
 
 export function markEntrySynced(id: string, serverId?: string) {
-  db.prepare(`
-    UPDATE sync_outbox SET status = 'synced', synced_at = datetime('now') WHERE id = ?
-  `).run(id)
+  db.run("UPDATE sync_outbox SET status = 'synced', synced_at = datetime('now') WHERE id = ?", [id])
   if (serverId) {
-    const entry = db.prepare('SELECT entity_type, entity_id FROM sync_outbox WHERE id = ?').get(id) as any
-    if (entry) {
-      db.prepare(`
-        INSERT OR REPLACE INTO id_mappings (local_id, server_id, entity_type) VALUES (?, ?, ?)
-      `).run(entry.entity_id, serverId, entry.entity_type)
+    const stmt = db.exec('SELECT entity_type, entity_id FROM sync_outbox WHERE id = ?', [id])
+    if (stmt.length > 0 && stmt[0].values.length > 0) {
+      const entityId = stmt[0].values[0][1] as string
+      const entityType = stmt[0].values[0][0] as string
+      db.run(
+        'INSERT OR REPLACE INTO id_mappings (local_id, server_id, entity_type) VALUES (?, ?, ?)',
+        [entityId, serverId, entityType],
+      )
     }
   }
+  saveDatabase()
 }
 
 export function markEntryConflict(id: string, errorMessage: string) {
-  db.prepare(`
-    UPDATE sync_outbox SET status = 'conflict', error_message = ? WHERE id = ?
-  `).run(errorMessage, id)
+  db.run("UPDATE sync_outbox SET status = 'conflict', error_message = ? WHERE id = ?", [
+    errorMessage,
+    id,
+  ])
+  saveDatabase()
 }
 
 export function markEntryError(id: string, errorMessage: string) {
-  db.prepare(`
-    UPDATE sync_outbox SET status = 'error', error_message = ? WHERE id = ?
-  `).run(errorMessage, id)
+  db.run("UPDATE sync_outbox SET status = 'error', error_message = ? WHERE id = ?", [
+    errorMessage,
+    id,
+  ])
+  saveDatabase()
 }
 
 export function getConflictCount(): number {
-  const row = db.prepare("SELECT COUNT(*) as count FROM sync_outbox WHERE status = 'conflict'").get() as { count: number }
-  return row.count
+  const stmt = db.exec("SELECT COUNT(*) as count FROM sync_outbox WHERE status = 'conflict'")
+  if (stmt.length > 0 && stmt[0].values.length > 0) {
+    return stmt[0].values[0][0] as number
+  }
+  return 0
 }
 
 export function getPendingCount(): number {
-  const row = db.prepare("SELECT COUNT(*) as count FROM sync_outbox WHERE status = 'pending'").get() as { count: number }
-  return row.count
+  const stmt = db.exec("SELECT COUNT(*) as count FROM sync_outbox WHERE status = 'pending'")
+  if (stmt.length > 0 && stmt[0].values.length > 0) {
+    return stmt[0].values[0][0] as number
+  }
+  return 0
 }
 
 export function getConflicts(): any[] {
-  return db.prepare("SELECT * FROM sync_outbox WHERE status = 'conflict' ORDER BY created_at DESC").all()
+  const stmt = db.exec("SELECT * FROM sync_outbox WHERE status = 'conflict' ORDER BY created_at DESC")
+  return parseResults(stmt)
 }
 
 export function getServerId(localId: string): string | null {
-  const row = db.prepare('SELECT server_id FROM id_mappings WHERE local_id = ?').get(localId) as { server_id: string } | undefined
-  return row?.server_id || null
+  const stmt = db.exec('SELECT server_id FROM id_mappings WHERE local_id = ?', [localId])
+  if (stmt.length > 0 && stmt[0].values.length > 0) {
+    return stmt[0].values[0][0] as string
+  }
+  return null
 }
 
 export function saveLocalStudents(students: any[]) {
-  const upsert = db.prepare(`
-    INSERT INTO students_local (id, registration_number, first_name, last_name, birth_date, birth_place, gender, nationality, address, phone_number, email, photo_url, blood_type, medical_notes, allergies, emergency_contact, emergency_phone, status, class_id, enrollment_date, version, updated_by, device_id, updated_at, synced)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)
-    ON CONFLICT(id) DO UPDATE SET
-      first_name = excluded.first_name,
-      last_name = excluded.last_name,
-      status = excluded.status,
-      class_id = excluded.class_id,
-      version = excluded.version,
-      updated_at = datetime('now'),
-      synced = 1
-  `)
-  const tx = db.transaction((students: any[]) => {
+  const tx = () => {
     for (const s of students) {
-      upsert.run(
-        s.id, s.registrationNumber, s.firstName, s.lastName, s.birthDate, s.birthPlace,
-        s.gender, s.nationality, s.address, s.phoneNumber, s.email, s.photoUrl,
-        s.bloodType, s.medicalNotes, s.allergies, s.emergencyContact, s.emergencyPhone,
-        s.status, s.classId, s.enrollmentDate, s.version || 1, s.updatedBy, s.deviceId
+      db.run(
+        `INSERT OR REPLACE INTO students_local (id, registration_number, first_name, last_name, birth_date, birth_place, gender, nationality, address, phone_number, email, photo_url, blood_type, medical_notes, allergies, emergency_contact, emergency_phone, status, class_id, enrollment_date, version, updated_by, device_id, updated_at, synced)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)`,
+        [
+          s.id,
+          s.registrationNumber,
+          s.firstName,
+          s.lastName,
+          s.birthDate || null,
+          s.birthPlace || null,
+          s.gender || null,
+          s.nationality || null,
+          s.address || null,
+          s.phoneNumber || null,
+          s.email || null,
+          s.photoUrl || null,
+          s.bloodType || null,
+          s.medicalNotes || null,
+          s.allergies || null,
+          s.emergencyContact || null,
+          s.emergencyPhone || null,
+          s.status || 'ACTIVE',
+          s.classId || null,
+          s.enrollmentDate || null,
+          s.version || 1,
+          s.updatedBy || null,
+          s.deviceId || null,
+        ],
       )
     }
-  })
-  tx(students)
+  }
+  tx()
+  saveDatabase()
 }
 
 export function getLocalStudents(filters?: any): any[] {
   let query = "SELECT * FROM students_local WHERE deleted_at IS NULL"
   const params: any[] = []
   if (filters?.classId) {
-    query += " AND class_id = ?"
+    query += ' AND class_id = ?'
     params.push(filters.classId)
   }
   if (filters?.search) {
-    query += " AND (first_name LIKE ? OR last_name LIKE ? OR registration_number LIKE ?)"
+    query += ' AND (first_name LIKE ? OR last_name LIKE ? OR registration_number LIKE ?)'
     const search = `%${filters.search}%`
     params.push(search, search, search)
   }
-  query += " ORDER BY last_name ASC"
-  return db.prepare(query).all(...params)
+  query += ' ORDER BY last_name ASC'
+  const stmt = db.exec(query, params)
+  return parseResults(stmt).map(mapStudentRow)
+}
+
+function mapStudentRow(row: any): any {
+  return {
+    id: row.id,
+    registrationNumber: row.registration_number,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    birthDate: row.birth_date,
+    gender: row.gender,
+    status: row.status,
+    classId: row.class_id,
+    phoneNumber: row.phone_number,
+    email: row.email,
+  }
+}
+
+function parseResults(stmts: any[]): any[] {
+  if (stmts.length === 0) return []
+  const stmt = stmts[0]
+  if (!stmt.columns || !stmt.values) return []
+  const columns = stmt.columns as string[]
+  return stmt.values.map((row: any[]) => {
+    const obj: any = {}
+    columns.forEach((col: string, i: number) => {
+      obj[col] = row[i]
+    })
+    return obj
+  })
 }
 
 export function saveLocalGrades(grades: any[]) {
-  const upsert = db.prepare(`
-    INSERT INTO grades_local (id, tenant_id, student_id, subject_id, teacher_id, period_id, value, max_value, coefficient, evaluation_type, evaluation_label, comment, semester, is_published, version, updated_by, device_id, updated_at, synced)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)
-    ON CONFLICT(id) DO UPDATE SET
-      value = excluded.value,
-      max_value = excluded.max_value,
-      coefficient = excluded.coefficient,
-      evaluation_label = excluded.evaluation_label,
-      comment = excluded.comment,
-      is_published = excluded.is_published,
-      version = excluded.version,
-      updated_at = datetime('now'),
-      synced = 1
-  `)
-  const tx = db.transaction((grades: any[]) => {
-    for (const g of grades) {
-      upsert.run(
-        g.id, g.tenantId, g.studentId, g.subjectId, g.teacherId, g.periodId,
-        g.value, g.maxValue, g.coefficient, g.evaluationType, g.evaluationLabel,
-        g.comment, g.semester, g.isPublished ? 1 : 0,
-        g.version || 1, g.updatedBy, g.deviceId
-      )
-    }
-  })
-  tx(grades)
+  for (const g of grades) {
+    db.run(
+      `INSERT OR REPLACE INTO grades_local (id, tenant_id, student_id, subject_id, teacher_id, period_id, value, max_value, coefficient, evaluation_type, evaluation_label, comment, semester, is_published, version, updated_by, device_id, updated_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)`,
+      [
+        g.id,
+        g.tenantId || null,
+        g.studentId,
+        g.subjectId,
+        g.teacherId || null,
+        g.periodId || null,
+        g.value,
+        g.maxValue || 20,
+        g.coefficient || 1,
+        g.evaluationType || 'EXAM',
+        g.evaluationLabel || null,
+        g.comment || null,
+        g.semester || 1,
+        g.isPublished ? 1 : 0,
+        g.version || 1,
+        g.updatedBy || null,
+        g.deviceId || null,
+      ],
+    )
+  }
+  saveDatabase()
 }
 
 export function saveLocalAttendance(records: any[]) {
-  const upsert = db.prepare(`
-    INSERT INTO attendance_local (id, tenant_id, student_id, date, status, justification, version, updated_by, device_id, updated_at, synced)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)
-    ON CONFLICT(id) DO UPDATE SET
-      status = excluded.status,
-      justification = excluded.justification,
-      version = excluded.version,
-      updated_at = datetime('now'),
-      synced = 1
-  `)
-  const tx = db.transaction((records: any[]) => {
-    for (const r of records) {
-      upsert.run(
-        r.id, r.tenantId, r.studentId, r.date, r.status, r.justification,
-        r.version || 1, r.updatedBy, r.deviceId
-      )
-    }
-  })
-  tx(records)
+  for (const r of records) {
+    db.run(
+      `INSERT OR REPLACE INTO attendance_local (id, tenant_id, student_id, date, status, justification, version, updated_by, device_id, updated_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)`,
+      [
+        r.id,
+        r.tenantId || null,
+        r.studentId,
+        r.date,
+        r.status || 'PRESENT',
+        r.justification || null,
+        r.version || 1,
+        r.updatedBy || null,
+        r.deviceId || null,
+      ],
+    )
+  }
+  saveDatabase()
 }
 
 export function closeDatabase() {
   if (db) {
+    saveDatabase()
     db.close()
   }
 }
