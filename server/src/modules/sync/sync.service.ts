@@ -1,8 +1,7 @@
-import { Injectable, Logger, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { SyncBatchDto, SyncEntryDto, SyncResultDto, SyncResultEntry, SyncChange, ResolveConflictDto } from './dto/sync-batch.dto';
-import { SyncOperation, SyncStatus } from '@prisma/client';
+import { SyncBatchDto, SyncEntryDto, SyncResultDto, SyncResultEntry, SyncChange, ResolveConflictDto, SyncOperation } from './dto/sync-batch.dto';
 
 const CRITICAL_FIELDS: Record<string, string[]> = {
   Grade: ['value', 'maxValue', 'coefficient'],
@@ -86,7 +85,7 @@ export class SyncService {
     });
 
     if (existingMapping) {
-      const existingRecord = await this.findEntityById(tenantId, entityType, existingMapping.entityId);
+      const existingRecord = await this.getEntityById(tenantId, entityType, existingMapping.entityId);
       if (existingRecord) {
         return {
           localId,
@@ -117,7 +116,7 @@ export class SyncService {
     await this.prisma.syncLog.create({
       data: {
         tenantId,
-        deviceId,
+        deviceId: entry.deviceId,
         entityType,
         entityId: entity.id,
         operation: 'CREATE',
@@ -131,7 +130,7 @@ export class SyncService {
       await this.prisma.syncLog.create({
         data: {
           tenantId,
-          deviceId,
+          deviceId: entry.deviceId,
           entityType: `${entityType}_ID_MAP`,
           entityId: localId,
           operation: 'CREATE',
@@ -147,7 +146,7 @@ export class SyncService {
       action: 'SYNC_CREATE',
       entityType,
       entityId: entity.id,
-      metadata: { localId, deviceId },
+      metadata: { localId, deviceId: entry.deviceId },
       newValue: entry.payload,
     });
 
@@ -177,7 +176,7 @@ export class SyncService {
     if (entry.version > 0 && entry.version < currentVersion) {
       const conflict = await this.detectConflict(tenantId, entityType, serverId, entry);
       if (conflict) {
-        await this.markConflict(tenantId, deviceId, entityType, serverId, entry, currentVersion, conflict);
+        await this.markConflict(tenantId, entry.deviceId, entityType, serverId, entry, currentVersion, conflict);
         return {
           localId: entry.localId,
           serverId,
@@ -192,7 +191,7 @@ export class SyncService {
     const hasCriticalChanges = criticalFields.some((field) => field in (entry.payload || {}));
 
     if (hasCriticalChanges && currentVersion > 0 && entry.version !== currentVersion) {
-      const serverEntity = await this.findEntityById(tenantId, entityType, serverId);
+      const serverEntity = await this.getEntityById(tenantId, entityType, serverId);
       if (serverEntity) {
         const conflict = {
           type: 'CRITICAL_FIELD_CONFLICT',
@@ -403,14 +402,14 @@ export class SyncService {
 
     const entityIdsByType = new Map<string, Set<string>>();
     for (const log of logs) {
-      if (!entityTypeByType.has(log.entityType)) {
-        entityTypeByType.set(log.entityType, new Set());
+      if (!entityIdsByType.has(log.entityType)) {
+        entityIdsByType.set(log.entityType, new Set());
       }
-      entityTypeByType.get(log.entityType).add(log.entityId);
+      entityIdsByType.get(log.entityType)!.add(log.entityId);
     }
 
     const serverDataCache = new Map<string, Map<string, any>>();
-    for (const [entityType, ids] of entityTypeByType) {
+    for (const [entityType, ids] of entityIdsByType) {
       if (entityType.endsWith('_Local_MAP')) continue;
       try {
         const entities = await this.getEntitiesByIds(tenantId, entityType, Array.from(ids));

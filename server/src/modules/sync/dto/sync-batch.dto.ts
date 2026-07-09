@@ -1,6 +1,11 @@
 import { IsString, IsEnum, IsObject, IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SyncOperation } from '@prisma/client';
+
+export enum SyncOperation {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+}
 
 export class SyncEntryDto {
   @IsString()
