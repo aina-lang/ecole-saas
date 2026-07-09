@@ -1,19 +1,9 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
-import {
-  PersonIcon,
-  ReaderIcon,
-  BellIcon,
-  StarIcon
-} from '@radix-ui/react-icons'
+import { PersonIcon, ReaderIcon, BellIcon, StarIcon } from '@radix-ui/react-icons'
 import { Link } from 'react-router-dom'
 
 const stats = [
@@ -58,7 +48,7 @@ const recentActivity = [
 const quickActions = [
   { label: 'Inscrire un élève', path: '/students/new', variant: 'default' as const },
   { label: 'Ajouter des notes', path: '/grades', variant: 'outline' as const },
-  { label: 'Faire l\'appel', path: '/attendance', variant: 'outline' as const },
+  { label: "Faire l'appel", path: '/attendance', variant: 'outline' as const },
   { label: 'Envoyer un message', path: '/communications', variant: 'outline' as const }
 ]
 
@@ -71,9 +61,7 @@ export function DashboardPage() {
         <h2 className="text-2xl font-bold tracking-tight">
           Bonjour, {user?.firstName || 'Utilisateur'}
         </h2>
-        <p className="text-muted-foreground">
-          Voici un aperçu de votre établissement aujourd'hui.
-        </p>
+        <p className="text-muted-foreground">Voici un aperçu de votre établissement aujourd'hui.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -107,17 +95,13 @@ export function DashboardPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm font-medium">{item.action}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.detail}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{item.detail}</p>
                     </div>
                     <Badge variant="secondary" className="shrink-0 text-[10px]">
                       {item.time}
                     </Badge>
                   </div>
-                  {i < recentActivity.length - 1 && (
-                    <Separator className="mt-3" />
-                  )}
+                  {i < recentActivity.length - 1 && <Separator className="mt-3" />}
                 </div>
               ))}
             </div>
@@ -131,12 +115,7 @@ export function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
               {quickActions.map((action) => (
-                <Button
-                  key={action.label}
-                  variant={action.variant}
-                  asChild
-                  className="h-20"
-                >
+                <Button key={action.label} variant={action.variant} asChild className="h-20">
                   <Link to={action.path}>{action.label}</Link>
                 </Button>
               ))}

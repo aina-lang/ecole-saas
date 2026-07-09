@@ -23,8 +23,7 @@ export const useSyncStore = create<SyncState>((set) => ({
 
   setOnline: (online: boolean) => set({ isOnline: online }),
 
-  incrementPending: () =>
-    set((state) => ({ pendingCount: state.pendingCount + 1 })),
+  incrementPending: () => set((state) => ({ pendingCount: state.pendingCount + 1 })),
 
   decrementPending: () =>
     set((state) => ({

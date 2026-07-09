@@ -7,30 +7,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(
-  date: string | Date,
-  dateFormat: string = 'dd/MM/yyyy'
-): string {
+export function formatDate(date: string | Date, dateFormat: string = 'dd/MM/yyyy'): string {
   return format(new Date(date), dateFormat, { locale: fr })
 }
 
-export function formatCurrency(
-  amount: number,
-  currency: string = 'XAF'
-): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'decimal',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount) + ` ${currency}`
+export function formatCurrency(amount: number, currency: string = 'XAF'): string {
+  return (
+    new Intl.NumberFormat('fr-FR', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount) + ` ${currency}`
+  )
 }
 
 let counter = 0
 
-export function generateRegistrationNumber(
-  prefix: string = 'STU',
-  year?: number
-): string {
+export function generateRegistrationNumber(prefix: string = 'STU', year?: number): string {
   const currentYear = year ?? new Date().getFullYear()
   const shortYear = currentYear.toString().slice(-2)
   counter++

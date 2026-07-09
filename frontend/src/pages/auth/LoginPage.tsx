@@ -17,10 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/auth-store'
 
 const loginSchema = z.object({
-  email: z
-    .string()
-    .email('Adresse email invalide')
-    .min(1, 'L\'email est requis'),
+  email: z.string().email('Adresse email invalide').min(1, "L'email est requis"),
   password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères')
 })
 
@@ -48,10 +45,7 @@ export function LoginPage() {
       await login(values.email, values.password)
       navigate('/dashboard', { replace: true })
     } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Email ou mot de passe incorrect'
+      const message = err instanceof Error ? err.message : 'Email ou mot de passe incorrect'
       setError(message)
     }
   }
@@ -63,19 +57,14 @@ export function LoginPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
             <span className="text-xl font-bold text-primary-foreground">E</span>
           </div>
-          <CardTitle className="text-center text-2xl">
-            École SaaS
-          </CardTitle>
+          <CardTitle className="text-center text-2xl">École SaaS</CardTitle>
           <p className="text-center text-sm text-muted-foreground">
             Connectez-vous à votre espace de gestion scolaire
           </p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-4"
-            >
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="email"
@@ -120,14 +109,36 @@ export function LoginPage() {
                 </div>
               )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={form.formState.isSubmitting}
-              >
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? (
                   <span className="flex items-center gap-2">
-                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 animate-spin"><path d="M1.84998 7.49998C1.84998 4.66416 4.05979 1.53198 7.49998 1.53198C10.2783 1.53198 12.0406 3.47663 12.8505 5.5M13.15 7.49998C13.15 10.3358 10.9402 13.468 7.49998 13.468C4.72166 13.468 2.95937 11.5234 2.14951 9.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/><path d="M12.5 1.5V5.5H8.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 13.5V9.5H6.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 15 15"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 animate-spin"
+                    >
+                      <path
+                        d="M1.84998 7.49998C1.84998 4.66416 4.05979 1.53198 7.49998 1.53198C10.2783 1.53198 12.0406 3.47663 12.8505 5.5M13.15 7.49998C13.15 10.3358 10.9402 13.468 7.49998 13.468C4.72166 13.468 2.95937 11.5234 2.14951 9.5"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12.5 1.5V5.5H8.5"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M2.5 13.5V9.5H6.5"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                     Connexion...
                   </span>
                 ) : (
@@ -139,10 +150,7 @@ export function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Vous n'avez pas de compte ?{' '}
-            <Link
-              to="/register"
-              className="font-medium text-primary hover:underline"
-            >
+            <Link to="/register" className="font-medium text-primary hover:underline">
               Créer un compte
             </Link>
           </p>

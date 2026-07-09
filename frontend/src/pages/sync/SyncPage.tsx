@@ -26,9 +26,7 @@ export function SyncPage() {
           <CardContent>
             <div className="flex items-center gap-2 text-lg font-bold">
               <span
-                className={`h-3 w-3 rounded-full ${
-                  isOnline ? 'bg-green-500' : 'bg-red-500'
-                }`}
+                className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
               />
               {isOnline ? 'En ligne' : 'Hors ligne'}
             </div>
@@ -71,9 +69,7 @@ export function SyncPage() {
       </Card>
 
       {lastSyncAt && (
-        <p className="text-sm text-muted-foreground">
-          Dernière synchronisation : {lastSyncAt}
-        </p>
+        <p className="text-sm text-muted-foreground">Dernière synchronisation : {lastSyncAt}</p>
       )}
     </div>
   )

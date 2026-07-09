@@ -1,7 +1,4 @@
-import axios, {
-  type AxiosError,
-  type InternalAxiosRequestConfig
-} from 'axios'
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
 const client = axios.create({
   baseURL: 'http://localhost:3000/api/v1',
@@ -65,10 +62,9 @@ client.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(
-          'http://localhost:3000/api/v1/auth/refresh',
-          { refreshToken }
-        )
+        const { data } = await axios.post('http://localhost:3000/api/v1/auth/refresh', {
+          refreshToken
+        })
         const { accessToken, refreshToken: newRefreshToken } = data.data
         localStorage.setItem('accessToken', accessToken)
         localStorage.setItem('refreshToken', newRefreshToken)

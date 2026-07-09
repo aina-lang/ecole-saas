@@ -29,12 +29,7 @@ export function Topbar({ title }: TopbarProps) {
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-4">
       <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          onClick={toggleSidebar}
-        >
+        <Button variant="ghost" size="icon" className="lg:hidden" onClick={toggleSidebar}>
           <HamburgerMenuIcon className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-semibold">{title}</h1>
@@ -45,11 +40,7 @@ export function Topbar({ title }: TopbarProps) {
           {isSyncing ? (
             <ReloadIcon className="h-3.5 w-3.5 animate-spin text-blue-500" />
           ) : (
-            <span
-              className={`h-3 w-3 rounded-full ${
-                isOnline ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            />
+            <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
           )}
           <span className="hidden sm:inline">
             {isSyncing

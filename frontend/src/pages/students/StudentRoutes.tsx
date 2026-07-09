@@ -1,11 +1,15 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { StudentListPage } from './StudentListPage'
+import { StudentFormPage } from './StudentFormPage'
+import { StudentDetailPage } from './StudentDetailPage'
 
 export function StudentRoutes() {
   return (
     <Routes>
-      <Route index element={<div className="text-muted-foreground">Liste des élèves</div>} />
-      <Route path="new" element={<div className="text-muted-foreground">Nouvel élève</div>} />
-      <Route path=":id" element={<div className="text-muted-foreground">Détail élève</div>} />
+      <Route index element={<StudentListPage />} />
+      <Route path="new" element={<StudentFormPage />} />
+      <Route path=":id" element={<StudentDetailPage />} />
+      <Route path=":id/edit" element={<StudentFormPage />} />
       <Route path="*" element={<Navigate to="/students" replace />} />
     </Routes>
   )
