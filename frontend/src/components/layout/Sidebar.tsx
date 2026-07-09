@@ -1,10 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import {
-  HomeIcon,
   PersonIcon,
   ReaderIcon,
   RocketIcon,
-  BellIcon,
   ChatBubbleIcon,
   ValueNoneIcon,
   GearIcon,
@@ -20,15 +18,29 @@ const menuItems = [
   { label: 'Élèves', path: '/students', icon: PersonIcon },
   { label: 'Classes', path: '/classes', icon: ReaderIcon },
   { label: 'Notes', path: '/grades', icon: RocketIcon },
-  { label: 'Présences', path: '/attendance', icon: BellCheck },
+  { label: 'Présences', path: '/attendance', icon: AttendanceIcon },
   { label: 'Communications', path: '/communications', icon: ChatBubbleIcon },
   { label: 'Finances', path: '/finances', icon: ValueNoneIcon },
   { label: 'Administration', path: '/administration', icon: GearIcon },
   { label: 'Synchronisation', path: '/sync', icon: UpdateIcon }
 ]
 
-function HomeDashboardIcon(props: React.ComponentProps<typeof HomeIcon>) {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}><path d="M1 6.5V14H5V9H10V14H14V6.5L7.5 1L1 6.5Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/></svg>
+function HomeDashboardIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M1 6.5V14H5V9H10V14H14V6.5L7.5 1L1 6.5Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function AttendanceIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M3.5 10.5L6.5 13.5L12 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M1 7.5L3.5 10.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 2.5L12 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 export function Sidebar() {

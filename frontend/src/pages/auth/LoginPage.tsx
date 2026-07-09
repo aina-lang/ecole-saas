@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/form'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/auth-store'
-import { ReloadIcon } from '@radix-ui/react-icons'
 
 const loginSchema = z.object({
   email: z
@@ -128,7 +127,7 @@ export function LoginPage() {
               >
                 {form.formState.isSubmitting ? (
                   <span className="flex items-center gap-2">
-                    <ReloadIcon className="h-4 w-4 animate-spin" />
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 animate-spin"><path d="M1.84998 7.49998C1.84998 4.66416 4.05979 1.53198 7.49998 1.53198C10.2783 1.53198 12.0406 3.47663 12.8505 5.5M13.15 7.49998C13.15 10.3358 10.9402 13.468 7.49998 13.468C4.72166 13.468 2.95937 11.5234 2.14951 9.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/><path d="M12.5 1.5V5.5H8.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 13.5V9.5H6.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     Connexion...
                   </span>
                 ) : (

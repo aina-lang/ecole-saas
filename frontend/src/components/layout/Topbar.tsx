@@ -12,7 +12,7 @@ import { useUIStore } from '@/stores/ui-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSyncStore } from '@/stores/sync-store'
 import { getInitials } from '@/lib/utils'
-import { HamburgerMenuIcon, UpdateIcon } from '@radix-ui/react-icons'
+import { HamburgerMenuIcon } from '@radix-ui/react-icons'
 
 interface TopbarProps {
   title: string
@@ -93,11 +93,7 @@ export function Topbar({ title }: TopbarProps) {
   )
 }
 
-function ReloadIcon(props: React.ComponentProps<typeof ReloadIcon>) {
-  return <ReloadIconSvg {...props} />
-}
-
-function ReloadIconSvg(props: React.SVGProps<SVGSVGElement>) {
+function ReloadIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       width="15"
