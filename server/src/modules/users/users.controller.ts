@@ -1,0 +1,42 @@
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
+@Controller('users')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+export class UsersController {
+  constructor(private usersService: UsersService) {}
+
+  @Get()
+  findAll(@CurrentUser('tenantId') tenantId: string) {
+    return this.usersService.findAll(tenantId);
+  }
+
+  @Get(':id')
+  findById(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.usersService.findById(id, tenantId);
+  }
+
+  @Post()
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  create(@CurrentUser('tenantId') tenantId: string, @Body() dto: CreateUserDto) {
+    return this.usersService.create(tenantId, dto);
+  }
+
+  @Patch(':id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  update(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string, @Body() dto: UpdateUserDto) {
+    return this.usersService.update(id, tenantId, dto);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  remove(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.usersService.remove(id, tenantId);
+  }
+}
