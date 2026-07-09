@@ -1,12 +1,30 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Custom APIs for renderer
-const api = {}
+const api = {
+  db: {
+    getStudents: (filters?: any) => ipcRenderer.invoke('db:get-students', filters),
+    saveStudents: (students: any[]) => ipcRenderer.invoke('db:save-students', students),
+    saveGrades: (grades: any[]) => ipcRenderer.invoke('db:save-grades', grades),
+    saveAttendance: (records: any[]) => ipcRenderer.invoke('db:save-attendance', records),
+    addToOutbox: (entry: any) => ipcRenderer.invoke('db:add-to-outbox', entry),
+  },
+  sync: {
+    getStatus: () => ipcRenderer.invoke('sync:status'),
+    forceSync: () => ipcRenderer.invoke('sync:force'),
+    getConflicts: () => ipcRenderer.invoke('sync:conflicts'),
+    addToOutbox: (entry: any) => ipcRenderer.invoke('sync:add-to-outbox', entry),
+    onStatusChanged: (callback: (status: any) => void) => {
+      ipcRenderer.on('sync:status-changed', (_event, data) => callback(data))
+      return () => ipcRenderer.removeAllListeners('sync:status-changed')
+    },
+    onProgress: (callback: (progress: any) => void) => {
+      ipcRenderer.on('sync:progress', (_event, data) => callback(data))
+      return () => ipcRenderer.removeAllListeners('sync:progress')
+    },
+  },
+}
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
@@ -15,8 +33,6 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  ;(window as any).electron = electronAPI
+  ;(window as any).api = api
 }

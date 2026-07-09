@@ -2,23 +2,31 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { getDatabase, closeDatabase, getPendingCount, getConflictCount, getDeviceId, addToOutbox, getLocalStudents, saveLocalStudents, saveLocalGrades, saveLocalAttendance, getConflicts } from './database'
+import { startSyncScheduler, stopSyncScheduler, performSync, getOnlineStatus, checkAndUpdateConnectivity } from './sync-engine'
+
+let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 600,
-    height: 400,
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 1024,
+    minHeight: 600,
     show: false,
     autoHideMenuBar: true,
+    title: 'Ecole SaaS - Gestion Scolaire',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow!.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -26,8 +34,6 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -35,40 +41,83 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+function setupIPC() {
+  ipcMain.handle('db:get-students', async (_event, filters) => {
+    return getLocalStudents(filters)
+  })
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+  ipcMain.handle('db:save-students', async (_event, students) => {
+    saveLocalStudents(students)
+    for (const s of students) {
+      addToOutbox('Student', s.id || s.localId, 'CREATE', s)
+    }
+    return { success: true }
+  })
+
+  ipcMain.handle('db:save-grades', async (_event, grades) => {
+    saveLocalGrades(grades)
+    for (const g of grades) {
+      addToOutbox('Grade', g.id || g.localId, 'CREATE', g)
+    }
+    return { success: true }
+  })
+
+  ipcMain.handle('db:save-attendance', async (_event, records) => {
+    saveLocalAttendance(records)
+    for (const r of records) {
+      addToOutbox('Attendance', r.id || r.localId, 'CREATE', r)
+    }
+    return { success: true }
+  })
+
+  ipcMain.handle('sync:status', async () => {
+    return {
+      isOnline: getOnlineStatus(),
+      pendingCount: getPendingCount(),
+      conflictCount: getConflictCount(),
+      deviceId: getDeviceId(),
+    }
+  })
+
+  ipcMain.handle('sync:force', async () => {
+    return performSync()
+  })
+
+  ipcMain.handle('sync:conflicts', async () => {
+    return getConflicts()
+  })
+
+  ipcMain.handle('sync:add-to-outbox', async (_event, entry) => {
+    return addToOutbox(entry.entityType, entry.entityId, entry.operation, entry.payload, entry.version)
+  })
+
+  ipcMain.handle('db:add-to-outbox', async (_event, entry) => {
+    addToOutbox(entry.entityType, entry.entityId, entry.operation, entry.payload, entry.version || 1)
+    return { success: true }
+  })
+}
+
+app.whenReady().then(() => {
+  electronApp.setAppUserModelId('com.ecole-saas')
+
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
+  getDatabase()
+  setupIPC()
   createWindow()
+  startSyncScheduler(30000)
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  stopSyncScheduler()
+  closeDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app"s specific main process
-// code. You can also put them in separate files and require them here.

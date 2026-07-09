@@ -6,7 +6,7 @@ import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
 import {
   ArchiveIcon,
-  DraftingCompassIcon,
+  Pencil1Icon,
   EnvelopeClosedIcon,
   EnvelopeOpenIcon,
   PaperPlaneIcon,
@@ -28,7 +28,7 @@ type Folder = 'inbox' | 'sent' | 'drafts' | 'archived'
 const folders: { key: Folder; label: string; icon: typeof EnvelopeClosedIcon }[] = [
   { key: 'inbox', label: 'Boîte de réception', icon: EnvelopeClosedIcon },
   { key: 'sent', label: 'Envoyés', icon: PaperPlaneIcon },
-  { key: 'drafts', label: 'Brouillons', icon: DraftingCompassIcon },
+  { key: 'drafts', label: 'Brouillons', icon: Pencil1Icon },
   { key: 'archived', label: 'Archivés', icon: ArchiveIcon }
 ]
 
