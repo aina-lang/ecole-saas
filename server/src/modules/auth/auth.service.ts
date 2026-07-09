@@ -7,13 +7,11 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import * as OTPLib from 'otplib';
+import * as OTPAuth from 'otplib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { LoginDto } from './dto/login.dto';
 import { toDataURL } from 'qrcode';
-
-const authenticator = OTPLib.authenticator;
 
 @Injectable()
 export class AuthService {
@@ -101,7 +99,8 @@ export class AuthService {
     }
 
     if (user.twoFactorEnabled && dto.twoFactorCode) {
-      const isValid = authenticator.verify({
+      if (!user.twoFactorSecret) throw new UnauthorizedException('2FA non configuré');
+      const isValid = OTPAuth.verify({
         token: dto.twoFactorCode,
         secret: user.twoFactorSecret,
       });
@@ -176,24 +175,24 @@ export class AuthService {
   }
 
   async setupTwoFactor(userId: string) {
-    const secret = authenticator.generateSecret();
+    const secret = OTPAuth.generateSecret();
     const user_ = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user_) throw new UnauthorizedException('Utilisateur non trouvé');
-    const otpauth = authenticator.keyuri(user_.email, 'Ecole-SaaS', secret);
 
     await this.prisma.user.update({
       where: { id: userId },
       data: { twoFactorSecret: secret },
     });
 
+    const otpauth = `otpauth://totp/Ecole-SaaS:${encodeURIComponent(user_.email)}?secret=${secret}&issuer=Ecole-SaaS`;
     const qrCode = await toDataURL(otpauth);
     return { secret, qrCode };
   }
 
   async verifyTwoFactor(userId: string, token: string) {
     const user_ = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user_) throw new UnauthorizedException('Utilisateur non trouvé');
-    const isValid = authenticator.verify({ token, secret: user_.twoFactorSecret });
+    if (!user_ || !user_.twoFactorSecret) throw new UnauthorizedException('Utilisateur non trouvé');
+    const isValid = OTPAuth.verify({ token, secret: user_.twoFactorSecret });
     if (!isValid) throw new UnauthorizedException('Code 2FA invalide');
 
     await this.prisma.user.update({

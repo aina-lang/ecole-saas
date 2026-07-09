@@ -4,7 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 
-interface SubjectAverage {
+export interface SubjectAverage {
   subject: any;
   average: number;
   count: number;
