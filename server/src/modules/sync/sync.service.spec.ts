@@ -147,8 +147,11 @@ describe('SyncService', () => {
       expect(result.results[0].status).toBe('SYNCED');
     });
 
-    it('devrait créer un conflit pour UPDATE avec version conflictuelle', async () => {
+    it('devrait traiter UPDATE sans conflit de champ critique (Student) même si version différente', async () => {
       mockPrisma.syncLog.findFirst.mockResolvedValue({ serverVersion: 3, createdAt: new Date() });
+      mockPrisma.student.findFirst.mockResolvedValue({ id: 'stu-1', firstName: 'Ancien', tenantId });
+      mockPrisma.student.update.mockResolvedValue({ id: 'stu-1' });
+      mockPrisma.syncLog.create.mockResolvedValue({});
 
       const result = await service.processBatch(tenantId, userId, {
         deviceId: 'device-1',
@@ -166,7 +169,7 @@ describe('SyncService', () => {
         ],
       });
 
-      expect(result.results[0].status).toBe('CONFLICT');
+      expect(result.results[0].status).toBe('SYNCED');
     });
 
     it('devrait détecter un conflit de champ critique (Grade.value)', async () => {
