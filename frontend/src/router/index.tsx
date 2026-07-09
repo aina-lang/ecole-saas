@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
-import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
+// import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { SyncPage } from '@/pages/sync/SyncPage'
 import { StudentRoutes } from '@/pages/students/StudentRoutes'
@@ -12,6 +12,7 @@ import { AttendanceRoutes } from '@/pages/attendance/AttendanceRoutes'
 import { CommunicationRoutes } from '@/pages/communications/CommunicationRoutes'
 import { FinanceRoutes } from '@/pages/finances/FinanceRoutes'
 import { AdminRoutes } from '@/pages/administration/AdminRoutes'
+import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
