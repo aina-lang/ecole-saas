@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+server/node_modules/
+
+# Build outputs
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/release/
+server/dist/
+server/build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+frontend/.env
+server/.env
+
+# Storage local (fichiers uploadés, pas de service tiers)
+server/storage/
+
+# Base de données locale SQLite (client offline)
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+*.db
+
+# Prisma
+server/prisma/migrations/dev/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Electron
+frontend/out/
+frontend/dist/
+frontend/release/
+
+# Docker volumes
+postgres_data/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE (optionnel - certaines équipes préfèrent versionner .vscode)
+.idea/
+*.iml
+
+# Coverage / tests
+coverage/
+.nyc_output/
+
+# TypeScript build info
+*.tsbuildinfo
