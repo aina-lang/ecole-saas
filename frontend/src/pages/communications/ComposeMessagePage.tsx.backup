@@ -5,8 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Cross2Icon } from '@radix-ui/react-icons'
-import { Send } from 'lucide-react'
+import { Cross2Icon, PaperPlaneIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
 import type { User, ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -311,7 +310,7 @@ export function ComposeMessagePage() {
                   Annuler
                 </Button>
                 <Button type="submit" disabled={sendMutation.isPending} className="gap-2">
-                  <Send className="h-4 w-4" />
+                  <PaperPlaneIcon className="h-4 w-4" />
                   {sendMutation.isPending ? 'Envoi en cours...' : 'Envoyer'}
                 </Button>
               </div>

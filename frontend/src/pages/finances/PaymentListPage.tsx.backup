@@ -6,8 +6,7 @@ import { z } from 'zod'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { Download } from 'lucide-react'
-import { PlusIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
+import { DownloadIcon, PlusIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
 import type { Payment, ApiResponse, PaginatedResponse, Student } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -139,7 +138,7 @@ export function PaymentListPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="gap-2" onClick={() => exportCsv(filters)}>
-            <Download className="h-4 w-4" />
+            <DownloadIcon className="h-4 w-4" />
             Exporter CSV
           </Button>
         </div>

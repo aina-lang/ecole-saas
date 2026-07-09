@@ -9,11 +9,11 @@ import {
   Pencil1Icon,
   EnvelopeClosedIcon,
   EnvelopeOpenIcon,
+  PaperPlaneIcon,
   PlusIcon,
   ReaderIcon,
   TrashIcon
 } from '@radix-ui/react-icons'
-import { Send } from 'lucide-react'
 import client from '@/api/client'
 import type { Message, ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -25,9 +25,9 @@ import { cn } from '@/lib/utils'
 
 type Folder = 'inbox' | 'sent' | 'drafts' | 'archived'
 
-const folders: { key: Folder; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const folders: { key: Folder; label: string; icon: typeof EnvelopeClosedIcon }[] = [
   { key: 'inbox', label: 'Boîte de réception', icon: EnvelopeClosedIcon },
-  { key: 'sent', label: 'Envoyés', icon: Send },
+  { key: 'sent', label: 'Envoyés', icon: PaperPlaneIcon },
   { key: 'drafts', label: 'Brouillons', icon: Pencil1Icon },
   { key: 'archived', label: 'Archivés', icon: ArchiveIcon }
 ]
