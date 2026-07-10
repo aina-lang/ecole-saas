@@ -44,12 +44,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onboardingCompleted: localStorage.getItem('onboardingCompleted') === 'true',
 
   login: async (email: string, password: string) => {
-    const { data } = await client.post('/auth/login', { email, password })
-    const { user, accessToken, refreshToken, tenantId } = data.data
+    const normalizedEmail = email.trim().toLowerCase()
+    console.log('[FRONTEND] login request', { email: normalizedEmail })
+    const { data } = await client.post('/auth/login', {
+      email: normalizedEmail,
+      password
+    })
+    console.log('[FRONTEND] login response', {
+      hasUser: !!data?.user,
+      email: data?.user?.email,
+      hasAccessToken: !!data?.accessToken,
+      tenantId: data?.tenantId ?? data?.user?.tenantId
+    })
+    const { user, accessToken, refreshToken, tenantId } = data
+    const resolvedTenantId = tenantId ?? user?.tenantId
 
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
-    localStorage.setItem('tenantId', tenantId)
+    localStorage.setItem('tenantId', resolvedTenantId)
 
     set({
       user,
@@ -77,7 +89,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async (payload: RegisterPayload) => {
-    await client.post('/auth/register', payload)
+    await client.post('/auth/register', {
+      ...payload,
+      adminEmail: payload.adminEmail.trim().toLowerCase()
+    })
   },
 
   refreshAuth: async () => {
@@ -89,7 +104,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     try {
       const { data } = await client.post('/auth/refresh', { refreshToken })
-      const { accessToken, refreshToken: newRefreshToken, user } = data.data
+      const { accessToken, refreshToken: newRefreshToken, user } = data
 
       localStorage.setItem('accessToken', accessToken)
       localStorage.setItem('refreshToken', newRefreshToken)

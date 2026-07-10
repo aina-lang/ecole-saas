@@ -1,7 +1,6 @@
-import { IsEmail, IsString, IsEnum, MinLength, IsNotEmpty, IsOptional } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { IsEmail, IsString, IsNotEmpty, IsOptional, IsArray, MinLength } from 'class-validator';
 
-export class CreateUserDto {
+export class CreateTeacherDto {
   @IsEmail({}, { message: 'Email invalide' })
   email: string;
 
@@ -17,10 +16,21 @@ export class CreateUserDto {
   @IsNotEmpty({ message: 'Le nom est requis' })
   lastName: string;
 
-  @IsEnum(UserRole, { message: 'Rôle invalide' })
-  role: UserRole;
-
   @IsOptional()
   @IsString()
   phoneNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  specialty?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  classIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  subjectIds?: string[];
 }

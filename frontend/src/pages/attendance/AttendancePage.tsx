@@ -1,15 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { CalendarIcon, Save, Check, X, Clock, Ban } from 'lucide-react'
+import { CalendarIcon, Check, X, Ban, Users } from 'lucide-react'
 
 import client from '@/api/client'
 import type { Student } from '@/types'
 import { cn } from '@/lib/utils'
 
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -17,13 +15,15 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
+type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'EXCUSED'
+
+type StatusFilter = 'ALL' | AttendanceStatus | 'UNMARKED'
 
 interface ClassOption {
   id: string
@@ -33,6 +33,7 @@ interface ClassOption {
 interface StudentAttendanceEntry {
   studentId: string
   studentName: string
+  registrationNumber: string
   status: AttendanceStatus | null
 }
 
@@ -40,28 +41,21 @@ const STATUS_CONFIG: Record<
   AttendanceStatus,
   { label: string; color: string; bg: string; border: string; icon: React.ReactNode }
 > = {
-  present: {
+  PRESENT: {
     label: 'Présent',
     color: 'text-green-700',
     bg: 'bg-green-100',
     border: 'border-green-500',
     icon: <Check className="h-4 w-4" />
   },
-  absent: {
+  ABSENT: {
     label: 'Absent',
     color: 'text-red-700',
     bg: 'bg-red-100',
     border: 'border-red-500',
     icon: <X className="h-4 w-4" />
   },
-  late: {
-    label: 'Retard',
-    color: 'text-orange-700',
-    bg: 'bg-orange-100',
-    border: 'border-orange-500',
-    icon: <Clock className="h-4 w-4" />
-  },
-  excused: {
+  EXCUSED: {
     label: 'Excusé',
     color: 'text-blue-700',
     bg: 'bg-blue-100',
@@ -70,19 +64,12 @@ const STATUS_CONFIG: Record<
   }
 }
 
-const STATUSES: AttendanceStatus[] = ['present', 'absent', 'late', 'excused']
-const STATUS_KEY_MAP: Record<string, AttendanceStatus> = {
-  p: 'present',
-  a: 'absent',
-  l: 'late',
-  e: 'excused'
-}
-
 export function AttendancePage() {
-  const queryClient = useQueryClient()
   const [date, setDate] = useState<Date>(new Date())
   const [classId, setClassId] = useState<string>('')
   const [entries, setEntries] = useState<StudentAttendanceEntry[]>([])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ['classes'],
@@ -115,97 +102,52 @@ export function AttendancePage() {
   })
 
   useEffect(() => {
-    if (students) {
-      const existingMap = new Map(
-        (
-          existingAttendance as Array<{ studentId: string; status: AttendanceStatus }> | undefined
-        )?.map((a) => [a.studentId, a.status]) ?? []
-      )
-      setEntries(
-        students.map((s) => ({
-          studentId: s.id,
-          studentName: `${s.lastName} ${s.firstName}`,
-          status: existingMap.get(s.id) ?? null
-        }))
-      )
-    }
-  }, [students, existingAttendance])
-
-  const submitMutation = useMutation({
-    mutationFn: async (
-      attendanceData: Array<{ studentId: string; status: AttendanceStatus; date: string }>
-    ) => {
-      const res = await client.post('/attendance/bulk', { attendance: attendanceData })
-      return res.data
-    },
-    onSuccess: () => {
-      toast.success('Présences enregistrées avec succès')
-      queryClient.invalidateQueries({ queryKey: ['attendance'] })
-    },
-    onError: () => {
-      toast.error("Erreur lors de l'enregistrement des présences")
-    }
-  })
-
-  function setStatus(studentId: string, status: AttendanceStatus) {
-    setEntries((prev) =>
-      prev.map((e) =>
-        e.studentId === studentId ? { ...e, status: e.status === status ? null : status } : e
-      )
-    )
-  }
-
-  function handleSubmit() {
-    const marked = entries.filter((e) => e.status !== null)
-    if (marked.length === 0) {
-      toast.error('Aucune présence à enregistrer')
+    if (!students) {
+      setEntries([])
       return
     }
 
-    submitMutation.mutate(
-      marked.map((e) => ({
-        studentId: e.studentId,
-        status: e.status!,
-        date: format(date, 'yyyy-MM-dd')
+    const existingMap = new Map(
+      (
+        existingAttendance as Array<{ studentId: string; status: AttendanceStatus }> | undefined
+      )?.map((a) => [a.studentId, a.status]) ?? []
+    )
+
+    setEntries(
+      students.map((s) => ({
+        studentId: s.id,
+        studentName: `${s.lastName} ${s.firstName}`,
+        registrationNumber: s.registrationNumber,
+        status: existingMap.get(s.id) ?? null
       }))
     )
-  }
+  }, [students, existingAttendance])
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const key = e.key.toLowerCase()
-    if (key in STATUS_KEY_MAP) {
-      const focused = document.activeElement as HTMLElement | null
-      if (focused && focused.dataset.studentId) {
-        setStatus(focused.dataset.studentId, STATUS_KEY_MAP[key])
-      }
+  const filteredEntries = entries.filter((entry) => {
+    const query = search.trim().toLowerCase()
+    if (query) {
+      const matchesName = entry.studentName.toLowerCase().includes(query)
+      const matchesMatricule = entry.registrationNumber.toLowerCase().includes(query)
+      if (!matchesName && !matchesMatricule) return false
     }
-  }, [])
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+    if (statusFilter === 'UNMARKED') return entry.status === null
+    if (statusFilter !== 'ALL') return entry.status === statusFilter
+    return true
+  })
 
   const totalStudents = entries.length
-  const presentCount = entries.filter((e) => e.status === 'present').length
-  const absentCount = entries.filter((e) => e.status === 'absent').length
-  const lateCount = entries.filter((e) => e.status === 'late').length
-  const excusedCount = entries.filter((e) => e.status === 'excused').length
-  const markedCount = presentCount + absentCount + lateCount + excusedCount
+  const presentCount = entries.filter((e) => e.status === 'PRESENT').length
+  const absentCount = entries.filter((e) => e.status === 'ABSENT').length
+  const excusedCount = entries.filter((e) => e.status === 'EXCUSED').length
+  const markedCount = presentCount + absentCount + excusedCount
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Appel</h2>
-          <p className="text-muted-foreground">
-            Gérez les présences des élèves par classe et par jour.
-          </p>
-        </div>
-        <Button onClick={handleSubmit} disabled={submitMutation.isPending || markedCount === 0}>
-          <Save className="mr-2 h-4 w-4" />
-          {submitMutation.isPending ? 'Enregistrement...' : 'Enregistrer les présences'}
-        </Button>
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Présences</h2>
+        <p className="text-muted-foreground">
+          Consultez la liste des présences par classe et par jour.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-4 items-end">
@@ -213,18 +155,16 @@ export function AttendancePage() {
           <label className="text-sm font-medium">Date</label>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-start text-left font-normal">
+              <button
+                type="button"
+                className="w-full justify-start text-left font-normal inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {format(date, 'EEEE d MMMM yyyy', { locale: fr })}
-              </Button>
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={(d) => d && setDate(d)}
-                initialFocus
-              />
+              <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus />
             </PopoverContent>
           </Popover>
         </div>
@@ -245,6 +185,32 @@ export function AttendancePage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-4 items-end">
+        <div className="flex-1 min-w-[200px] space-y-1.5">
+          <label className="text-sm font-medium">Rechercher</label>
+          <Input
+            placeholder="Nom ou matricule..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="w-48 space-y-1.5">
+          <label className="text-sm font-medium">Statut</label>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Tous" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tous</SelectItem>
+              <SelectItem value="PRESENT">Présent</SelectItem>
+              <SelectItem value="ABSENT">Absent</SelectItem>
+              <SelectItem value="EXCUSED">Excusé</SelectItem>
+              <SelectItem value="UNMARKED">Non marqué</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {markedCount > 0 && (
         <div className="flex flex-wrap gap-3">
           <Badge variant="secondary" className="gap-1">
@@ -256,10 +222,6 @@ export function AttendancePage() {
             Absents: {absentCount}
           </Badge>
           <Badge variant="secondary" className="gap-1">
-            <Clock className="h-3 w-3 text-orange-600" />
-            Retards: {lateCount}
-          </Badge>
-          <Badge variant="secondary" className="gap-1">
             <Ban className="h-3 w-3 text-blue-600" />
             Excusés: {excusedCount}
           </Badge>
@@ -269,19 +231,11 @@ export function AttendancePage() {
         </div>
       )}
 
-      <div className="text-xs text-muted-foreground flex gap-4 mb-2">
-        <span className="font-medium">Raccourcis:</span>
-        <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">P</kbd> Présent
-        <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">A</kbd> Absent
-        <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">L</kbd> Retard
-        <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">E</kbd> Excusé
-      </div>
-
       <Card>
         <CardContent className="p-4">
           {!classId ? (
             <p className="text-center text-muted-foreground py-12">
-              Sélectionnez une classe pour faire l'appel.
+              Sélectionnez une classe pour consulter les présences.
             </p>
           ) : loadingStudents ? (
             <p className="text-center text-muted-foreground py-12">Chargement des élèves...</p>
@@ -289,60 +243,51 @@ export function AttendancePage() {
             <p className="text-center text-muted-foreground py-12">
               Aucun élève dans cette classe.
             </p>
+          ) : filteredEntries.length === 0 ? (
+            <p className="text-center text-muted-foreground py-12">
+              Aucun résultat pour cette recherche ou ce filtre.
+            </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {entries.map((entry) => (
-                <div
-                  key={entry.studentId}
-                  data-student-id={entry.studentId}
-                  tabIndex={0}
-                  className={cn(
-                    'flex flex-col gap-2 rounded-lg border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    entry.status
-                      ? STATUS_CONFIG[entry.status].bg + ' ' + STATUS_CONFIG[entry.status].border
-                      : 'bg-card hover:bg-accent/50'
-                  )}
-                >
-                  <span className="text-sm font-medium truncate">{entry.studentName}</span>
-                  <div className="flex gap-1">
-                    {STATUSES.map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => setStatus(entry.studentId, status)}
-                        className={cn(
-                          'flex-1 flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all',
-                          entry.status === status
-                            ? STATUS_CONFIG[status].bg +
-                                ' ' +
-                                STATUS_CONFIG[status].color +
-                                ' ring-2 ring-offset-1 ' +
-                                STATUS_CONFIG[status].border
-                            : 'text-muted-foreground hover:bg-accent'
-                        )}
-                      >
-                        {entry.status === status && STATUS_CONFIG[status].icon}
-                        {STATUS_CONFIG[status].label}
-                      </button>
-                    ))}
+              {filteredEntries.map((entry) => {
+                const config = entry.status ? STATUS_CONFIG[entry.status] : null
+                return (
+                  <div
+                    key={entry.studentId}
+                    className={cn(
+                      'flex flex-col gap-2 rounded-lg border p-3',
+                      config ? config.bg + ' ' + config.border : 'bg-card'
+                    )}
+                  >
+                    <span className="text-sm font-medium truncate">{entry.studentName}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {entry.registrationNumber}
+                    </span>
+                    <div
+                      className={cn(
+                        'flex items-center gap-1.5 text-xs font-medium',
+                        config ? config.color : 'text-muted-foreground'
+                      )}
+                    >
+                      {config ? (
+                        <>
+                          {config.icon}
+                          {config.label}
+                        </>
+                      ) : (
+                        <>
+                          <Users className="h-4 w-4" />
+                          Non marqué
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {markedCount > 0 && (
-        <div className="flex justify-end">
-          <Button size="lg" onClick={handleSubmit} disabled={submitMutation.isPending}>
-            <Save className="mr-2 h-4 w-4" />
-            {submitMutation.isPending
-              ? 'Enregistrement...'
-              : `Enregistrer les présences (${markedCount})`}
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

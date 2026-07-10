@@ -37,6 +37,40 @@ client.interceptors.request.use(
 
 export const UNAUTHORIZED_EVENT = 'auth:unauthorized'
 
+export function extractErrorMessage(
+  error: unknown,
+  fallback = 'Une erreur est survenue'
+): string {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status
+    const data = error.response?.data as
+      | { message?: string | string[]; error?: string }
+      | undefined
+
+    if (data) {
+      if (typeof data.message === 'string') return data.message
+      if (Array.isArray(data.message) && data.message.length) {
+        return data.message.join(', ')
+      }
+      if (typeof data.error === 'string') return data.error
+    }
+
+    if (status && status >= 500) {
+      return "Erreur du serveur. Veuillez réessayer plus tard."
+    }
+    if (!error.response) {
+      return 'Impossible de contacter le serveur. Vérifiez votre connexion.'
+    }
+    if (status === 401) {
+      return 'Identifiant ou mot de passe incorrect'
+    }
+    return `Erreur ${status}. Veuillez réessayer.`
+  }
+
+  if (error instanceof Error) return error.message
+  return fallback
+}
+
 client.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -74,7 +108,7 @@ client.interceptors.response.use(
         const { data } = await axios.post('http://localhost:3000/api/v1/auth/refresh', {
           refreshToken
         })
-        const { accessToken, refreshToken: newRefreshToken } = data.data
+        const { accessToken, refreshToken: newRefreshToken } = data
         localStorage.setItem('accessToken', accessToken)
         localStorage.setItem('refreshToken', newRefreshToken)
         client.defaults.headers.common.Authorization = `Bearer ${accessToken}`

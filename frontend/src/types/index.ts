@@ -3,6 +3,7 @@ export interface User {
   email: string
   firstName: string
   lastName: string
+  phoneNumber?: string | null
   role: string
   tenantId: string
   isActive: boolean

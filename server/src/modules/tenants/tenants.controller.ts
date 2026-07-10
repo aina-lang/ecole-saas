@@ -29,9 +29,18 @@ export class TenantsController {
   }
 
   @Patch(':id')
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   update(@Param('id') id: string, @Body() dto: UpdateTenantDto) {
     return this.tenantsService.update(id, dto);
+  }
+
+  @Post(':id/academic-years')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  createAcademicYear(
+    @Param('id') id: string,
+    @Body() body: { label: string }
+  ) {
+    return this.tenantsService.createAcademicYear(id, body.label);
   }
 
   @Post(':id/suspend')

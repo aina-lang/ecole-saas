@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,10 +15,11 @@ import {
 } from '@/components/ui/form'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { useAuthStore } from '@/stores/auth-store'
+import { extractErrorMessage } from '@/api/client'
 
 const loginSchema = z.object({
   email: z.string().email('Adresse email invalide').min(1, "L'email est requis"),
-  password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères')
+  password: z.string().min(1, 'Le mot de passe est requis')
 })
 
 type LoginValues = z.infer<typeof loginSchema>
@@ -35,8 +36,7 @@ export function LoginPage() {
   })
 
   if (isAuthenticated) {
-    navigate('/dashboard', { replace: true })
-    return null
+    return <Navigate to="/dashboard" replace />
   }
 
   async function onSubmit(values: LoginValues) {
@@ -44,8 +44,9 @@ export function LoginPage() {
     try {
       await login(values.email, values.password)
       navigate('/dashboard', { replace: true })
-    } catch {
-      setError('Identifiant ou mot de passe incorrect')
+    } catch (err) {
+      console.error('[FRONTEND] login error', err)
+      setError(extractErrorMessage(err))
     }
   }
 

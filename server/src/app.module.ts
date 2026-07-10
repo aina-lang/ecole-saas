@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { UsersModule } from './modules/users/users.module';
 import { StudentsModule } from './modules/students/students.module';
+import { TeachersModule } from './modules/teachers/teachers.module';
 import { ClassesModule } from './modules/classes/classes.module';
 import { GradesModule } from './modules/grades/grades.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -16,6 +17,7 @@ import { CommunicationsModule } from './modules/communications/communications.mo
 import { FinancesModule } from './modules/finances/finances.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { TimetableModule } from './modules/timetable/timetable.module';
 import { SyncModule } from './modules/sync/sync.module';
 import envConfig from './config/env.config';
 
@@ -30,6 +32,7 @@ import envConfig from './config/env.config';
     TenantsModule,
     UsersModule,
     StudentsModule,
+    TeachersModule,
     ClassesModule,
     GradesModule,
     AttendanceModule,
@@ -37,6 +40,7 @@ import envConfig from './config/env.config';
     FinancesModule,
     UploadModule,
     StatisticsModule,
+    TimetableModule,
     SyncModule,
   ],
   providers: [

@@ -111,13 +111,64 @@ const userSchema = z.object({
   firstName: z.string().min(1, 'Le prénom est requis'),
   lastName: z.string().min(1, 'Le nom est requis'),
   role: z.enum(['ADMIN', 'TEACHER', 'SECRETARY', 'PARENT']),
-  password: z.string().min(6, 'Minimum 6 caractères').optional().or(z.literal(''))
+  password: z.string().min(6, 'Minimum 6 caractères').optional().or(z.literal('')),
+  phoneNumber: z.string().optional().or(z.literal('')),
+  specialty: z.string().optional().or(z.literal(''))
 })
 
 type UserFormValues = z.infer<typeof userSchema>
 
 interface UserWithMeta extends User {
   lastLoginAt?: string | null
+  teacher?: { id: string; specialty?: string | null } | null
+}
+
+interface Option {
+  id: string
+  name: string
+}
+
+function MultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder
+}: {
+  options: Option[]
+  selected: string[]
+  onChange: (next: string[]) => void
+  placeholder: string
+}) {
+  if (!options.length) {
+    return <p className="text-xs text-muted-foreground">Aucune option disponible.</p>
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => {
+        const active = selected.includes(opt.id)
+        return (
+          <button
+            type="button"
+            key={opt.id}
+            onClick={() =>
+              onChange(active ? selected.filter((i) => i !== opt.id) : [...selected, opt.id])
+            }
+            className={
+              'rounded-full border px-3 py-1 text-xs transition-colors ' +
+              (active
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-accent')
+            }
+          >
+            {opt.name}
+          </button>
+        )
+      })}
+      {!selected.length && (
+        <span className="text-xs text-muted-foreground">{placeholder}</span>
+      )}
+    </div>
+  )
 }
 
 export function UserManagementPage() {
@@ -127,6 +178,8 @@ export function UserManagementPage() {
   const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserWithMeta | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [teacherClassIds, setTeacherClassIds] = useState<string[]>([])
+  const [teacherSubjectIds, setTeacherSubjectIds] = useState<string[]>([])
   const limit = 10
 
   const { data: usersData, isLoading } = useQuery({
@@ -135,8 +188,26 @@ export function UserManagementPage() {
       const params: Record<string, string | number> = { page, limit }
       if (search) params.search = search
       if (roleFilter !== 'all') params.role = roleFilter
-      const { data } = await client.get('/admin/users', { params })
+      const { data } = await client.get('/users', { params })
       return data as PaginatedResponse<UserWithMeta>
+    }
+  })
+
+  const { data: classes } = useQuery<Option[]>({
+    queryKey: ['classes-opt'],
+    queryFn: async () => {
+      const res = await client.get('/classes')
+      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string }>
+      return items.map((c) => ({ id: c.id, name: c.name }))
+    }
+  })
+
+  const { data: subjects } = useQuery<Option[]>({
+    queryKey: ['subjects-opt'],
+    queryFn: async () => {
+      const res = await client.get('/subjects')
+      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string }>
+      return items.map((s) => ({ id: s.id, name: s.name }))
     }
   })
 
@@ -147,40 +218,111 @@ export function UserManagementPage() {
       firstName: '',
       lastName: '',
       role: 'TEACHER',
-      password: ''
+      password: '',
+      phoneNumber: '',
+      specialty: ''
     }
   })
 
-  function openCreate() {
+  const watchedRole = form.watch('role')
+
+  function resetTeacherState() {
+    setTeacherClassIds([])
+    setTeacherSubjectIds([])
+  }
+
+  async function openCreate() {
     setEditingUser(null)
-    form.reset({ email: '', firstName: '', lastName: '', role: 'TEACHER', password: '' })
+    resetTeacherState()
+    form.reset({
+      email: '',
+      firstName: '',
+      lastName: '',
+      role: 'TEACHER',
+      password: '',
+      phoneNumber: '',
+      specialty: ''
+    })
     setDialogOpen(true)
   }
 
-  function openEdit(user: UserWithMeta) {
+  async function openEdit(user: UserWithMeta) {
     setEditingUser(user)
+    resetTeacherState()
     form.reset({
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role as UserFormValues['role'],
-      password: ''
+      password: '',
+      phoneNumber: user.phoneNumber ?? '',
+      specialty: ''
     })
+
+    if (user.role === 'TEACHER' && user.teacher?.id) {
+      try {
+        const { data } = await client.get(`/teachers/${user.teacher.id}`)
+        const teacher = data.data ?? data
+        form.setValue('specialty', teacher.specialty ?? '')
+        setTeacherClassIds((teacher.classes ?? []).map((c: { id: string }) => c.id))
+        setTeacherSubjectIds((teacher.subjects ?? []).map((s: { id: string }) => s.id))
+      } catch {
+        /* ignore */
+      }
+    }
     setDialogOpen(true)
   }
 
   const saveMutation = useMutation({
     mutationFn: async (values: UserFormValues) => {
+      const baseUser = {
+        email: values.email,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        phoneNumber: values.phoneNumber || undefined
+      }
+
       if (editingUser) {
-        const payload = { ...values }
-        if (!payload.password) delete payload.password
-        await client.patch(`/admin/users/${editingUser.id}`, payload)
+        if (values.role === 'TEACHER' && editingUser.teacher?.id) {
+          const payload: Record<string, unknown> = {
+            ...baseUser,
+            specialty: values.specialty || undefined,
+            classIds: teacherClassIds,
+            subjectIds: teacherSubjectIds
+          }
+          if (values.password) payload.password = values.password
+          await client.patch(`/teachers/${editingUser.teacher.id}`, payload)
+        } else {
+          const payload: Record<string, unknown> = {
+            ...baseUser,
+            role: values.role,
+            isActive: editingUser.isActive
+          }
+          if (values.password) payload.password = values.password
+          await client.patch(`/users/${editingUser.id}`, payload)
+        }
       } else {
-        await client.post('/admin/users', values)
+        if (values.role === 'TEACHER') {
+          await client.post('/teachers', {
+            ...baseUser,
+            password: values.password,
+            specialty: values.specialty || undefined,
+            classIds: teacherClassIds,
+            subjectIds: teacherSubjectIds
+          })
+        } else {
+          await client.post('/users', {
+            ...baseUser,
+            password: values.password,
+            role: values.role
+          })
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['classes-opt'] })
+      queryClient.invalidateQueries({ queryKey: ['subjects-opt'] })
       toast.success(editingUser ? 'Utilisateur modifié avec succès' : 'Utilisateur créé avec succès')
       setDialogOpen(false)
     },
@@ -191,7 +333,7 @@ export function UserManagementPage() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      await client.patch(`/admin/users/${id}`, { isActive: !isActive })
+      await client.patch(`/users/${id}`, { isActive: !isActive })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -201,6 +343,8 @@ export function UserManagementPage() {
       toast.error('Erreur lors de la modification du statut')
     }
   })
+
+  const isTeacher = watchedRole === 'TEACHER'
 
   const totalPages = usersData ? Math.ceil(usersData.total / limit) : 0
 
@@ -234,7 +378,7 @@ export function UserManagementPage() {
               Ajouter un utilisateur
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingUser ? 'Modifier l\'utilisateur' : 'Ajouter un utilisateur'}</DialogTitle>
               <DialogDescription>
@@ -245,32 +389,34 @@ export function UserManagementPage() {
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Nom de famille" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prénom</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Prénom" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nom</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nom de famille" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prénom</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Prénom" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="email"
@@ -279,6 +425,19 @@ export function UserManagementPage() {
                       <FormLabel>Email</FormLabel>
                       <FormControl>
                         <Input placeholder="email@exemple.com" type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="phoneNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Téléphone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="+261 ..." {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -307,6 +466,44 @@ export function UserManagementPage() {
                     </FormItem>
                   )}
                 />
+
+                {isTeacher && (
+                  <div className="space-y-4 rounded-md border p-3">
+                    <p className="text-sm font-medium text-muted-foreground">Informations enseignant</p>
+                    <FormField
+                      control={form.control}
+                      name="specialty"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Spécialité</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ex: Mathématiques" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="space-y-1.5">
+                      <FormLabel>Classes affectées</FormLabel>
+                      <MultiSelect
+                        options={classes ?? []}
+                        selected={teacherClassIds}
+                        onChange={setTeacherClassIds}
+                        placeholder="Sélectionner des classes"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <FormLabel>Matières enseignées</FormLabel>
+                      <MultiSelect
+                        options={subjects ?? []}
+                        selected={teacherSubjectIds}
+                        onChange={setTeacherSubjectIds}
+                        placeholder="Sélectionner des matières"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <FormField
                   control={form.control}
                   name="password"
@@ -387,6 +584,7 @@ export function UserManagementPage() {
                 <TableHead>Nom</TableHead>
                 <TableHead>Prénom</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Téléphone</TableHead>
                 <TableHead>Rôle</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Dernière connexion</TableHead>
@@ -396,13 +594,13 @@ export function UserManagementPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : !usersData?.data.length ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     Aucun utilisateur trouvé
                   </TableCell>
                 </TableRow>
@@ -412,6 +610,7 @@ export function UserManagementPage() {
                     <TableCell className="font-medium">{user.lastName}</TableCell>
                     <TableCell>{user.firstName}</TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{user.phoneNumber || '-'}</TableCell>
                     <TableCell>
                       <Badge className={roleColors[user.role] || ''} variant="secondary">
                         {user.role === 'ADMIN' && 'Admin'}

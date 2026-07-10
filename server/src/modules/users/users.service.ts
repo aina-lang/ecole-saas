@@ -8,21 +8,46 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(tenantId: string) {
-    return this.prisma.user.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findAll(
+    tenantId: string,
+    opts?: { search?: string; role?: string; page?: number; limit?: number }
+  ) {
+    const where: any = { tenantId };
+    if (opts?.role) where.role = opts.role;
+    if (opts?.search) {
+      where.OR = [
+        { email: { contains: opts.search, mode: 'insensitive' } },
+        { firstName: { contains: opts.search, mode: 'insensitive' } },
+        { lastName: { contains: opts.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const page = opts?.page && opts.page > 0 ? opts.page : 1;
+    const limit = opts?.limit && opts.limit > 0 ? opts.limit : 10;
+
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          phoneNumber: true,
+          lastLoginAt: true,
+          createdAt: true,
+          teacher: { select: { id: true, specialty: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return { data: items, total, page, limit };
   }
 
   async findById(id: string, tenantId: string) {
@@ -60,6 +85,7 @@ export class UsersService {
         firstName: dto.firstName,
         lastName: dto.lastName,
         role: dto.role,
+        phoneNumber: dto.phoneNumber,
       },
       select: {
         id: true,
@@ -67,6 +93,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         role: true,
+        phoneNumber: true,
         createdAt: true,
       },
     });
@@ -81,6 +108,7 @@ export class UsersService {
     if (dto.lastName) data.lastName = dto.lastName;
     if (dto.email) data.email = dto.email;
     if (dto.role) data.role = dto.role;
+    if (dto.phoneNumber !== undefined) data.phoneNumber = dto.phoneNumber;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 12);
 

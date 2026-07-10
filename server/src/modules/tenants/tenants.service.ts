@@ -38,6 +38,40 @@ export class TenantsService {
     return this.prisma.tenant.update({ where: { id }, data: dto });
   }
 
+  async createAcademicYear(id: string, label: string) {
+    const startYear = parseInt(label.split('-')[0], 10) || new Date().getFullYear();
+
+    await this.prisma.academicYear.updateMany({
+      where: { tenantId: id, isCurrent: true },
+      data: { isCurrent: false }
+    });
+
+    const existing = await this.prisma.academicYear.findUnique({
+      where: { tenantId_label: { tenantId: id, label } },
+    });
+
+    if (existing) {
+      return this.prisma.academicYear.update({
+        where: { id: existing.id },
+        data: {
+          isCurrent: true,
+          startDate: new Date(startYear, 8, 1),
+          endDate: new Date(startYear + 1, 6, 30),
+        },
+      });
+    }
+
+    return this.prisma.academicYear.create({
+      data: {
+        tenantId: id,
+        label,
+        startDate: new Date(startYear, 8, 1),
+        endDate: new Date(startYear + 1, 6, 30),
+        isCurrent: true
+      }
+    });
+  }
+
   async suspend(id: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new NotFoundException('Établissement non trouvé');

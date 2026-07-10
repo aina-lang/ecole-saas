@@ -17,7 +17,18 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+    console.log('[AUTH] login request', { email: dto.email, hasPassword: !!dto.password });
+    try {
+      const result = await this.authService.login(dto);
+      console.log('[AUTH] login success', {
+        userId: (result as any).user?.id,
+        email: (result as any).user?.email
+      });
+      return result;
+    } catch (err) {
+      console.error('[AUTH] login failed', { email: dto.email, error: err?.message });
+      throw err;
+    }
   }
 
   @Post('refresh')
