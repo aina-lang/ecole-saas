@@ -191,6 +191,7 @@ export function ComposeMessagePage() {
                                 <CommandItem
                                   key={u.id}
                                   value={u.id}
+                                  keywords={[`${u.firstName} ${u.lastName}`, u.email]}
                                   onSelect={() => addRecipient(u.id)}
                                 >
                                   <div className="flex items-center gap-2">

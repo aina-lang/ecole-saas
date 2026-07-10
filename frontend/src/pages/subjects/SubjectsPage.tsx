@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
   DialogContent,
@@ -242,21 +243,18 @@ export function SubjectsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Classe (optionnel)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || '__none__'}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Aucune (générale)" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__none__">Aucune (générale)</SelectItem>
-                          {(classes ?? []).map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Combobox
+                          value={field.value || '__none__'}
+                          onValueChange={(v) => field.onChange(v || '__none__')}
+                          placeholder="Aucune (générale)"
+                          searchPlaceholder="Rechercher une classe..."
+                          options={[
+                            { value: '__none__', label: 'Aucune (générale)' },
+                            ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+                          ]}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

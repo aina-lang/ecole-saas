@@ -29,13 +29,7 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -391,18 +385,19 @@ export function SyncPage() {
               <CardTitle>Appareils connectés</CardTitle>
               <CardDescription>Liste des appareils utilisant cette instance</CardDescription>
             </div>
-            <Select value={syncFilter} onValueChange={setSyncFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Filtrer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
-                <SelectItem value="DESKTOP">Desktop</SelectItem>
-                <SelectItem value="MOBILE">Mobile</SelectItem>
-                <SelectItem value="TABLET">Tablette</SelectItem>
-                <SelectItem value="WEB">Web</SelectItem>
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { value: 'all', label: 'Tous les types' },
+                { value: 'DESKTOP', label: 'Desktop' },
+                { value: 'MOBILE', label: 'Mobile' },
+                { value: 'TABLET', label: 'Tablette' },
+                { value: 'WEB', label: 'Web' }
+              ]}
+              value={syncFilter}
+              onValueChange={setSyncFilter}
+              placeholder="Filtrer"
+              className="w-[160px]"
+            />
           </div>
         </CardHeader>
         <CardContent className="p-0">

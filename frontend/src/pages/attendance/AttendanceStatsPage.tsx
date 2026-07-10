@@ -8,13 +8,7 @@ import client from '@/api/client'
 import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
@@ -197,41 +191,36 @@ export function AttendanceStatsPage() {
           <div className="flex flex-wrap gap-4">
             <div className="w-48">
               <Label className="mb-1.5 block text-sm">Classe</Label>
-              <Select
+              <Combobox
                 value={classId}
                 onValueChange={(v) => {
-                  setClassId(v)
+                  setClassId(v || 'all')
                   setStudentId('')
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Toutes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les classes</SelectItem>
-                  {classes?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Toutes"
+                searchPlaceholder="Rechercher une classe..."
+                options={[
+                  { value: 'all', label: 'Toutes les classes' },
+                  ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
             </div>
             <div className="w-48">
               <Label className="mb-1.5 block text-sm">Élève</Label>
-              <Select value={studentId} onValueChange={setStudentId} disabled={!classId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tous" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les élèves</SelectItem>
-                  {students?.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.lastName} {s.firstName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={studentId}
+                onValueChange={(v) => setStudentId(v || 'all')}
+                disabled={!classId}
+                placeholder="Tous"
+                searchPlaceholder="Rechercher un élève..."
+                options={[
+                  { value: 'all', label: 'Tous les élèves' },
+                  ...(students ?? []).map((s) => ({
+                    value: s.id,
+                    label: `${s.lastName} ${s.firstName}`,
+                  })),
+                ]}
+              />
             </div>
             <div className="w-44">
               <Label className="mb-1.5 block text-sm">Du</Label>

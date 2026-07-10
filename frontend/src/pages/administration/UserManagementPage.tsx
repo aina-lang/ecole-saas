@@ -24,13 +24,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import {
   Pagination,
@@ -169,18 +163,19 @@ export function UserManagementPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1) }}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Rôle" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les rôles</SelectItem>
-                <SelectItem value="ADMIN">Administrateur</SelectItem>
-                <SelectItem value="TEACHER">Enseignant</SelectItem>
-                <SelectItem value="SECRETARY">Secrétaire</SelectItem>
-                <SelectItem value="PARENT">Parent</SelectItem>
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { value: 'all', label: 'Tous les rôles' },
+                { value: 'ADMIN', label: 'Administrateur' },
+                { value: 'TEACHER', label: 'Enseignant' },
+                { value: 'SECRETARY', label: 'Secrétaire' },
+                { value: 'PARENT', label: 'Parent' }
+              ]}
+              value={roleFilter}
+              onValueChange={(v) => { setRoleFilter(v); setPage(1) }}
+              placeholder="Rôle"
+              className="w-[180px]"
+            />
           </div>
         </CardContent>
       </Card>

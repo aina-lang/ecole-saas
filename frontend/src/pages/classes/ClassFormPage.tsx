@@ -22,13 +22,7 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Table,
   TableBody,
@@ -214,27 +208,28 @@ export function ClassFormPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Niveau *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un niveau" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="6ème">6ème</SelectItem>
-                        <SelectItem value="5ème">5ème</SelectItem>
-                        <SelectItem value="4ème">4ème</SelectItem>
-                        <SelectItem value="3ème">3ème</SelectItem>
-                        <SelectItem value="2nde">2nde</SelectItem>
-                        <SelectItem value="1ère">1ère</SelectItem>
-                        <SelectItem value="Tle">Terminale</SelectItem>
-                        <SelectItem value="CP">CP</SelectItem>
-                        <SelectItem value="CE1">CE1</SelectItem>
-                        <SelectItem value="CE2">CE2</SelectItem>
-                        <SelectItem value="CM1">CM1</SelectItem>
-                        <SelectItem value="CM2">CM2</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        options={[
+                          { value: '6ème', label: '6ème' },
+                          { value: '5ème', label: '5ème' },
+                          { value: '4ème', label: '4ème' },
+                          { value: '3ème', label: '3ème' },
+                          { value: '2nde', label: '2nde' },
+                          { value: '1ère', label: '1ère' },
+                          { value: 'Tle', label: 'Terminale' },
+                          { value: 'CP', label: 'CP' },
+                          { value: 'CE1', label: 'CE1' },
+                          { value: 'CE2', label: 'CE2' },
+                          { value: 'CM1', label: 'CM1' },
+                          { value: 'CM2', label: 'CM2' }
+                        ]}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Sélectionner un niveau"
+                        className="w-full"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

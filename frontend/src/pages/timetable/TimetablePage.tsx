@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
   DialogContent,
@@ -182,18 +183,13 @@ export function TimetablePage() {
           <p className="text-muted-foreground">Planifiez les cours par classe et par jour.</p>
         </div>
         <div className="w-56">
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner une classe" />
-            </SelectTrigger>
-            <SelectContent>
-              {(classes ?? []).map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={classId}
+            onValueChange={setClassId}
+            placeholder="Sélectionner une classe"
+            searchPlaceholder="Rechercher une classe..."
+            options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+          />
         </div>
       </div>
 
@@ -277,20 +273,18 @@ export function TimetablePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Matière</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(subjects ?? []).map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {formatSubjectLabel(s)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Sélectionner"
+                        searchPlaceholder="Rechercher une matière..."
+                        options={(subjects ?? []).map((s) => ({
+                          value: s.id,
+                          label: formatSubjectLabel(s),
+                        }))}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -301,21 +295,21 @@ export function TimetablePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Enseignant (optionnel)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || '__none__'}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Aucun" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__none__">Aucun</SelectItem>
-                        {(teachers ?? []).map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.user.firstName} {t.user.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        value={field.value || '__none__'}
+                        onValueChange={(v) => field.onChange(v || '__none__')}
+                        placeholder="Aucun"
+                        searchPlaceholder="Rechercher un enseignant..."
+                        options={[
+                          { value: '__none__', label: 'Aucun' },
+                          ...(teachers ?? []).map((t) => ({
+                            value: t.id,
+                            label: `${t.user.firstName} ${t.user.lastName}`,
+                          })),
+                        ]}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -10,13 +10,7 @@ import type { Teacher } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -195,20 +189,14 @@ export function TeacherContractPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Enseignant</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {teachers?.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.user.firstName} {t.user.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        options={teachers?.map((t) => ({ value: t.id, label: `${t.user.firstName} ${t.user.lastName}` })) ?? []}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Sélectionner"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -219,18 +207,17 @@ export function TeacherContractPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type de contrat</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="HOURLY">Horaire</SelectItem>
-                        <SelectItem value="MONTHLY">Mensuel</SelectItem>
-                        <SelectItem value="FIXED">Forfait</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        options={[
+                          { value: 'HOURLY', label: 'Horaire' },
+                          { value: 'MONTHLY', label: 'Mensuel' },
+                          { value: 'FIXED', label: 'Forfait' }
+                        ]}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -25,13 +25,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Pencil2Icon, ArrowLeftIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
 
 export function ClassDetailPage() {
@@ -180,18 +174,16 @@ export function ClassDetailPage() {
                     <DialogTitle>Ajouter un élève à la classe</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pt-4">
-                    <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un élève" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {studentsNotInClass.map((student) => (
-                          <SelectItem key={student.id} value={student.id}>
-                            {student.firstName} {student.lastName} ({student.registrationNumber})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Combobox
+                      value={selectedStudentId}
+                      onValueChange={setSelectedStudentId}
+                      placeholder="Sélectionner un élève"
+                      searchPlaceholder="Rechercher un élève..."
+                      options={studentsNotInClass.map((student) => ({
+                        value: student.id,
+                        label: `${student.firstName} ${student.lastName} (${student.registrationNumber})`,
+                      }))}
+                    />
                     <Button
                       className="w-full"
                       disabled={!selectedStudentId || addStudentMutation.isPending}

@@ -8,13 +8,7 @@ import client from '@/api/client'
 import type { Student } from '@/types'
 import { cn } from '@/lib/utils'
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
@@ -170,18 +164,13 @@ export function AttendancePage() {
         </div>
         <div className="w-48 space-y-1.5">
           <label className="text-sm font-medium">Classe</label>
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner" />
-            </SelectTrigger>
-            <SelectContent>
-              {classes?.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={classId}
+            onValueChange={setClassId}
+            placeholder="Sélectionner"
+            searchPlaceholder="Rechercher une classe..."
+            options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+          />
         </div>
       </div>
 

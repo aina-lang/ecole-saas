@@ -18,13 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -153,43 +147,36 @@ export function StudentListPage() {
                 className="pl-9"
               />
             </div>
-            <Select
+            <Combobox
+              className="w-[180px]"
               value={classFilter}
               onValueChange={(v) => {
-                setClassFilter(v)
+                setClassFilter(v || 'all')
                 setPage(1)
               }}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Classe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les classes</SelectItem>
-                {classes?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
+              placeholder="Classe"
+              searchPlaceholder="Rechercher une classe..."
+              options={[
+                { value: 'all', label: 'Toutes les classes' },
+                ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+            <Combobox
+              className="w-[150px]"
               value={statusFilter}
               onValueChange={(v) => {
                 setStatusFilter(v)
                 setPage(1)
               }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="active">Actif</SelectItem>
-                <SelectItem value="inactive">Inactif</SelectItem>
-                <SelectItem value="graduated">Diplômé</SelectItem>
-                <SelectItem value="suspended">Suspendu</SelectItem>
-              </SelectContent>
-            </Select>
+              placeholder="Statut"
+              options={[
+                { value: 'all', label: 'Tous les statuts' },
+                { value: 'active', label: 'Actif' },
+                { value: 'inactive', label: 'Inactif' },
+                { value: 'graduated', label: 'Diplômé' },
+                { value: 'suspended', label: 'Suspendu' },
+              ]}
+            />
           </div>
         </CardContent>
       </Card>

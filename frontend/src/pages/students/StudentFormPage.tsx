@@ -12,13 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Form,
@@ -85,18 +79,20 @@ export function StudentFormPage() {
   const { data: classes } = useQuery({
     queryKey: ['classes-list'],
     queryFn: async () => {
-      const { data } = await client.get('/classes')
-      return data.data as { id: string; name: string }[]
+      const res = await client.get('/classes')
+      const raw = res.data
+      return (Array.isArray(raw) ? raw : raw.data ?? []) as { id: string; name: string }[]
     }
   })
 
   const { data: parentUsers } = useQuery({
     queryKey: ['parent-users'],
     queryFn: async () => {
-      const { data } = await client.get('/users', {
+      const res = await client.get('/users', {
         params: { role: 'PARENT', limit: 200 },
       })
-      return (data.data ?? []) as Array<{ id: string; firstName: string; lastName: string }>
+      const raw = res.data
+      return (Array.isArray(raw) ? raw : raw.data ?? []) as Array<{ id: string; firstName: string; lastName: string }>
     },
   })
 
@@ -332,17 +328,17 @@ export function StudentFormPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Genre *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="M">Masculin</SelectItem>
-                            <SelectItem value="F">Féminin</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Combobox
+                            options={[
+                              { value: 'M', label: 'Masculin' },
+                              { value: 'F', label: 'Féminin' },
+                            ]}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Sélectionner"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -451,23 +447,16 @@ export function StudentFormPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Groupe sanguin</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="A+">A+</SelectItem>
-                            <SelectItem value="A-">A-</SelectItem>
-                            <SelectItem value="B+">B+</SelectItem>
-                            <SelectItem value="B-">B-</SelectItem>
-                            <SelectItem value="AB+">AB+</SelectItem>
-                            <SelectItem value="AB-">AB-</SelectItem>
-                            <SelectItem value="O+">O+</SelectItem>
-                            <SelectItem value="O-">O-</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Combobox
+                            options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(
+                              (g) => ({ value: g, label: g })
+                            )}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Sélectionner"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -518,20 +507,14 @@ export function StudentFormPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Classe *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner une classe" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {classes?.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Combobox
+                            options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Sélectionner une classe"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -562,23 +545,16 @@ export function StudentFormPage() {
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
                       <FormLabel>Ajouter un parent ou tuteur</FormLabel>
-                      <Select
-                        value={undefined}
-                        onValueChange={(value) => addParent(value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un compte parent..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(parentUsers ?? [])
-                            .filter((u) => !parentLinks.some((l) => l.parentId === u.id))
-                            .map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.firstName} {u.lastName}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        options={(parentUsers ?? [])
+                          .filter((u) => !parentLinks.some((l) => l.parentId === u.id))
+                          .map((u) => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))}
+                        value=""
+                        onValueChange={(value) => {
+                          if (value) addParent(value)
+                        }}
+                        placeholder="Sélectionner un compte parent..."
+                      />
                     </div>
                   </div>
 
@@ -599,22 +575,19 @@ export function StudentFormPage() {
                           <span className="font-medium">
                             {user ? `${user.firstName} ${user.lastName}` : link.parentId}
                           </span>
-                          <Select
+                          <Combobox
+                            options={[
+                              { value: 'PARENT', label: 'Parent' },
+                              { value: 'TUTEUR', label: 'Tuteur' },
+                            ]}
                             value={link.relation}
                             onValueChange={(value) =>
                               updateParentLink(index, {
                                 relation: value as 'PARENT' | 'TUTEUR',
                               })
                             }
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PARENT">Parent</SelectItem>
-                              <SelectItem value="TUTEUR">Tuteur</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            className="w-40"
+                          />
                           <label className="flex items-center gap-2 text-sm">
                             <input
                               type="radio"

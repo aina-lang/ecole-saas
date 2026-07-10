@@ -23,13 +23,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
   DialogContent,
@@ -161,39 +155,41 @@ export function AuditLogPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v); setPage(1) }}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les actions</SelectItem>
-                <SelectItem value="CREATE">Création</SelectItem>
-                <SelectItem value="UPDATE">Modification</SelectItem>
-                <SelectItem value="DELETE">Suppression</SelectItem>
-                <SelectItem value="LOGIN">Connexion</SelectItem>
-                <SelectItem value="LOGOUT">Déconnexion</SelectItem>
-                <SelectItem value="SYNC_START">Début synchro</SelectItem>
-                <SelectItem value="SYNC_COMPLETE">Fin synchro</SelectItem>
-                <SelectItem value="EXPORT">Export</SelectItem>
-                <SelectItem value="IMPORT">Import</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={entityFilter} onValueChange={(v) => { setEntityFilter(v); setPage(1) }}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Entité" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les entités</SelectItem>
-                <SelectItem value="USER">Utilisateur</SelectItem>
-                <SelectItem value="STUDENT">Élève</SelectItem>
-                <SelectItem value="CLASS">Classe</SelectItem>
-                <SelectItem value="GRADE">Note</SelectItem>
-                <SelectItem value="PAYMENT">Paiement</SelectItem>
-                <SelectItem value="ATTENDANCE">Présence</SelectItem>
-                <SelectItem value="SETTINGS">Paramètres</SelectItem>
-                <SelectItem value="SYNC">Synchronisation</SelectItem>
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { value: 'all', label: 'Toutes les actions' },
+                { value: 'CREATE', label: 'Création' },
+                { value: 'UPDATE', label: 'Modification' },
+                { value: 'DELETE', label: 'Suppression' },
+                { value: 'LOGIN', label: 'Connexion' },
+                { value: 'LOGOUT', label: 'Déconnexion' },
+                { value: 'SYNC_START', label: 'Début synchro' },
+                { value: 'SYNC_COMPLETE', label: 'Fin synchro' },
+                { value: 'EXPORT', label: 'Export' },
+                { value: 'IMPORT', label: 'Import' }
+              ]}
+              value={actionFilter}
+              onValueChange={(v) => { setActionFilter(v); setPage(1) }}
+              placeholder="Action"
+              className="w-[160px]"
+            />
+            <Combobox
+              options={[
+                { value: 'all', label: 'Toutes les entités' },
+                { value: 'USER', label: 'Utilisateur' },
+                { value: 'STUDENT', label: 'Élève' },
+                { value: 'CLASS', label: 'Classe' },
+                { value: 'GRADE', label: 'Note' },
+                { value: 'PAYMENT', label: 'Paiement' },
+                { value: 'ATTENDANCE', label: 'Présence' },
+                { value: 'SETTINGS', label: 'Paramètres' },
+                { value: 'SYNC', label: 'Synchronisation' }
+              ]}
+              value={entityFilter}
+              onValueChange={(v) => { setEntityFilter(v); setPage(1) }}
+              placeholder="Entité"
+              className="w-[160px]"
+            />
             <Input
               type="date"
               value={dateFrom}

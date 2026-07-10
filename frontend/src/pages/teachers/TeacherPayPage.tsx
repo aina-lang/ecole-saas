@@ -7,13 +7,7 @@ import type { Teacher } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Table,
   TableBody,
@@ -156,18 +150,12 @@ export function TeacherPayPage() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[200px]">
               <label className="text-sm font-medium">Enseignant</label>
-              <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teachers?.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.user.firstName} {t.user.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={(teachers ?? []).map((t) => ({ value: t.id, label: `${t.user.firstName} ${t.user.lastName}` }))}
+                value={selectedTeacher}
+                onValueChange={setSelectedTeacher}
+                placeholder="Sélectionner"
+              />
             </div>
             <div>
               <label className="text-sm font-medium">Début période</label>

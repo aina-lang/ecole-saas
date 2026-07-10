@@ -13,13 +13,7 @@ import type { Payment, ApiResponse, PaginatedResponse, Student } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
   DialogContent,
@@ -166,21 +160,19 @@ export function PaymentListPage() {
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Statut</label>
-              <Select
+              <Combobox
+                options={[
+                  { value: ' ', label: 'Tous' },
+                  { value: 'pending', label: 'En attente' },
+                  { value: 'partial', label: 'Partiel' },
+                  { value: 'paid', label: 'Payé' },
+                  { value: 'overdue', label: 'En retard' }
+                ]}
                 value={filters.status ?? ''}
                 onValueChange={(v) => setFilters((prev) => ({ ...prev, status: v }))}
-              >
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Tous" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value=" ">Tous</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="partial">Partiel</SelectItem>
-                  <SelectItem value="paid">Payé</SelectItem>
-                  <SelectItem value="overdue">En retard</SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="Tous"
+                className="w-[150px]"
+              />
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Du</label>
@@ -303,20 +295,18 @@ export function PaymentListPage() {
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel>Moyen de paiement</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Sélectionner..." />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="cash">Espèces</SelectItem>
-                                          <SelectItem value="mobile">Mobile Money</SelectItem>
-                                          <SelectItem value="card">Carte bancaire</SelectItem>
-                                          <SelectItem value="transfer">Virement</SelectItem>
-                                          <SelectItem value="check">Chèque</SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                      <Combobox
+                                        options={[
+                                          { value: 'cash', label: 'Espèces' },
+                                          { value: 'mobile', label: 'Mobile Money' },
+                                          { value: 'card', label: 'Carte bancaire' },
+                                          { value: 'transfer', label: 'Virement' },
+                                          { value: 'check', label: 'Chèque' }
+                                        ]}
+                                        value={field.value}
+                                        onValueChange={field.onChange}
+                                        placeholder="Sélectionner..."
+                                      />
                                       <FormMessage />
                                     </FormItem>
                                   )}

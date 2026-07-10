@@ -13,13 +13,7 @@ import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Table,
   TableBody,
@@ -236,64 +230,49 @@ export function GradeListPage() {
         <CardContent>
           <div className="flex flex-wrap gap-4">
             <div className="w-48">
-              <Select
+              <Combobox
                 value={classId}
                 onValueChange={(v) => {
-                  setClassId(v)
+                  setClassId(v || 'all')
                   setPage(1)
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Classe" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les classes</SelectItem>
-                  {classes?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Classe"
+                searchPlaceholder="Rechercher une classe..."
+                options={[
+                  { value: 'all', label: 'Toutes les classes' },
+                  ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
             </div>
             <div className="w-48">
-              <Select
+              <Combobox
                 value={subjectId}
                 onValueChange={(v) => {
-                  setSubjectId(v)
+                  setSubjectId(v || 'all')
                   setPage(1)
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Matière" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les matières</SelectItem>
-                  {subjects?.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {formatSubjectLabel(s)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Matière"
+                searchPlaceholder="Rechercher une matière..."
+                options={[
+                  { value: 'all', label: 'Toutes les matières' },
+                  ...(subjects ?? []).map((s) => ({ value: s.id, label: formatSubjectLabel(s) })),
+                ]}
+              />
             </div>
             <div className="w-40">
-              <Select
+              <Combobox
                 value={semester}
                 onValueChange={(v) => {
                   setSemester(v)
                   setPage(1)
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Semestre" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="1">Semestre 1</SelectItem>
-                  <SelectItem value="2">Semestre 2</SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="Semestre"
+                options={[
+                  { value: 'all', label: 'Tous' },
+                  { value: '1', label: 'Semestre 1' },
+                  { value: '2', label: 'Semestre 2' },
+                ]}
+              />
             </div>
           </div>
         </CardContent>

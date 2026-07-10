@@ -12,13 +12,7 @@ import { formatSubjectLabel } from '@/lib/subject'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -346,19 +340,19 @@ export function UserFormPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Rôle *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un rôle" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="ADMIN">Administrateur</SelectItem>
-                        <SelectItem value="TEACHER">Enseignant</SelectItem>
-                        <SelectItem value="SECRETARY">Secrétaire</SelectItem>
-                        <SelectItem value="PARENT">Parent</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        options={[
+                          { value: 'ADMIN', label: 'Administrateur' },
+                          { value: 'TEACHER', label: 'Enseignant' },
+                          { value: 'SECRETARY', label: 'Secrétaire' },
+                          { value: 'PARENT', label: 'Parent' },
+                        ]}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Sélectionner un rôle"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

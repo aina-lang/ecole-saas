@@ -10,13 +10,7 @@ import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Table,
   TableBody,
@@ -225,47 +219,37 @@ export function GradeEntryPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className="space-y-1.5">
               <Label>Classe</Label>
-              <Select value={classId} onValueChange={setClassId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={classId}
+                onValueChange={setClassId}
+                placeholder="Sélectionner"
+                searchPlaceholder="Rechercher une classe..."
+                options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Matière</Label>
-              <Select value={subjectId} onValueChange={setSubjectId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects?.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {formatSubjectLabel(s)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={subjectId}
+                onValueChange={setSubjectId}
+                placeholder="Sélectionner"
+                searchPlaceholder="Rechercher une matière..."
+                options={(subjects ?? []).map((s) => ({ value: s.id, label: formatSubjectLabel(s) }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Type</Label>
-              <Select value={evaluationType} onValueChange={setEvaluationType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="exam">Examen</SelectItem>
-                  <SelectItem value="test">Test</SelectItem>
-                  <SelectItem value="homework">Devoir</SelectItem>
-                  <SelectItem value="project">Projet</SelectItem>
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={evaluationType}
+                onValueChange={setEvaluationType}
+                placeholder="Sélectionner"
+                options={[
+                  { value: 'exam', label: 'Examen' },
+                  { value: 'test', label: 'Test' },
+                  { value: 'homework', label: 'Devoir' },
+                  { value: 'project', label: 'Projet' }
+                ]}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Note max</Label>
@@ -288,15 +272,15 @@ export function GradeEntryPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Semestre</Label>
-              <Select value={semester} onValueChange={setSemester}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Semestre 1</SelectItem>
-                  <SelectItem value="2">Semestre 2</SelectItem>
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={semester}
+                onValueChange={setSemester}
+                placeholder="Sélectionner"
+                options={[
+                  { value: '1', label: 'Semestre 1' },
+                  { value: '2', label: 'Semestre 2' }
+                ]}
+              />
             </div>
           </div>
         </CardContent>
