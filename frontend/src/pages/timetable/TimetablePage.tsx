@@ -10,13 +10,6 @@ import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
@@ -249,20 +242,14 @@ export function TimetablePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Jour</FormLabel>
-                    <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                        <Combobox
+                          value={String(field.value)}
+                          onValueChange={(v) => field.onChange(Number(v))}
+                          placeholder="Sélectionner"
+                          options={DAYS.map((d) => ({ value: String(d.value), label: d.label }))}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {DAYS.map((d) => (
-                          <SelectItem key={d.value} value={String(d.value)}>
-                            {d.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

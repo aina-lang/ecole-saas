@@ -13,13 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -234,18 +228,16 @@ export function ComposeMessagePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Priorité</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une priorité" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="high">Haut</SelectItem>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Combobox
+                      options={[
+                        { value: 'normal', label: 'Normal' },
+                        { value: 'high', label: 'Haut' },
+                        { value: 'urgent', label: 'Urgent' }
+                      ]}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      placeholder="Sélectionner une priorité"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

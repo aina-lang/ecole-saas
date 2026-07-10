@@ -185,18 +185,18 @@ export function AttendancePage() {
         </div>
         <div className="w-48 space-y-1.5">
           <label className="text-sm font-medium">Statut</label>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Tous" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tous</SelectItem>
-              <SelectItem value="PRESENT">Présent</SelectItem>
-              <SelectItem value="ABSENT">Absent</SelectItem>
-              <SelectItem value="EXCUSED">Excusé</SelectItem>
-              <SelectItem value="UNMARKED">Non marqué</SelectItem>
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+            placeholder="Tous"
+            options={[
+              { value: 'ALL', label: 'Tous' },
+              { value: 'PRESENT', label: 'Présent' },
+              { value: 'ABSENT', label: 'Absent' },
+              { value: 'EXCUSED', label: 'Excusé' },
+              { value: 'UNMARKED', label: 'Non marqué' }
+            ]}
+          />
         </div>
       </div>
 

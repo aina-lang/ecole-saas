@@ -18,13 +18,6 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
@@ -205,21 +198,18 @@ export function SubjectsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Niveau</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || '__none__'}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un niveau" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {LEVELS.map((lvl) => (
-                            <SelectItem key={lvl} value={lvl}>
-                              {lvl}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="__none__">Aucun</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Combobox
+                          value={field.value || '__none__'}
+                          onValueChange={(v) => field.onChange(v || '__none__')}
+                          placeholder="Sélectionner un niveau"
+                          searchPlaceholder="Rechercher un niveau..."
+                          options={[
+                            { value: '__none__', label: 'Aucun' },
+                            ...LEVELS.map((lvl) => ({ value: lvl, label: lvl })),
+                          ]}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
