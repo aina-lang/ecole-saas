@@ -39,9 +39,9 @@ export class SubjectsService {
 
   async create(tenantId: string, dto: CreateSubjectDto, userId?: string) {
     const existing = await this.prisma.subject.findFirst({
-      where: { tenantId, name: dto.name },
+      where: { tenantId, name: dto.name, level: dto.level ?? null },
     });
-    if (existing) throw new ConflictException('Cette matière existe déjà');
+    if (existing) throw new ConflictException('Cette matière existe déjà pour ce niveau');
 
     if (dto.classId) {
       const cls = await this.prisma.class.findFirst({
@@ -55,6 +55,7 @@ export class SubjectsService {
         tenantId,
         name: dto.name,
         code: dto.code,
+        level: dto.level,
         coefficient: dto.coefficient ?? 1.0,
         classId: dto.classId,
       },
@@ -78,9 +79,9 @@ export class SubjectsService {
 
     if (dto.name) {
       const existing = await this.prisma.subject.findFirst({
-        where: { tenantId, name: dto.name, id: { not: id } },
+        where: { tenantId, name: dto.name, level: dto.level ?? null, id: { not: id } },
       });
-      if (existing) throw new ConflictException('Cette matière existe déjà');
+      if (existing) throw new ConflictException('Cette matière existe déjà pour ce niveau');
     }
 
     if (dto.classId) {
@@ -95,6 +96,7 @@ export class SubjectsService {
       data: {
         name: dto.name,
         code: dto.code,
+        level: dto.level,
         coefficient: dto.coefficient,
         classId: dto.classId,
       },

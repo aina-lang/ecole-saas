@@ -261,6 +261,7 @@ model Subject {
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   code        String?
+  level       String?
   coefficient Float        @default(1.0)
   classId     String?
   class       Class?       @relation(fields: [classId], references: [id])
@@ -268,7 +269,7 @@ model Subject {
   teachers    Teacher[]
   timetable TimetableSlot[]
 
-  @@unique([tenantId, name])
+  @@unique([tenantId, name, level])
   @@map("subjects")
 }
 

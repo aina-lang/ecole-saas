@@ -11,6 +11,10 @@ export class CreateSubjectDto {
   code?: string;
 
   @IsOptional()
+  @IsString()
+  level?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Type(() => Number)

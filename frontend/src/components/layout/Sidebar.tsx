@@ -6,7 +6,9 @@ import {
   ChatBubbleIcon,
   ValueNoneIcon,
   GearIcon,
-  UpdateIcon
+  UpdateIcon,
+  BookmarkIcon,
+  CalendarIcon
 } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -19,6 +21,8 @@ const menuItems = [
   { label: 'Classes', path: '/classes', icon: ReaderIcon },
   { label: 'Notes', path: '/grades', icon: RocketIcon },
   { label: 'Présences', path: '/attendance', icon: AttendanceIcon },
+  { label: 'Matières', path: '/subjects', icon: BookmarkIcon },
+  { label: 'Emploi du temps', path: '/timetable', icon: CalendarIcon },
   { label: 'Communications', path: '/communications', icon: ChatBubbleIcon },
   { label: 'Finances', path: '/finances', icon: ValueNoneIcon },
   { label: 'Administration', path: '/administration', icon: GearIcon },

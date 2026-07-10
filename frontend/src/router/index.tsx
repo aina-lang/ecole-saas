@@ -9,6 +9,8 @@ import { SyncPage } from '@/pages/sync/SyncPage'
 import { StudentRoutes } from '@/pages/students/StudentRoutes'
 import { ClassRoutes } from '@/pages/classes/ClassRoutes'
 import { GradeRoutes } from '@/pages/grades/GradeRoutes'
+import { SubjectsPage } from '@/pages/subjects/SubjectsPage'
+import { TimetablePage } from '@/pages/timetable/TimetablePage'
 import { AttendanceRoutes } from '@/pages/attendance/AttendanceRoutes'
 import { CommunicationRoutes } from '@/pages/communications/CommunicationRoutes'
 import { FinanceRoutes } from '@/pages/finances/FinanceRoutes'
@@ -49,6 +51,8 @@ export function AppRouter() {
         <Route path="students/*" element={<StudentRoutes />} />
         <Route path="classes/*" element={<ClassRoutes />} />
         <Route path="grades/*" element={<GradeRoutes />} />
+        <Route path="subjects" element={<SubjectsPage />} />
+        <Route path="timetable" element={<TimetablePage />} />
         <Route path="attendance/*" element={<AttendanceRoutes />} />
         <Route path="communications/*" element={<CommunicationRoutes />} />
         <Route path="finances/*" element={<FinanceRoutes />} />

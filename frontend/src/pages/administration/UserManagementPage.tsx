@@ -180,6 +180,7 @@ export function UserManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [teacherClassIds, setTeacherClassIds] = useState<string[]>([])
   const [teacherSubjectIds, setTeacherSubjectIds] = useState<string[]>([])
+  const [newSubject, setNewSubject] = useState('')
   const limit = 10
 
   const { data: usersData, isLoading } = useQuery({
@@ -206,8 +207,8 @@ export function UserManagementPage() {
     queryKey: ['subjects-opt'],
     queryFn: async () => {
       const res = await client.get('/subjects')
-      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string }>
-      return items.map((s) => ({ id: s.id, name: s.name }))
+      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string; level?: string | null }>
+      return items.map((s) => ({ id: s.id, name: s.level ? `${s.name} (${s.level})` : s.name }))
     }
   })
 
@@ -272,6 +273,22 @@ export function UserManagementPage() {
     }
     setDialogOpen(true)
   }
+
+  const createSubjectMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await client.post('/subjects', { name: name.trim(), coefficient: 1 })
+      return (data.data ?? data) as { id: string; name: string }
+    },
+    onSuccess: (subject) => {
+      queryClient.setQueryData(['subjects-opt'], (old: Option[] | undefined) =>
+        old ? [...old, { id: subject.id, name: subject.name }] : [{ id: subject.id, name: subject.name }]
+      )
+      setTeacherSubjectIds((prev) => (prev.includes(subject.id) ? prev : [...prev, subject.id]))
+      setNewSubject('')
+      toast.success('Matière créée')
+    },
+    onError: () => toast.error("Erreur lors de la création de la matière")
+  })
 
   const saveMutation = useMutation({
     mutationFn: async (values: UserFormValues) => {
@@ -500,6 +517,27 @@ export function UserManagementPage() {
                         onChange={setTeacherSubjectIds}
                         placeholder="Sélectionner des matières"
                       />
+                      <div className="flex gap-2 pt-1">
+                        <Input
+                          placeholder="Créer une nouvelle matière..."
+                          value={newSubject}
+                          onChange={(e) => setNewSubject(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              if (newSubject.trim()) createSubjectMutation.mutate(newSubject)
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!newSubject.trim() || createSubjectMutation.isPending}
+                          onClick={() => createSubjectMutation.mutate(newSubject)}
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
