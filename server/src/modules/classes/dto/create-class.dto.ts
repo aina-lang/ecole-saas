@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, Min, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, IsNotEmpty, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateClassDto {
@@ -19,4 +19,14 @@ export class CreateClassDto {
   @Min(1)
   @Type(() => Number)
   capacity?: number = 30;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  subjectIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  teacherIds?: string[];
 }

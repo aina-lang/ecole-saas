@@ -63,6 +63,12 @@ export class ClassesService {
         level: dto.level,
         room: dto.room,
         capacity: dto.capacity ?? 30,
+        subjects: dto.subjectIds?.length
+          ? { connect: dto.subjectIds.map((id) => ({ id })) }
+          : undefined,
+        teachers: dto.teacherIds?.length
+          ? { connect: dto.teacherIds.map((id) => ({ id })) }
+          : undefined,
       },
     });
 
@@ -89,14 +95,17 @@ export class ClassesService {
       if (existing) throw new ConflictException('Cette classe existe déjà');
     }
 
+    const data: any = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.level !== undefined) data.level = dto.level;
+    if (dto.room !== undefined) data.room = dto.room;
+    if (dto.capacity !== undefined) data.capacity = dto.capacity;
+    if (dto.subjectIds) data.subjects = { set: dto.subjectIds.map((id) => ({ id })) };
+    if (dto.teacherIds) data.teachers = { set: dto.teacherIds.map((id) => ({ id })) };
+
     const updated = await this.prisma.class.update({
       where: { id },
-      data: {
-        name: dto.name,
-        level: dto.level,
-        room: dto.room,
-        capacity: dto.capacity,
-      },
+      data,
     });
 
     await this.auditService.log({

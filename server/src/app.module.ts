@@ -19,6 +19,9 @@ import { UploadModule } from './modules/upload/upload.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { TimetableModule } from './modules/timetable/timetable.module';
 import { SyncModule } from './modules/sync/sync.module';
+import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module';
+import { TeacherContractsModule } from './modules/teacher-contracts/teacher-contracts.module';
+import { TeacherPaymentsModule } from './modules/teacher-payments/teacher-payments.module';
 import envConfig from './config/env.config';
 
 @Module({
@@ -42,6 +45,9 @@ import envConfig from './config/env.config';
     StatisticsModule,
     TimetableModule,
     SyncModule,
+    TeacherAttendanceModule,
+    TeacherContractsModule,
+    TeacherPaymentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

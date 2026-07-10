@@ -14,12 +14,15 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
+import { useNavigate } from 'react-router-dom'
 import {
   BarChartIcon,
   ExclamationTriangleIcon,
   PersonIcon,
   TimerIcon,
-  CheckCircledIcon
+  CheckCircledIcon,
+  ReaderIcon,
+  CalendarIcon
 } from '@radix-ui/react-icons'
 import client from '@/api/client'
 import type { ApiResponse, Payment, Student } from '@/types'
@@ -43,6 +46,7 @@ function fetchDashboard(): Promise<ApiResponse<DashboardData>> {
 }
 
 export function FinanceDashboardPage() {
+  const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['finance-dashboard'],
     queryFn: fetchDashboard

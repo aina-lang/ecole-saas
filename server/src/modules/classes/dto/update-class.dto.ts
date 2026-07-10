@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateClassDto {
@@ -19,4 +19,14 @@ export class UpdateClassDto {
   @Min(1)
   @Type(() => Number)
   capacity?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  subjectIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  teacherIds?: string[];
 }

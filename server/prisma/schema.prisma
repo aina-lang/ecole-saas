@@ -112,7 +112,10 @@ model Tenant {
   auditLogs       AuditLog[]
   syncJobs        SyncJob[]
   feeStructures   FeeStructure[]
-  timetableSlots  TimetableSlot[]
+  timetableSlots    TimetableSlot[]
+  teacherAttendances TeacherAttendance[]
+  teacherContracts   TeacherContract[]
+  teacherPayments    TeacherPayment[]
 
   @@map("tenants")
 }
@@ -294,7 +297,10 @@ model Teacher {
   classes   Class[]
   subjects  Subject[]
   grades    Grade[]
-  timetable TimetableSlot[]
+  timetable     TimetableSlot[]
+  attendances   TeacherAttendance[]
+  contract      TeacherContract?
+  payments      TeacherPayment[]
 
   @@map("teachers")
 }
@@ -318,6 +324,88 @@ model TimetableSlot {
 
   @@index([tenantId, classId])
   @@map("timetable_slots")
+}
+
+enum TeacherAttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ContractType {
+  HOURLY
+  MONTHLY
+  FIXED
+}
+
+enum TeacherPaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+model TeacherAttendance {
+  id             String                  @id @default(cuid())
+  tenantId       String
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId      String
+  teacher        Teacher                 @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  date           DateTime
+  status         TeacherAttendanceStatus @default(PRESENT)
+  justification  String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([teacherId, date])
+  @@index([tenantId, date])
+  @@map("teacher_attendances")
+}
+
+model TeacherContract {
+  id            String       @id @default(cuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId     String       @unique
+  teacher       Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  contractType  ContractType @default(HOURLY)
+  hourlyRate    Float?
+  monthlySalary Float?
+  fixedAmount   Float?
+  startDate     DateTime
+  endDate       DateTime?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("teacher_contracts")
+}
+
+model TeacherPayment {
+  id              String                @id @default(cuid())
+  tenantId        String
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId       String
+  teacher         Teacher               @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  periodLabel     String
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalHours      Float                 @default(0)
+  hourlyRate      Float?
+  baseAmount      Float                 @default(0)
+  bonusAmount     Float                 @default(0)
+  deductionAmount Float                 @default(0)
+  totalAmount     Float                 @default(0)
+  status          TeacherPaymentStatus  @default(PENDING)
+  paidAt          DateTime?
+  paymentMethod   String?
+  reference       String?
+  notes           String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([tenantId, teacherId])
+  @@map("teacher_payments")
 }
 
 model Grade {

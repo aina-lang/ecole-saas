@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/form'
 
 const studentFormSchema = z.object({
-  firstName: z.string().min(1, 'Le prénom est requis'),
+  firstName: z.string().optional().or(z.literal('')),
   lastName: z.string().min(1, 'Le nom est requis'),
   birthDate: z.string().min(1, 'La date de naissance est requise'),
   birthPlace: z.string().optional(),
@@ -48,6 +48,25 @@ const studentFormSchema = z.object({
   enrollmentDate: z.string().min(1, "La date d'inscription est requise")
 })
 
+const fieldTabMap: Record<string, string> = {
+  lastName: 'identite',
+  firstName: 'identite',
+  birthDate: 'identite',
+  birthPlace: 'identite',
+  gender: 'identite',
+  nationality: 'identite',
+  address: 'contact',
+  phone: 'contact',
+  email: 'contact',
+  emergencyContact: 'contact',
+  emergencyPhone: 'contact',
+  bloodType: 'medical',
+  allergies: 'medical',
+  medicalNotes: 'medical',
+  classId: 'scolarite',
+  enrollmentDate: 'scolarite',
+}
+
 interface ParentLink {
   parentId: string
   relation: 'PARENT' | 'TUTEUR'
@@ -61,6 +80,7 @@ export function StudentFormPage() {
   const { id } = useParams()
   const queryClient = useQueryClient()
   const isEditing = !!id
+  const [activeTab, setActiveTab] = useState('identite')
 
   const { data: classes } = useQuery({
     queryKey: ['classes-list'],
@@ -174,7 +194,9 @@ export function StudentFormPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
-      const { data } = await client.post('/students', { ...values, parents: parentLinks })
+      const payload: Record<string, unknown> = { ...values, parents: parentLinks }
+      if (!payload.firstName) delete payload.firstName
+      const { data } = await client.post('/students', payload)
       return data
     },
     onSuccess: () => {
@@ -230,14 +252,20 @@ export function StudentFormPage() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Tabs defaultValue="identite" className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+          const errorFields = Object.keys(errors)
+          if (errorFields.length > 0) {
+            const tab = fieldTabMap[errorFields[0]]
+            if (tab) setActiveTab(tab)
+          }
+        })} className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
               <TabsTrigger value="identite">Identité</TabsTrigger>
+              <TabsTrigger value="parents">Parents / Tuteurs</TabsTrigger>
               <TabsTrigger value="contact">Contact</TabsTrigger>
               <TabsTrigger value="medical">Médical</TabsTrigger>
               <TabsTrigger value="scolarite">Scolarité</TabsTrigger>
-              <TabsTrigger value="parents">Parents / Tuteurs</TabsTrigger>
             </TabsList>
 
             <TabsContent value="identite">
@@ -264,7 +292,7 @@ export function StudentFormPage() {
                     name="firstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Prénom *</FormLabel>
+                        <FormLabel>Prénom</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Prénom" />
                         </FormControl>

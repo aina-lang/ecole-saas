@@ -187,7 +187,7 @@ export class AuthService {
       data: { twoFactorSecret: secret },
     });
 
-    const otpauth = `otpauth://totp/Ecole-SaaS:${encodeURIComponent(user_.email)}?secret=${secret}&issuer=Ecole-SaaS`;
+    const otpauth = `otpauth://totp/Ecole-SaaS:${encodeURIComponent(user_.email || '')}?secret=${secret}&issuer=Ecole-SaaS`;
     const qrCode = await toDataURL(otpauth);
     return { secret, qrCode };
   }
