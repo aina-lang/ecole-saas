@@ -11,6 +11,7 @@ import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -394,9 +395,8 @@ export function UserFormPage() {
                   <FormItem>
                     <FormLabel>{isEditing ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe *'}</FormLabel>
                     <FormControl>
-                      <Input
+                      <PasswordInput
                         placeholder={isEditing ? 'Laisser vide pour conserver' : '••••••••'}
-                        type="password"
                         {...field}
                       />
                     </FormControl>

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
@@ -580,7 +581,7 @@ export function SettingsPage() {
                       <FormItem>
                         <FormLabel>Mot de passe actuel</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="••••••••" {...field} />
+                          <PasswordInput placeholder="••••••••" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -593,7 +594,7 @@ export function SettingsPage() {
                       <FormItem>
                         <FormLabel>Nouveau mot de passe</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Minimum 6 caractères" {...field} />
+                          <PasswordInput placeholder="Minimum 6 caractères" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -606,7 +607,7 @@ export function SettingsPage() {
                       <FormItem>
                         <FormLabel>Confirmer le mot de passe</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Répétez le mot de passe" {...field} />
+                          <PasswordInput placeholder="Répétez le mot de passe" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

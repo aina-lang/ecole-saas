@@ -10,9 +10,19 @@ import type { Student } from '@/types'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Combobox } from '@/components/ui/combobox'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { PlusIcon } from '@radix-ui/react-icons'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Form,
@@ -97,6 +107,12 @@ export function StudentFormPage() {
   })
 
   const [parentLinks, setParentLinks] = useState<ParentLink[]>([])
+  const [parentDialogOpen, setParentDialogOpen] = useState(false)
+  const [npLastName, setNpLastName] = useState('')
+  const [npFirstName, setNpFirstName] = useState('')
+  const [npEmail, setNpEmail] = useState('')
+  const [npPassword, setNpPassword] = useState('')
+  const [npPhones, setNpPhones] = useState<string[]>([''])
 
   const { data: student } = useQuery({
     queryKey: ['student', id],
@@ -202,6 +218,35 @@ export function StudentFormPage() {
     },
     onError: () => {
       toast.error("Erreur lors de la création de l'élève")
+    }
+  })
+
+  const createParentMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, unknown> = { lastName: npLastName.trim(), role: 'PARENT' }
+      if (npFirstName.trim()) payload.firstName = npFirstName.trim()
+      if (npEmail.trim()) payload.email = npEmail.trim()
+      if (npPassword.trim()) payload.password = npPassword.trim()
+      const phones = npPhones.map((p) => p.trim()).filter(Boolean)
+      if (phones.length) payload.phones = phones
+      const { data } = await client.post('/users', payload)
+      return data
+    },
+    onSuccess: (data) => {
+      const newUser = data?.data ?? data
+      const id = newUser?.id ?? newUser?._id
+      if (id) addParent(id)
+      queryClient.invalidateQueries({ queryKey: ['parent-users'] })
+      setParentDialogOpen(false)
+      setNpLastName('')
+      setNpFirstName('')
+      setNpEmail('')
+      setNpPassword('')
+      setNpPhones([''])
+      toast.success('Parent créé et ajouté')
+    },
+    onError: () => {
+      toast.error('Erreur lors de la création du parent')
     }
   })
 
@@ -556,7 +601,117 @@ export function StudentFormPage() {
                         placeholder="Sélectionner un compte parent..."
                       />
                     </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => setParentDialogOpen(true)}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </Button>
                   </div>
+
+                  <Dialog open={parentDialogOpen} onOpenChange={setParentDialogOpen}>
+                    <DialogContent className="sm:max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>Nouveau parent / tuteur</DialogTitle>
+                        <DialogDescription>
+                          Créer un compte parent pour l'associer à cet élève
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Nom *</label>
+                          <Input
+                            placeholder="Nom de famille"
+                            value={npLastName}
+                            onChange={(e) => setNpLastName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Prénom</label>
+                          <Input
+                            placeholder="Prénom"
+                            value={npFirstName}
+                            onChange={(e) => setNpFirstName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Email</label>
+                          <Input
+                            placeholder="email@exemple.com"
+                            type="email"
+                            value={npEmail}
+                            onChange={(e) => setNpEmail(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Mot de passe</label>
+                          <PasswordInput
+                            placeholder="Laisser vide pour générer"
+                            value={npPassword}
+                            onChange={(e) => setNpPassword(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-sm font-medium">Téléphone (max 3)</label>
+                          {npPhones.map((phone, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <Input
+                                placeholder="+261 ..."
+                                value={phone}
+                                onChange={(e) =>
+                                  setNpPhones((prev) => {
+                                    const next = [...prev]
+                                    next[index] = e.target.value
+                                    return next
+                                  })
+                                }
+                              />
+                              {npPhones.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() =>
+                                    setNpPhones((prev) => {
+                                      const next = prev.filter((_, i) => i !== index)
+                                      return next.length ? next : ['']
+                                    })
+                                  }
+                                >
+                                  ×
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                          {npPhones.length < 3 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setNpPhones((prev) => [...prev, ''])}
+                            >
+                              + Ajouter un numéro
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setParentDialogOpen(false)}>
+                          Annuler
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={!npLastName.trim() || createParentMutation.isPending}
+                          onClick={() => createParentMutation.mutate()}
+                        >
+                          {createParentMutation.isPending ? 'Création...' : 'Créer et ajouter'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                   {parentLinks.length === 0 && (
                     <p className="text-sm text-muted-foreground">
