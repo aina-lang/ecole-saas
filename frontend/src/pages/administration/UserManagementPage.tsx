@@ -1,8 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -21,8 +19,7 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
-  CardDescription
+  CardTitle
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,23 +31,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from '@/components/ui/dialog'
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage
-} from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
 import {
   Pagination,
@@ -64,8 +44,7 @@ import {
 import {
   PlusIcon,
   MagnifyingGlassIcon,
-  Pencil2Icon,
-  ReloadIcon
+  Pencil2Icon
 } from '@radix-ui/react-icons'
 
 const roleColors: Record<string, string> = {
@@ -106,81 +85,18 @@ const rolePermissions: Record<string, string[]> = {
   ]
 }
 
-const userSchema = z.object({
-  email: z.string().email('Adresse email invalide'),
-  firstName: z.string().min(1, 'Le prénom est requis'),
-  lastName: z.string().min(1, 'Le nom est requis'),
-  role: z.enum(['ADMIN', 'TEACHER', 'SECRETARY', 'PARENT']),
-  password: z.string().min(6, 'Minimum 6 caractères').optional().or(z.literal('')),
-  phoneNumber: z.string().optional().or(z.literal('')),
-  specialty: z.string().optional().or(z.literal(''))
-})
-
-type UserFormValues = z.infer<typeof userSchema>
-
 interface UserWithMeta extends User {
   lastLoginAt?: string | null
   teacher?: { id: string; specialty?: string | null } | null
 }
 
-interface Option {
-  id: string
-  name: string
-}
-
-function MultiSelect({
-  options,
-  selected,
-  onChange,
-  placeholder
-}: {
-  options: Option[]
-  selected: string[]
-  onChange: (next: string[]) => void
-  placeholder: string
-}) {
-  if (!options.length) {
-    return <p className="text-xs text-muted-foreground">Aucune option disponible.</p>
-  }
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => {
-        const active = selected.includes(opt.id)
-        return (
-          <button
-            type="button"
-            key={opt.id}
-            onClick={() =>
-              onChange(active ? selected.filter((i) => i !== opt.id) : [...selected, opt.id])
-            }
-            className={
-              'rounded-full border px-3 py-1 text-xs transition-colors ' +
-              (active
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-accent')
-            }
-          >
-            {opt.name}
-          </button>
-        )
-      })}
-      {!selected.length && (
-        <span className="text-xs text-muted-foreground">{placeholder}</span>
-      )}
-    </div>
-  )
-}
-
 export function UserManagementPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [page, setPage] = useState(1)
-  const [editingUser, setEditingUser] = useState<UserWithMeta | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [teacherClassIds, setTeacherClassIds] = useState<string[]>([])
-  const [teacherSubjectIds, setTeacherSubjectIds] = useState<string[]>([])
-  const [newSubject, setNewSubject] = useState('')
+  const [selectedUser, setSelectedUser] = useState<UserWithMeta | null>(null)
   const limit = 10
 
   const { data: usersData, isLoading } = useQuery({
@@ -191,160 +107,6 @@ export function UserManagementPage() {
       if (roleFilter !== 'all') params.role = roleFilter
       const { data } = await client.get('/users', { params })
       return data as PaginatedResponse<UserWithMeta>
-    }
-  })
-
-  const { data: classes } = useQuery<Option[]>({
-    queryKey: ['classes-opt'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string }>
-      return items.map((c) => ({ id: c.id, name: c.name }))
-    }
-  })
-
-  const { data: subjects } = useQuery<Option[]>({
-    queryKey: ['subjects-opt'],
-    queryFn: async () => {
-      const res = await client.get('/subjects')
-      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string; level?: string | null }>
-      return items.map((s) => ({ id: s.id, name: s.level ? `${s.name} (${s.level})` : s.name }))
-    }
-  })
-
-  const form = useForm<UserFormValues>({
-    resolver: zodResolver(userSchema),
-    defaultValues: {
-      email: '',
-      firstName: '',
-      lastName: '',
-      role: 'TEACHER',
-      password: '',
-      phoneNumber: '',
-      specialty: ''
-    }
-  })
-
-  const watchedRole = form.watch('role')
-
-  function resetTeacherState() {
-    setTeacherClassIds([])
-    setTeacherSubjectIds([])
-  }
-
-  async function openCreate() {
-    setEditingUser(null)
-    resetTeacherState()
-    form.reset({
-      email: '',
-      firstName: '',
-      lastName: '',
-      role: 'TEACHER',
-      password: '',
-      phoneNumber: '',
-      specialty: ''
-    })
-    setDialogOpen(true)
-  }
-
-  async function openEdit(user: UserWithMeta) {
-    setEditingUser(user)
-    resetTeacherState()
-    form.reset({
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role as UserFormValues['role'],
-      password: '',
-      phoneNumber: user.phoneNumber ?? '',
-      specialty: ''
-    })
-
-    if (user.role === 'TEACHER' && user.teacher?.id) {
-      try {
-        const { data } = await client.get(`/teachers/${user.teacher.id}`)
-        const teacher = data.data ?? data
-        form.setValue('specialty', teacher.specialty ?? '')
-        setTeacherClassIds((teacher.classes ?? []).map((c: { id: string }) => c.id))
-        setTeacherSubjectIds((teacher.subjects ?? []).map((s: { id: string }) => s.id))
-      } catch {
-        /* ignore */
-      }
-    }
-    setDialogOpen(true)
-  }
-
-  const createSubjectMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const { data } = await client.post('/subjects', { name: name.trim(), coefficient: 1 })
-      return (data.data ?? data) as { id: string; name: string }
-    },
-    onSuccess: (subject) => {
-      queryClient.setQueryData(['subjects-opt'], (old: Option[] | undefined) =>
-        old ? [...old, { id: subject.id, name: subject.name }] : [{ id: subject.id, name: subject.name }]
-      )
-      setTeacherSubjectIds((prev) => (prev.includes(subject.id) ? prev : [...prev, subject.id]))
-      setNewSubject('')
-      toast.success('Matière créée')
-    },
-    onError: () => toast.error("Erreur lors de la création de la matière")
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: async (values: UserFormValues) => {
-      const baseUser = {
-        email: values.email,
-        firstName: values.firstName,
-        lastName: values.lastName,
-        phoneNumber: values.phoneNumber || undefined
-      }
-
-      if (editingUser) {
-        if (values.role === 'TEACHER' && editingUser.teacher?.id) {
-          const payload: Record<string, unknown> = {
-            ...baseUser,
-            specialty: values.specialty || undefined,
-            classIds: teacherClassIds,
-            subjectIds: teacherSubjectIds
-          }
-          if (values.password) payload.password = values.password
-          await client.patch(`/teachers/${editingUser.teacher.id}`, payload)
-        } else {
-          const payload: Record<string, unknown> = {
-            ...baseUser,
-            role: values.role,
-            isActive: editingUser.isActive
-          }
-          if (values.password) payload.password = values.password
-          await client.patch(`/users/${editingUser.id}`, payload)
-        }
-      } else {
-        if (values.role === 'TEACHER') {
-          await client.post('/teachers', {
-            ...baseUser,
-            password: values.password,
-            specialty: values.specialty || undefined,
-            classIds: teacherClassIds,
-            subjectIds: teacherSubjectIds
-          })
-        } else {
-          await client.post('/users', {
-            ...baseUser,
-            password: values.password,
-            role: values.role
-          })
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-      queryClient.invalidateQueries({ queryKey: ['classes-opt'] })
-      queryClient.invalidateQueries({ queryKey: ['subjects-opt'] })
-      toast.success(editingUser ? 'Utilisateur modifié avec succès' : 'Utilisateur créé avec succès')
-      setDialogOpen(false)
-    },
-    onError: () => {
-      toast.error('Erreur lors de l\'enregistrement de l\'utilisateur')
     }
   })
 
@@ -360,8 +122,6 @@ export function UserManagementPage() {
       toast.error('Erreur lors de la modification du statut')
     }
   })
-
-  const isTeacher = watchedRole === 'TEACHER'
 
   const totalPages = usersData ? Math.ceil(usersData.total / limit) : 0
 
@@ -388,199 +148,10 @@ export function UserManagementPage() {
           <h2 className="text-2xl font-bold tracking-tight">Gestion des utilisateurs</h2>
           <p className="text-muted-foreground">Gérer les comptes utilisateurs de l'établissement</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Ajouter un utilisateur
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingUser ? 'Modifier l\'utilisateur' : 'Ajouter un utilisateur'}</DialogTitle>
-              <DialogDescription>
-                {editingUser
-                  ? 'Modifiez les informations de l\'utilisateur'
-                  : 'Créez un nouveau compte utilisateur'}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nom de famille" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Prénom</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Prénom" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="email@exemple.com" type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="phoneNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Téléphone</FormLabel>
-                      <FormControl>
-                        <Input placeholder="+261 ..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="role"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Rôle</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un rôle" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="ADMIN">Administrateur</SelectItem>
-                          <SelectItem value="TEACHER">Enseignant</SelectItem>
-                          <SelectItem value="SECRETARY">Secrétaire</SelectItem>
-                          <SelectItem value="PARENT">Parent</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {isTeacher && (
-                  <div className="space-y-4 rounded-md border p-3">
-                    <p className="text-sm font-medium text-muted-foreground">Informations enseignant</p>
-                    <FormField
-                      control={form.control}
-                      name="specialty"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Spécialité</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ex: Mathématiques" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="space-y-1.5">
-                      <FormLabel>Classes affectées</FormLabel>
-                      <MultiSelect
-                        options={classes ?? []}
-                        selected={teacherClassIds}
-                        onChange={setTeacherClassIds}
-                        placeholder="Sélectionner des classes"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <FormLabel>Matières enseignées</FormLabel>
-                      <MultiSelect
-                        options={subjects ?? []}
-                        selected={teacherSubjectIds}
-                        onChange={setTeacherSubjectIds}
-                        placeholder="Sélectionner des matières"
-                      />
-                      <div className="flex gap-2 pt-1">
-                        <Input
-                          placeholder="Créer une nouvelle matière..."
-                          value={newSubject}
-                          onChange={(e) => setNewSubject(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              if (newSubject.trim()) createSubjectMutation.mutate(newSubject)
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={!newSubject.trim() || createSubjectMutation.isPending}
-                          onClick={() => createSubjectMutation.mutate(newSubject)}
-                        >
-                          <PlusIcon className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{editingUser ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe'}</FormLabel>
-                      <FormControl>
-                        <Input placeholder={editingUser ? 'Laisser vide pour conserver' : '••••••••'} type="password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {editingUser && (
-                  <div className="rounded-md bg-muted p-3">
-                    <p className="text-xs text-muted-foreground">Permissions :</p>
-                    <ul className="mt-1 list-inside list-disc text-xs text-muted-foreground">
-                      {(rolePermissions[editingUser.role] || []).map((perm) => (
-                        <li key={perm}>{perm}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <DialogFooter>
-                  <Button type="submit" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending ? (
-                      <>
-                        <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                        Enregistrement...
-                      </>
-                    ) : (
-                      editingUser ? 'Modifier' : 'Créer'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => navigate('/administration/users/new')}>
+          <PlusIcon className="mr-2 h-4 w-4" />
+          Ajouter un utilisateur
+        </Button>
       </div>
 
       <Card>
@@ -648,7 +219,9 @@ export function UserManagementPage() {
                     <TableCell className="font-medium">{user.lastName}</TableCell>
                     <TableCell>{user.firstName}</TableCell>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{user.phoneNumber || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {user.phones?.map((p) => p.value).join(', ') || '-'}
+                    </TableCell>
                     <TableCell>
                       <Badge className={roleColors[user.role] || ''} variant="secondary">
                         {user.role === 'ADMIN' && 'Admin'}
@@ -670,7 +243,7 @@ export function UserManagementPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
+                        <Button variant="ghost" size="icon" onClick={() => navigate(`/administration/users/${user.id}/edit`)}>
                           <Pencil2Icon className="h-4 w-4" />
                         </Button>
                         <Switch
@@ -725,20 +298,20 @@ export function UserManagementPage() {
         </Pagination>
       )}
 
-      {editingUser && (
+      {selectedUser && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Permissions - {editingUser.firstName} {editingUser.lastName}</CardTitle>
+            <CardTitle className="text-lg">Permissions - {selectedUser.firstName} {selectedUser.lastName}</CardTitle>
             <CardDescription>
-              Rôle actuel : {editingUser.role === 'ADMIN' && 'Administrateur'}
-              {editingUser.role === 'TEACHER' && 'Enseignant'}
-              {editingUser.role === 'SECRETARY' && 'Secrétaire'}
-              {editingUser.role === 'PARENT' && 'Parent'}
+              Rôle actuel : {selectedUser.role === 'ADMIN' && 'Administrateur'}
+              {selectedUser.role === 'TEACHER' && 'Enseignant'}
+              {selectedUser.role === 'SECRETARY' && 'Secrétaire'}
+              {selectedUser.role === 'PARENT' && 'Parent'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {(rolePermissions[editingUser.role] || []).map((perm) => (
+              {(rolePermissions[selectedUser.role] || []).map((perm) => (
                 <li key={perm} className="flex items-center gap-2 text-sm">
                   <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                   {perm}

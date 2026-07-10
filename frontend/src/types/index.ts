@@ -1,12 +1,24 @@
+export interface UserPhone {
+  value: string
+  sortOrder: number
+}
+
 export interface User {
   id: string
   email: string
   firstName: string
   lastName: string
-  phoneNumber?: string | null
+  phones?: UserPhone[] | null
   role: string
   tenantId: string
   isActive: boolean
+}
+
+export interface StudentParentLink {
+  id: string
+  relation: 'PARENT' | 'TUTEUR'
+  isPrimary: boolean
+  parent: { id: string; firstName: string; lastName: string; email?: string | null; phones?: UserPhone[] | null }
 }
 
 export interface Student {
@@ -22,6 +34,7 @@ export interface Student {
   parentPhone?: string
   parentEmail?: string
   address?: string
+  parents?: StudentParentLink[]
   createdAt: string
   updatedAt: string
 }
@@ -38,8 +51,11 @@ export interface Class {
 export interface Subject {
   id: string
   name: string
-  code: string
+  code: string | null
+  level: string | null
   coefficient: number
+  classId: string | null
+  class?: { id: string; name: string } | null
 }
 
 export interface Teacher {

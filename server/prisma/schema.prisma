@@ -161,13 +161,13 @@ model User {
   id               String           @id @default(cuid())
   tenantId         String
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email            String
+  email            String?
   passwordHash     String
-  firstName        String
+  firstName        String?
   lastName         String
   role             UserRole         @default(TEACHER)
-  phoneNumber      String?
   isActive         Boolean          @default(true)
+  phones           UserPhone[]
   twoFactorSecret  String?
   twoFactorEnabled Boolean          @default(false)
   lastLoginAt      DateTime?
@@ -182,6 +182,17 @@ model User {
 
   @@unique([tenantId, email])
   @@map("users")
+}
+
+model UserPhone {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  value     String
+  sortOrder Int    @default(0)
+
+  @@unique([userId, value])
+  @@map("user_phones")
 }
 
 model Student {

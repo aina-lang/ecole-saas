@@ -12,7 +12,10 @@ const TEACHER_INCLUDE = {
       email: true,
       firstName: true,
       lastName: true,
-      phoneNumber: true,
+      phones: {
+        select: { value: true, sortOrder: true },
+        orderBy: { sortOrder: 'asc' as const },
+      },
       isActive: true,
       role: true,
     },
@@ -45,25 +48,38 @@ export class TeachersService {
     return teacher;
   }
 
-  async create(tenantId: string, dto: CreateTeacherDto, userId?: string) {
-    const existing = await this.prisma.user.findFirst({
-      where: { tenantId, email: dto.email },
-    });
-    if (existing) throw new ConflictException('Cet email existe déjà');
+  private normalizePhones(phones?: string[]): string[] {
+    if (!phones) return [];
+    return Array.from(new Set(phones.map((p) => p.trim()).filter(Boolean))).slice(0, 3);
+  }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+  async create(tenantId: string, dto: CreateTeacherDto, userId?: string) {
+    if (dto.email) {
+      const existing = await this.prisma.user.findFirst({
+        where: { tenantId, email: dto.email },
+      });
+      if (existing) throw new ConflictException('Cet email existe déjà');
+    }
+
+    const phones = this.normalizePhones(dto.phones);
+
+    const userData: any = {
+      tenantId,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      role: 'TEACHER',
+      phones: phones.length
+        ? { create: phones.map((value, sortOrder) => ({ value, sortOrder })) }
+        : undefined,
+    };
+    if (dto.email) userData.email = dto.email;
+    userData.passwordHash = dto.password
+      ? await bcrypt.hash(dto.password, 12)
+      : await bcrypt.hash('Default123!', 12);
 
     const teacher = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: {
-          tenantId,
-          email: dto.email,
-          passwordHash,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          role: 'TEACHER',
-          phoneNumber: dto.phoneNumber,
-        },
+        data: userData,
       });
 
       const created = await tx.teacher.create({
@@ -99,12 +115,18 @@ export class TeachersService {
     const teacher = await this.prisma.teacher.findFirst({ where: { id, tenantId } });
     if (!teacher) throw new NotFoundException('Enseignant non trouvé');
 
-    if (dto.firstName || dto.lastName || dto.email || dto.phoneNumber || dto.password) {
+    if (dto.firstName || dto.lastName || dto.email || dto.phones !== undefined || dto.password) {
       const data: any = {};
       if (dto.firstName) data.firstName = dto.firstName;
       if (dto.lastName) data.lastName = dto.lastName;
       if (dto.email) data.email = dto.email;
-      if (dto.phoneNumber !== undefined) data.phoneNumber = dto.phoneNumber;
+      if (dto.phones !== undefined) {
+        const phones = this.normalizePhones(dto.phones);
+        data.phones = {
+          deleteMany: {},
+          create: phones.map((value, sortOrder) => ({ value, sortOrder })),
+        };
+      }
       if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 12);
       await this.prisma.user.update({ where: { id: teacher.userId }, data });
     }

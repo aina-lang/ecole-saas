@@ -142,6 +142,30 @@ function initializeSchema() {
       synced INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS users_local (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT,
+      email TEXT,
+      first_name TEXT,
+      last_name TEXT,
+      role TEXT DEFAULT 'TEACHER',
+      is_active INTEGER DEFAULT 1,
+      specialty TEXT,
+      version INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
+      synced INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS user_phones_local (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      value TEXT,
+      sort_order INTEGER DEFAULT 0,
+      FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+    );
+
     INSERT OR IGNORE INTO sync_metadata (key, value) VALUES ('device_id', '');
     INSERT OR IGNORE INTO sync_metadata (key, value) VALUES ('last_sync_timestamp', '');
   `)

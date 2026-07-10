@@ -31,7 +31,7 @@ export class GradesService {
       where,
       include: {
         student: { select: { id: true, firstName: true, lastName: true, registrationNumber: true } },
-        subject: { select: { id: true, name: true, code: true } },
+        subject: { select: { id: true, name: true, code: true, level: true, class: { select: { id: true, name: true } } } },
         period: { select: { id: true, label: true } },
         teacher: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
       },
@@ -44,7 +44,7 @@ export class GradesService {
       where: { id, tenantId, deletedAt: null },
       include: {
         student: { select: { id: true, firstName: true, lastName: true, registrationNumber: true } },
-        subject: { select: { id: true, name: true, code: true } },
+        subject: { select: { id: true, name: true, code: true, level: true, class: { select: { id: true, name: true } } } },
         period: { select: { id: true, label: true } },
         teacher: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
       },

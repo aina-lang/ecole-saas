@@ -98,7 +98,7 @@ export class StudentsService {
       if (existing) throw new ConflictException('Cet email est déjà utilisé par un autre étudiant');
     }
 
-    const { parentIds, ...studentData } = dto;
+    const { parents, ...studentData } = dto;
 
     const student = await this.prisma.student.create({
       data: {
@@ -106,12 +106,12 @@ export class StudentsService {
         tenantId,
         registrationNumber,
         birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
-        parents: parentIds?.length
+        parents: parents?.length
           ? {
-              create: parentIds.map((parentId) => ({
-                parentId,
-                relation: 'PARENT',
-                isPrimary: false,
+              create: parents.map((p) => ({
+                parentId: p.parentId,
+                relation: p.relation ?? 'PARENT',
+                isPrimary: p.isPrimary ?? false,
               })),
             }
           : undefined,
@@ -151,7 +151,7 @@ export class StudentsService {
       if (emailConflict) throw new ConflictException('Cet email est déjà utilisé par un autre étudiant');
     }
 
-    const { parentIds, ...studentData } = dto;
+    const { parents, ...studentData } = dto;
 
     const updateData: any = { ...studentData };
     if (dto.birthDate) updateData.birthDate = new Date(dto.birthDate);
@@ -159,15 +159,15 @@ export class StudentsService {
     if (userId) updateData.updatedBy = userId;
 
     const student = await this.prisma.$transaction(async (tx) => {
-      if (parentIds !== undefined) {
+      if (parents !== undefined) {
         await tx.studentParent.deleteMany({ where: { studentId: id } });
-        if (parentIds.length > 0) {
+        if (parents.length > 0) {
           await tx.studentParent.createMany({
-            data: parentIds.map((parentId) => ({
+            data: parents.map((p) => ({
               studentId: id,
-              parentId,
-              relation: 'PARENT',
-              isPrimary: false,
+              parentId: p.parentId,
+              relation: p.relation ?? 'PARENT',
+              isPrimary: p.isPrimary ?? false,
             })),
           });
         }

@@ -3,7 +3,12 @@ import {
   IsOptional,
   IsDateString,
   IsArray,
+  IsBoolean,
+  IsIn,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { StudentParentLinkDto } from './create-student.dto';
 
 export class UpdateStudentDto {
   @IsOptional()
@@ -68,6 +73,7 @@ export class UpdateStudentDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  parentIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => StudentParentLinkDto)
+  parents?: StudentParentLinkDto[];
 }

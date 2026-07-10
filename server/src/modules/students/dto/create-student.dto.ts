@@ -4,7 +4,24 @@ import {
   IsDateString,
   IsArray,
   IsNotEmpty,
+  IsBoolean,
+  IsIn,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class StudentParentLinkDto {
+  @IsString()
+  parentId: string;
+
+  @IsOptional()
+  @IsIn(['PARENT', 'TUTEUR'], { message: 'Relation invalide (PARENT ou TUTEUR)' })
+  relation?: 'PARENT' | 'TUTEUR';
+
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+}
 
 export class CreateStudentDto {
   @IsString()
@@ -69,6 +86,7 @@ export class CreateStudentDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  parentIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => StudentParentLinkDto)
+  parents?: StudentParentLinkDto[];
 }

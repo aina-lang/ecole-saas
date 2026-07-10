@@ -5,7 +5,16 @@ import { CreateTimetableSlotDto } from './dto/create-timetable-slot.dto';
 import { UpdateTimetableSlotDto } from './dto/update-timetable-slot.dto';
 
 const SLOT_INCLUDE = {
-  subject: { select: { id: true, name: true, code: true, coefficient: true } },
+  subject: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      coefficient: true,
+      level: true,
+      class: { select: { id: true, name: true } },
+    },
+  },
   teacher: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
 };
 

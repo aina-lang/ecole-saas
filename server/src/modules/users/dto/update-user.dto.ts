@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsEnum, IsOptional, MinLength, IsBoolean } from 'class-validator';
+import { IsEmail, IsString, IsEnum, IsOptional, MinLength, IsBoolean, IsArray, ArrayMaxSize } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class UpdateUserDto {
@@ -28,6 +28,8 @@ export class UpdateUserDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsString()
-  phoneNumber?: string;
+  @IsArray()
+  @ArrayMaxSize(3, { message: 'Maximum 3 numéros autorisés' })
+  @IsString({ each: true })
+  phones?: string[];
 }

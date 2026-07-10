@@ -189,21 +189,26 @@ export function StudentDetailPage() {
                     <p className="font-medium">{(student as any).phone}</p>
                   </div>
                 )}
-                {student.parentName && (
+                {student.parents && student.parents.length > 0 && (
                   <div>
-                    <span className="text-muted-foreground">Parent:</span>
-                    <p className="font-medium">{student.parentName}</p>
+                    <span className="text-muted-foreground">Parent(s) / Tuteur(s):</span>
+                    <ul className="mt-1 space-y-1">
+                      {student.parents.map((link) => (
+                        <li key={link.id} className="font-medium">
+                          {link.parent.firstName} {link.parent.lastName}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {link.relation === 'TUTEUR' ? 'Tuteur' : 'Parent'}
+                            {link.isPrimary ? ' · Principal' : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
-                {student.parentPhone && (
-                  <div>
-                    <span className="text-muted-foreground">Tél. parent:</span>
-                    <p className="font-medium">{student.parentPhone}</p>
-                  </div>
-                )}
-                {!student.address && !student.parentName && (
-                  <p className="text-muted-foreground italic">Aucune information de contact</p>
-                )}
+                {!student.address &&
+                  (!student.parents || student.parents.length === 0) && (
+                    <p className="text-muted-foreground italic">Aucune information de contact</p>
+                  )}
               </CardContent>
             </Card>
 

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -48,6 +48,12 @@ const studentFormSchema = z.object({
   enrollmentDate: z.string().min(1, "La date d'inscription est requise")
 })
 
+interface ParentLink {
+  parentId: string
+  relation: 'PARENT' | 'TUTEUR'
+  isPrimary: boolean
+}
+
 type StudentFormValues = z.infer<typeof studentFormSchema>
 
 export function StudentFormPage() {
@@ -63,6 +69,18 @@ export function StudentFormPage() {
       return data.data as { id: string; name: string }[]
     }
   })
+
+  const { data: parentUsers } = useQuery({
+    queryKey: ['parent-users'],
+    queryFn: async () => {
+      const { data } = await client.get('/users', {
+        params: { role: 'PARENT', limit: 200 },
+      })
+      return (data.data ?? []) as Array<{ id: string; firstName: string; lastName: string }>
+    },
+  })
+
+  const [parentLinks, setParentLinks] = useState<ParentLink[]>([])
 
   const { data: student } = useQuery({
     queryKey: ['student', id],
@@ -115,12 +133,48 @@ export function StudentFormPage() {
         classId: student.classId || '',
         enrollmentDate: (student as any).enrollmentDate?.split('T')[0] || ''
       })
+      setParentLinks(
+        (student.parents ?? []).map((p) => ({
+          parentId: p.parent.id,
+          relation: p.relation,
+          isPrimary: p.isPrimary,
+        }))
+      )
     }
   }, [student, form])
 
+  function addParent(parentId: string) {
+    if (!parentId || parentLinks.some((l) => l.parentId === parentId)) return
+    setParentLinks((prev) => [
+      ...prev,
+      { parentId, relation: 'PARENT', isPrimary: prev.length === 0 },
+    ])
+  }
+
+  function updateParentLink(index: number, patch: Partial<ParentLink>) {
+    setParentLinks((prev) =>
+      prev.map((l, i) => {
+        if (i !== index) return l
+        const next = { ...l, ...patch }
+        if (patch.isPrimary) {
+          return next
+        }
+        return next
+      })
+    )
+  }
+
+  function setPrimary(index: number) {
+    setParentLinks((prev) => prev.map((l, i) => ({ ...l, isPrimary: i === index })))
+  }
+
+  function removeParent(index: number) {
+    setParentLinks((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const createMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
-      const { data } = await client.post('/students', values)
+      const { data } = await client.post('/students', { ...values, parents: parentLinks })
       return data
     },
     onSuccess: () => {
@@ -135,7 +189,7 @@ export function StudentFormPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
-      const { data } = await client.patch(`/students/${id}`, values)
+      const { data } = await client.patch(`/students/${id}`, { ...values, parents: parentLinks })
       return data
     },
     onSuccess: () => {
@@ -183,6 +237,7 @@ export function StudentFormPage() {
               <TabsTrigger value="contact">Contact</TabsTrigger>
               <TabsTrigger value="medical">Médical</TabsTrigger>
               <TabsTrigger value="scolarite">Scolarité</TabsTrigger>
+              <TabsTrigger value="parents">Parents / Tuteurs</TabsTrigger>
             </TabsList>
 
             <TabsContent value="identite">
@@ -466,6 +521,94 @@ export function StudentFormPage() {
                       </FormItem>
                     )}
                   />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="parents">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Parent / Tuteur</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <FormLabel>Ajouter un parent ou tuteur</FormLabel>
+                      <Select
+                        value={undefined}
+                        onValueChange={(value) => addParent(value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un compte parent..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(parentUsers ?? [])
+                            .filter((u) => !parentLinks.some((l) => l.parentId === u.id))
+                            .map((u) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.firstName} {u.lastName}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {parentLinks.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Aucun parent ou tuteur rattaché.
+                    </p>
+                  )}
+
+                  <div className="space-y-3">
+                    {parentLinks.map((link, index) => {
+                      const user = (parentUsers ?? []).find((u) => u.id === link.parentId)
+                      return (
+                        <div
+                          key={link.parentId}
+                          className="flex flex-wrap items-center gap-3 rounded-md border p-3"
+                        >
+                          <span className="font-medium">
+                            {user ? `${user.firstName} ${user.lastName}` : link.parentId}
+                          </span>
+                          <Select
+                            value={link.relation}
+                            onValueChange={(value) =>
+                              updateParentLink(index, {
+                                relation: value as 'PARENT' | 'TUTEUR',
+                              })
+                            }
+                          >
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PARENT">Parent</SelectItem>
+                              <SelectItem value="TUTEUR">Tuteur</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="primary-parent"
+                              checked={link.isPrimary}
+                              onChange={() => setPrimary(index)}
+                            />
+                            Principal
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="ml-auto"
+                            onClick={() => removeParent(index)}
+                          >
+                            Retirer
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

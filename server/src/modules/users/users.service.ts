@@ -35,7 +35,10 @@ export class UsersService {
           lastName: true,
           role: true,
           isActive: true,
-          phoneNumber: true,
+          phones: {
+            select: { value: true, sortOrder: true },
+            orderBy: { sortOrder: 'asc' as const },
+          },
           lastLoginAt: true,
           createdAt: true,
           teacher: { select: { id: true, specialty: true } },
@@ -61,6 +64,10 @@ export class UsersService {
         role: true,
         isActive: true,
         twoFactorEnabled: true,
+        phones: {
+          select: { value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' as const },
+        },
         lastLoginAt: true,
         createdAt: true,
         teacher: { select: { id: true, specialty: true } },
@@ -71,32 +78,51 @@ export class UsersService {
   }
 
   async create(tenantId: string, dto: CreateUserDto) {
-    const existing = await this.prisma.user.findFirst({
-      where: { tenantId, email: dto.email },
-    });
-    if (existing) throw new ConflictException('Cet email existe déjà');
+    if (dto.email) {
+      const existing = await this.prisma.user.findFirst({
+        where: { tenantId, email: dto.email },
+      });
+      if (existing) throw new ConflictException('Cet email existe déjà');
+    }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const phones = this.normalizePhones(dto.phones);
+
+    const data: any = {
+      tenantId,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      role: dto.role,
+      phones: phones.length
+        ? { create: phones.map((value, sortOrder) => ({ value, sortOrder })) }
+        : undefined,
+    };
+    if (dto.email) data.email = dto.email;
+    data.passwordHash = dto.password
+      ? await bcrypt.hash(dto.password, 12)
+      : await bcrypt.hash('Default123!', 12);
+
     return this.prisma.user.create({
-      data: {
-        tenantId,
-        email: dto.email,
-        passwordHash,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        role: dto.role,
-        phoneNumber: dto.phoneNumber,
-      },
+      data,
       select: {
         id: true,
         email: true,
         firstName: true,
         lastName: true,
         role: true,
-        phoneNumber: true,
+        phones: {
+          select: { value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' as const },
+        },
         createdAt: true,
       },
     });
+  }
+
+  private normalizePhones(phones?: string[]): string[] {
+    if (!phones) return [];
+    return Array.from(
+      new Set(phones.map((p) => p.trim()).filter(Boolean))
+    ).slice(0, 3);
   }
 
   async update(id: string, tenantId: string, dto: UpdateUserDto) {
@@ -108,9 +134,16 @@ export class UsersService {
     if (dto.lastName) data.lastName = dto.lastName;
     if (dto.email) data.email = dto.email;
     if (dto.role) data.role = dto.role;
-    if (dto.phoneNumber !== undefined) data.phoneNumber = dto.phoneNumber;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 12);
+
+    if (dto.phones !== undefined) {
+      const phones = this.normalizePhones(dto.phones);
+      data.phones = {
+        deleteMany: {},
+        create: phones.map((value, sortOrder) => ({ value, sortOrder })),
+      };
+    }
 
     return this.prisma.user.update({
       where: { id },
@@ -122,6 +155,10 @@ export class UsersService {
         lastName: true,
         role: true,
         isActive: true,
+        phones: {
+          select: { value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' as const },
+        },
       },
     });
   }

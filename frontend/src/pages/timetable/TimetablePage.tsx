@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import type { Subject } from '@/types'
+import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,7 +48,7 @@ interface TimetableSlot {
   id: string
   classId: string
   subjectId: string
-  subject: { id: string; name: string; code: string | null }
+  subject: { id: string; name: string; code: string | null; level: string | null; class?: { id: string; name: string } | null }
   teacher?: { id: string; user: { firstName: string; lastName: string } } | null
   dayOfWeek: number
   startTime: string
@@ -90,12 +92,12 @@ export function TimetablePage() {
     }
   })
 
-  const { data: subjects } = useQuery<Array<{ id: string; name: string }>>({
+  const { data: subjects } = useQuery<Array<Subject>>({
     queryKey: ['subjects-opt'],
     queryFn: async () => {
       const res = await client.get('/subjects')
       const items = res.data.data ?? res.data
-      return (Array.isArray(items) ? items : []).map((s: any) => ({ id: s.id, name: s.name }))
+      return (Array.isArray(items) ? items : []) as Subject[]
     }
   })
 
@@ -284,7 +286,7 @@ export function TimetablePage() {
                       <SelectContent>
                         {(subjects ?? []).map((s) => (
                           <SelectItem key={s.id} value={s.id}>
-                            {s.name}
+                            {formatSubjectLabel(s)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -415,7 +417,7 @@ function FragmentRow({
                   key={slot.id}
                   className="group relative rounded-md border bg-primary/5 p-2 text-xs"
                 >
-                  <div className="font-medium">{slot.subject.name}</div>
+                  <div className="font-medium">{formatSubjectLabel(slot.subject)}</div>
                   {slot.teacher && (
                     <div className="text-muted-foreground">
                       {slot.teacher.user.firstName} {slot.teacher.user.lastName}

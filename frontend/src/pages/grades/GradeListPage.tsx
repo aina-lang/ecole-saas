@@ -7,8 +7,9 @@ import { fr } from 'date-fns/locale'
 import { ArrowUpDown, Edit, Trash2, Plus, Search } from 'lucide-react'
 
 import client from '@/api/client'
-import type { Grade, PaginatedResponse } from '@/types'
+import type { Grade, PaginatedResponse, Subject } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,7 +54,7 @@ import {
 
 interface GradeWithDetails extends Grade {
   student?: { id: string; firstName: string; lastName: string }
-  subject?: { id: string; name: string; code: string }
+  subject?: { id: string; name: string; code: string | null; level: string | null; class?: { id: string; name: string } | null }
   createdAt?: string
 }
 
@@ -62,11 +63,7 @@ interface ClassOption {
   name: string
 }
 
-interface SubjectOption {
-  id: string
-  name: string
-  code: string
-}
+interface SubjectOption extends Subject {}
 
 const evaluationTypeLabels: Record<string, string> = {
   exam: 'Examen',
@@ -107,7 +104,7 @@ export function GradeListPage() {
     queryKey: ['subjects'],
     queryFn: async () => {
       const res = await client.get('/subjects')
-      return res.data.data ?? res.data
+      return (res.data.data ?? res.data) as SubjectOption[]
     }
   })
 
@@ -274,7 +271,7 @@ export function GradeListPage() {
                   <SelectItem value="all">Toutes les matières</SelectItem>
                   {subjects?.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      {s.name}
+                      {formatSubjectLabel(s)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -338,7 +335,7 @@ export function GradeListPage() {
                         ? `${grade.student.lastName} ${grade.student.firstName}`
                         : grade.studentId}
                     </TableCell>
-                    <TableCell>{grade.subject?.name ?? grade.subjectId}</TableCell>
+                    <TableCell>{grade.subject ? formatSubjectLabel(grade.subject) : grade.subjectId}</TableCell>
                     <TableCell>
                       <span
                         className={cn(

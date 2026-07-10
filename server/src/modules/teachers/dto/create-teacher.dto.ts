@@ -1,24 +1,28 @@
-import { IsEmail, IsString, IsNotEmpty, IsOptional, IsArray, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, IsOptional, IsArray, ArrayMaxSize, MinLength } from 'class-validator';
 
 export class CreateTeacherDto {
+  @IsOptional()
   @IsEmail({}, { message: 'Email invalide' })
-  email: string;
+  email?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(8, { message: 'Le mot de passe doit faire au moins 8 caractères' })
-  password: string;
+  password?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Le prénom est requis' })
-  firstName: string;
+  firstName?: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Le nom est requis' })
   lastName: string;
 
   @IsOptional()
-  @IsString()
-  phoneNumber?: string;
+  @IsArray()
+  @ArrayMaxSize(3, { message: 'Maximum 3 numéros autorisés' })
+  @IsString({ each: true })
+  phones?: string[];
 
   @IsOptional()
   @IsString()

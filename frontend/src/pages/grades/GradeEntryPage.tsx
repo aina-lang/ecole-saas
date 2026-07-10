@@ -5,7 +5,8 @@ import { toast } from 'sonner'
 import { Save, ArrowLeft } from 'lucide-react'
 
 import client from '@/api/client'
-import type { Student } from '@/types'
+import type { Student, Subject } from '@/types'
+import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,12 +34,7 @@ interface ClassOption {
   name: string
 }
 
-interface SubjectOption {
-  id: string
-  name: string
-  code: string
-  coefficient: number
-}
+interface SubjectOption extends Subject {}
 
 interface StudentGradeEntry {
   studentId: string
@@ -74,7 +70,7 @@ export function GradeEntryPage() {
     queryKey: ['subjects'],
     queryFn: async () => {
       const res = await client.get('/subjects')
-      return res.data.data ?? res.data
+      return (res.data.data ?? res.data) as SubjectOption[]
     }
   })
 
@@ -251,7 +247,7 @@ export function GradeEntryPage() {
                 <SelectContent>
                   {subjects?.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      {s.name}
+                      {formatSubjectLabel(s)}
                     </SelectItem>
                   ))}
                 </SelectContent>

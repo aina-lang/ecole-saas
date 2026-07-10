@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, IsArray, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsArray, ArrayMaxSize, MinLength } from 'class-validator';
 
 export class UpdateTeacherDto {
   @IsOptional()
@@ -14,8 +14,10 @@ export class UpdateTeacherDto {
   email?: string;
 
   @IsOptional()
-  @IsString()
-  phoneNumber?: string;
+  @IsArray()
+  @ArrayMaxSize(3, { message: 'Maximum 3 numéros autorisés' })
+  @IsString({ each: true })
+  phones?: string[];
 
   @IsOptional()
   @IsString()

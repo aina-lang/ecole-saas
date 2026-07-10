@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import type { Class, Student, Subject, Teacher } from '@/types'
+import { formatSubjectLabel } from '@/lib/subject'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -253,7 +254,7 @@ export function ClassDetailPage() {
                 <div className="flex flex-wrap gap-2">
                   {classData.subjects.map((subject) => (
                     <Badge key={subject.id} variant="secondary">
-                      {subject.name} (Coeff: {subject.coefficient})
+                      {formatSubjectLabel(subject)} (Coeff: {subject.coefficient})
                     </Badge>
                   ))}
                 </div>

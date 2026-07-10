@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import type { Class, Subject, Teacher } from '@/types'
+import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -147,6 +148,11 @@ export function ClassFormPage() {
 
   const selectedSubjectIds = form.watch('subjectIds') || []
   const selectedTeacherIds = form.watch('teacherIds') || []
+  const selectedLevel = form.watch('level')
+
+  const filteredSubjects = (subjects ?? []).filter(
+    (s) => !selectedLevel || !s.level || s.level === selectedLevel
+  )
 
   function toggleSubject(subjectId: string) {
     const current = form.getValues('subjectIds') || []
@@ -267,9 +273,9 @@ export function ClassFormPage() {
               <CardTitle>Matières assignées</CardTitle>
             </CardHeader>
             <CardContent>
-              {subjects && subjects.length > 0 ? (
+              {filteredSubjects.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {subjects.map((subject) => {
+                  {filteredSubjects.map((subject) => {
                     const selected = selectedSubjectIds.includes(subject.id)
                     return (
                       <Badge
@@ -278,14 +284,14 @@ export function ClassFormPage() {
                         className="cursor-pointer select-none"
                         onClick={() => toggleSubject(subject.id)}
                       >
-                        {subject.name}
+                        {formatSubjectLabel(subject)}
                         {selected && <Cross2Icon className="ml-1 h-3 w-3" />}
                       </Badge>
                     )
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Aucune matière disponible</p>
+                <p className="text-sm text-muted-foreground">Aucune matière disponible pour ce niveau</p>
               )}
             </CardContent>
           </Card>
