@@ -23,6 +23,7 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
+import { PhotoUpload } from '@/components/ui/photo-upload'
 
 interface Option {
   id: string
@@ -143,6 +144,32 @@ export function UserFormPage() {
       return data.data ?? data
     },
     enabled: isEditing && !!user?.teacher?.id
+  })
+
+  const photoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await client.post(`/users/${id}/photo`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return data.data ?? data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['user', id] })
+    },
+  })
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await client.delete(`/users/${id}/photo`)
+      return data.data ?? data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['user', id] })
+    },
   })
 
   useEffect(() => {
@@ -415,7 +442,15 @@ export function UserFormPage() {
                   Configurez les informations spécifiques à l'enseignant
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2">
+            <CardContent className="space-y-4">
+              <PhotoUpload
+                src={user?.photoUrl}
+                firstName={user?.firstName}
+                lastName={user?.lastName}
+                onUpload={(file) => photoMutation.mutateAsync(file)}
+                onDelete={() => deletePhotoMutation.mutateAsync()}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="specialty"

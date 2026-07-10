@@ -15,7 +15,7 @@ export function ClassListPage() {
     queryKey: ['classes'],
     queryFn: async () => {
       const { data } = await client.get('/classes')
-      return data.data as Class[]
+      return (data.data ?? data) as Class[]
     }
   })
 

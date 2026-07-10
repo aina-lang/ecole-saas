@@ -26,6 +26,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { getInitials } from '@/lib/utils'
 import {
   Pagination,
   PaginationContent,
@@ -185,6 +187,7 @@ export function UserManagementPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Photo</TableHead>
                 <TableHead>Nom</TableHead>
                 <TableHead>Prénom</TableHead>
                 <TableHead>Email</TableHead>
@@ -197,9 +200,16 @@ export function UserManagementPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                      Chargement...
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              ) : !usersData?.data.length ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                    Chargement...
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                    Aucun utilisateur trouvé
                   </TableCell>
                 </TableRow>
               ) : !usersData?.data.length ? (
@@ -211,6 +221,12 @@ export function UserManagementPage() {
               ) : (
                 usersData.data.map((user) => (
                   <TableRow key={user.id}>
+                    <TableCell>
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={user.photoUrl || undefined} alt={user.firstName} />
+                        <AvatarFallback>{getInitials(user.firstName, user.lastName)}</AvatarFallback>
+                      </Avatar>
+                    </TableCell>
                     <TableCell className="font-medium">{user.lastName}</TableCell>
                     <TableCell>{user.firstName}</TableCell>
                     <TableCell>{user.email}</TableCell>

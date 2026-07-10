@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { PlusIcon } from '@radix-ui/react-icons'
 import { Textarea } from '@/components/ui/textarea'
+import { PhotoUpload } from '@/components/ui/photo-upload'
 import {
   Form,
   FormControl,
@@ -118,7 +119,7 @@ export function StudentFormPage() {
     queryKey: ['student', id],
     queryFn: async () => {
       const { data } = await client.get(`/students/${id}`)
-      return data.data as Student
+      return (data.data ?? data) as Student
     },
     enabled: isEditing
   })
@@ -206,8 +207,26 @@ export function StudentFormPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
-      const payload: Record<string, unknown> = { ...values, parents: parentLinks }
-      if (!payload.firstName) delete payload.firstName
+      const payload: Record<string, unknown> = {
+        firstName: values.firstName || undefined,
+        lastName: values.lastName,
+        birthDate: values.birthDate || undefined,
+        birthPlace: values.birthPlace || undefined,
+        gender: values.gender,
+        nationality: values.nationality || undefined,
+        address: values.address || undefined,
+        phoneNumber: values.phone || undefined,
+        email: values.email || undefined,
+        emergencyContact: values.emergencyContact || undefined,
+        emergencyPhone: values.emergencyPhone || undefined,
+        bloodType: values.bloodType || undefined,
+        medicalNotes: values.medicalNotes || undefined,
+        allergies: values.allergies || undefined,
+        classId: values.classId || undefined,
+        enrollmentDate: values.enrollmentDate || undefined,
+        parents: parentLinks,
+      }
+      Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
       const { data } = await client.post('/students', payload)
       return data
     },
@@ -252,7 +271,27 @@ export function StudentFormPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
-      const { data } = await client.patch(`/students/${id}`, { ...values, parents: parentLinks })
+      const payload: Record<string, unknown> = {
+        firstName: values.firstName || undefined,
+        lastName: values.lastName,
+        birthDate: values.birthDate || undefined,
+        birthPlace: values.birthPlace || undefined,
+        gender: values.gender,
+        nationality: values.nationality || undefined,
+        address: values.address || undefined,
+        phoneNumber: values.phone || undefined,
+        email: values.email || undefined,
+        emergencyContact: values.emergencyContact || undefined,
+        emergencyPhone: values.emergencyPhone || undefined,
+        bloodType: values.bloodType || undefined,
+        medicalNotes: values.medicalNotes || undefined,
+        allergies: values.allergies || undefined,
+        classId: values.classId || undefined,
+        enrollmentDate: values.enrollmentDate || undefined,
+        parents: parentLinks,
+      }
+      Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
+      const { data } = await client.patch(`/students/${id}`, payload)
       return data
     },
     onSuccess: () => {
@@ -273,6 +312,32 @@ export function StudentFormPage() {
       createMutation.mutate(values)
     }
   }
+
+  const photoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await client.post(`/students/${id}/photo`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return data.data ?? data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+      queryClient.invalidateQueries({ queryKey: ['student', id] })
+    },
+  })
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await client.delete(`/students/${id}/photo`)
+      return data.data ?? data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+      queryClient.invalidateQueries({ queryKey: ['student', id] })
+    },
+  })
 
   return (
     <div className="space-y-6">
@@ -314,7 +379,15 @@ export function StudentFormPage() {
                 <CardHeader>
                   <CardTitle>Informations personnelles</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+                <CardContent className="space-y-4">
+                  <PhotoUpload
+                    src={student?.photoUrl}
+                    firstName={student?.firstName}
+                    lastName={student?.lastName}
+                    onUpload={(file) => photoMutation.mutateAsync(file)}
+                    onDelete={() => deletePhotoMutation.mutateAsync()}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="lastName"

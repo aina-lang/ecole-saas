@@ -43,7 +43,7 @@ export function StudentDetailPage() {
     queryKey: ['student', id],
     queryFn: async () => {
       const { data } = await client.get(`/students/${id}`)
-      return data.data as Student
+      return (data.data ?? data) as Student
     }
   })
 
@@ -51,7 +51,7 @@ export function StudentDetailPage() {
     queryKey: ['student-grades', id],
     queryFn: async () => {
       const { data } = await client.get(`/students/${id}/grades`)
-      return data.data as Grade[]
+      return (data.data ?? data) as Grade[]
     },
     enabled: !!student
   })
@@ -60,7 +60,7 @@ export function StudentDetailPage() {
     queryKey: ['student-attendance', id],
     queryFn: async () => {
       const { data } = await client.get(`/students/${id}/attendance`)
-      return data.data as Attendance[]
+      return (data.data ?? data) as Attendance[]
     },
     enabled: !!student
   })
@@ -69,7 +69,7 @@ export function StudentDetailPage() {
     queryKey: ['student-payments', id],
     queryFn: async () => {
       const { data } = await client.get(`/students/${id}/payments`)
-      return data.data as Payment[]
+      return (data.data ?? data) as Payment[]
     },
     enabled: !!student
   })
@@ -113,6 +113,7 @@ export function StudentDetailPage() {
         <CardContent className="pt-6">
           <div className="flex items-center gap-6">
             <Avatar className="h-20 w-20">
+              <AvatarImage src={student.photoUrl || undefined} alt={student.firstName} />
               <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 space-y-1">

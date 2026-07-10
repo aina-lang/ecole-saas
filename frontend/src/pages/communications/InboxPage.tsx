@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 type Folder = 'inbox' | 'sent' | 'drafts' | 'archived'
 
@@ -62,6 +63,7 @@ export function InboxPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFolder: Folder = (searchParams.get('folder') as Folder) || 'inbox'
   const [search, setSearch] = useState('')
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['messages', activeFolder, search],
@@ -81,6 +83,7 @@ export function InboxPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages'] })
       toast.success('Message supprimé')
+      setDeleteId(null)
     }
   })
 
@@ -201,11 +204,18 @@ export function InboxPage() {
                         className="h-6 w-6 text-destructive"
                         onClick={(e) => {
                           e.stopPropagation()
-                          deleteMutation.mutate(msg.id)
+                          setDeleteId(msg.id)
                         }}
                       >
                         <TrashIcon className="h-3 w-3" />
                       </Button>
+                      <ConfirmDialog
+                        open={deleteId === msg.id}
+                        onOpenChange={(open) => !open && setDeleteId(null)}
+                        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
+                        title="Supprimer le message"
+                        description="Êtes-vous sûr de vouloir supprimer ce message ? Cette action est irréversible."
+                      />
                     </div>
                   </div>
                 </div>

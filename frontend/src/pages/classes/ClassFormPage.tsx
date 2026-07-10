@@ -55,7 +55,7 @@ export function ClassFormPage() {
     queryKey: ['class', id],
     queryFn: async () => {
       const { data } = await client.get(`/classes/${id}`)
-      return data.data as Class & { subjectIds?: string[]; teacherIds?: string[] }
+      return (data.data ?? data) as Class & { subjectIds?: string[]; teacherIds?: string[] }
     },
     enabled: isEditing
   })
@@ -64,7 +64,7 @@ export function ClassFormPage() {
     queryKey: ['subjects'],
     queryFn: async () => {
       const { data } = await client.get('/subjects')
-      return data.data as Subject[]
+      return (data.data ?? data) as Subject[]
     }
   })
 
@@ -72,7 +72,7 @@ export function ClassFormPage() {
     queryKey: ['teachers'],
     queryFn: async () => {
       const { data } = await client.get('/teachers')
-      return data.data as Teacher[]
+      return (data.data ?? data) as Teacher[]
     }
   })
 
@@ -95,8 +95,8 @@ export function ClassFormPage() {
         level: classData.level,
         room: classData.room || '',
         capacity: classData.capacity,
-        subjectIds: classData.subjectIds || [],
-        teacherIds: classData.teacherIds || []
+        subjectIds: (classData.subjects ?? []).map((s: any) => s.id),
+        teacherIds: (classData.teachers ?? []).map((t: any) => t.id)
       })
     }
   }, [classData, form])

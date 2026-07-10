@@ -100,7 +100,7 @@ export function SyncPage() {
     queryKey: ['sync-status'],
     queryFn: async () => {
       const { data } = await client.get('/sync/status')
-      const s = data.data as SyncStatus
+      const s = (data.data ?? data) as SyncStatus
       store.setOnline(s.isOnline)
       store.setSyncing(s.isSyncing)
       if (s.lastSyncAt) store.setLastSync(s.lastSyncAt)
@@ -114,7 +114,7 @@ export function SyncPage() {
     queryKey: ['sync-devices'],
     queryFn: async () => {
       const { data } = await client.get('/sync/devices')
-      return data.data as SyncDevice[]
+      return (data.data ?? data) as SyncDevice[]
     },
     refetchInterval: 10000
   })
@@ -125,7 +125,7 @@ export function SyncPage() {
       const params: Record<string, string> = {}
       if (syncFilter !== 'all') params.entityType = syncFilter
       const { data } = await client.get('/sync/conflicts', { params })
-      return data.data as SyncConflict[]
+      return (data.data ?? data) as SyncConflict[]
     },
     refetchInterval: 5000
   })
@@ -134,7 +134,7 @@ export function SyncPage() {
     queryKey: ['sync-pending-entries'],
     queryFn: async () => {
       const { data } = await client.get('/sync/pending')
-      return data.data as SyncEntry[]
+      return (data.data ?? data) as SyncEntry[]
     },
     refetchInterval: 5000
   })

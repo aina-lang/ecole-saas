@@ -68,6 +68,14 @@ export function GradeEntryPage() {
     }
   })
 
+  const selectedSubject = subjects?.find((s) => s.id === subjectId)
+
+  useEffect(() => {
+    if (selectedSubject?.coefficient) {
+      setCoefficient(String(selectedSubject.coefficient))
+    }
+  }, [selectedSubject])
+
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
     queryFn: async () => {
@@ -175,13 +183,13 @@ export function GradeEntryPage() {
         value: parseFloat(e.value),
         maxValue: parseFloat(maxValue),
         coefficient: parseFloat(coefficient),
-        evaluationType,
+        evaluationType: evaluationType.toUpperCase(),
         semester: parseInt(semester),
         comment: e.comment || undefined
       }))
 
     try {
-      await client.post('/grades/bulk', { grades: gradeEntries })
+      await client.post(`/grades/class/${classId}/bulk`, gradeEntries)
       toast.success(`${gradeEntries.length} note(s) enregistrée(s) avec succès`)
       queryClient.invalidateQueries({ queryKey: ['grades'] })
       setEntries((prev) => prev.map((e) => ({ ...e, value: '', comment: '' })))
@@ -267,7 +275,8 @@ export function GradeEntryPage() {
                 min="0.5"
                 step="0.5"
                 value={coefficient}
-                onChange={(e) => setCoefficient(e.target.value)}
+                readOnly
+                className="bg-muted"
               />
             </div>
             <div className="space-y-1.5">

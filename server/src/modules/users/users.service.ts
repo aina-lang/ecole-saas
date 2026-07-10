@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -35,6 +38,7 @@ export class UsersService {
           lastName: true,
           role: true,
           isActive: true,
+          photoUrl: true,
           phones: {
             select: { value: true, sortOrder: true },
             orderBy: { sortOrder: 'asc' as const },
@@ -63,6 +67,7 @@ export class UsersService {
         lastName: true,
         role: true,
         isActive: true,
+        photoUrl: true,
         twoFactorEnabled: true,
         phones: {
           select: { value: true, sortOrder: true },
@@ -109,6 +114,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         role: true,
+        photoUrl: true,
         phones: {
           select: { value: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' as const },
@@ -135,6 +141,7 @@ export class UsersService {
     if (dto.email) data.email = dto.email;
     if (dto.role) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.photoUrl !== undefined) data.photoUrl = dto.photoUrl;
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 12);
 
     if (dto.phones !== undefined) {
@@ -155,6 +162,7 @@ export class UsersService {
         lastName: true,
         role: true,
         isActive: true,
+        photoUrl: true,
         phones: {
           select: { value: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' as const },
@@ -171,5 +179,73 @@ export class UsersService {
       data: { isActive: false },
     });
     return { message: 'Utilisateur désactivé' };
+  }
+
+  async uploadAvatar(userId: string, tenantId: string, file: Express.Multer.File) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
+
+    const storageBase = path.join(process.cwd(), 'storage', `tenant_${tenantId}`, 'avatars');
+    fs.mkdirSync(storageBase, { recursive: true });
+
+    if (user.photoUrl) {
+      const oldPath = path.join(process.cwd(), user.photoUrl.replace(/^\//, ''));
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    const ext = path.extname(file.originalname) || '.jpg';
+    const fileName = `${userId}-${randomUUID()}${ext}`;
+    const filePath = path.join(storageBase, fileName);
+    fs.writeFileSync(filePath, file.buffer);
+
+    const photoUrl = `/storage/tenant_${tenantId}/avatars/${fileName}`;
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { photoUrl },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        photoUrl: true,
+        phones: {
+          select: { value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' as const },
+        },
+      },
+    });
+
+    return { photoUrl };
+  }
+
+  async deleteAvatar(userId: string, tenantId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
+    if (!user.photoUrl) return { message: 'Aucune photo' };
+
+    const filePath = path.join(process.cwd(), user.photoUrl.replace(/^\//, ''));
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { photoUrl: null },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        photoUrl: true,
+        phones: {
+          select: { value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' as const },
+        },
+      },
+    });
+
+    return { message: 'Photo supprimée' };
   }
 }

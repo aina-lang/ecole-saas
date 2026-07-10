@@ -11,6 +11,7 @@ import { formatSubjectLabel } from '@/lib/subject'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,7 @@ export function TimetablePage() {
   const [classId, setClassId] = useState('')
   const [open, setOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<number>(1)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data: classes } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ['classes-opt'],
@@ -156,6 +158,7 @@ export function TimetablePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
       toast.success('Créneau supprimé')
+      setDeleteId(null)
     },
     onError: () => toast.error('Erreur lors de la suppression')
   })
@@ -220,9 +223,16 @@ export function TimetablePage() {
               days={DAYS}
               slotAt={slotAt}
               onAdd={openCreate}
-              onDelete={(id) => deleteMutation.mutate(id)}
+              onDelete={(id) => setDeleteId(id)}
             />
           ))}
+          <ConfirmDialog
+            open={!!deleteId}
+            onOpenChange={(open) => !open && setDeleteId(null)}
+            onConfirm={() => { if (deleteId) deleteMutation.mutate(deleteId) }}
+            title="Supprimer le créneau"
+            description="Êtes-vous sûr de vouloir supprimer ce créneau ? Cette action est irréversible."
+          />
         </div>
       )}
 

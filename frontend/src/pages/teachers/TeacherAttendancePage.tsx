@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { format, isPast, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import client from '@/api/client'
 import type { Teacher } from '@/types'
@@ -42,8 +42,9 @@ export function TeacherAttendancePage() {
   const { data: teachers } = useQuery({
     queryKey: ['teachers-list'],
     queryFn: async () => {
-      const { data } = await client.get('/teachers')
-      return data.data as Teacher[]
+      const res = await client.get('/teachers')
+      const raw = res.data
+      return (Array.isArray(raw) ? raw : raw.data ?? []) as Teacher[]
     }
   })
 

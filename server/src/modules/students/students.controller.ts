@@ -8,6 +8,8 @@ import {
   Body,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { StudentsService } from './students.service';
@@ -17,6 +19,7 @@ import { QueryStudentDto } from './dto/query-student.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('students')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -83,5 +86,22 @@ export class StudentsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.studentsService.restore(id, tenantId, userId);
+  }
+
+  @Post(':id/photo')
+  @Roles('ADMIN', 'SECRETARY')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPhoto(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.studentsService.uploadPhoto(id, tenantId, file);
+  }
+
+  @Delete(':id/photo')
+  @Roles('ADMIN', 'SECRETARY')
+  deletePhoto(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.studentsService.deletePhoto(id, tenantId);
   }
 }

@@ -26,6 +26,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog'
 import { Combobox } from '@/components/ui/combobox'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Pencil2Icon, ArrowLeftIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
 
 export function ClassDetailPage() {
@@ -34,12 +35,13 @@ export function ClassDetailPage() {
   const queryClient = useQueryClient()
   const [addStudentOpen, setAddStudentOpen] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState('')
+  const [removeStudentId, setRemoveStudentId] = useState<string | null>(null)
 
   const { data: classData, isLoading } = useQuery({
     queryKey: ['class', id],
     queryFn: async () => {
       const { data } = await client.get(`/classes/${id}`)
-      return data.data as Class & {
+      return (data.data ?? data) as Class & {
         subjects?: Subject[]
         teachers?: Teacher[]
       }
@@ -49,8 +51,10 @@ export function ClassDetailPage() {
   const { data: students } = useQuery({
     queryKey: ['class-students', id],
     queryFn: async () => {
-      const { data } = await client.get(`/classes/${id}/students`)
-      return data.data as Student[]
+      const { data } = await client.get('/students', {
+        params: { classId: id }
+      })
+      return (data.data ?? data) as Student[]
     },
     enabled: !!id
   })
@@ -59,9 +63,9 @@ export function ClassDetailPage() {
     queryKey: ['all-students'],
     queryFn: async () => {
       const { data } = await client.get('/students', {
-        params: { limit: 1000 }
+        params: { limit: 100 }
       })
-      return data.data as Student[]
+      return (data.data ?? data) as Student[]
     },
     enabled: addStudentOpen
   })
@@ -90,10 +94,9 @@ export function ClassDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['class-students', id] })
       queryClient.invalidateQueries({ queryKey: ['class', id] })
       toast.success('Élève retiré de la classe')
+      setRemoveStudentId(null)
     },
-    onError: () => {
-      toast.error("Erreur lors du retrait de l'élève")
-    }
+    onError: () => toast.error("Erreur lors du retrait de l'élève")
   })
 
   if (isLoading) {
@@ -116,7 +119,7 @@ export function ClassDetailPage() {
   }
 
   const studentsNotInClass =
-    allStudents?.filter((s) => !students?.some((cs) => cs.id === s.id)) || []
+    allStudents?.filter((s) => !students?.some((cs) => cs.id === s.id) && !s.classId) || []
 
   return (
     <div className="space-y-6">
@@ -213,10 +216,17 @@ export function ClassDetailPage() {
                         <TableCell>{student.lastName}</TableCell>
                         <TableCell>{student.firstName}</TableCell>
                         <TableCell>
+                          <ConfirmDialog
+                            open={removeStudentId === student.id}
+                            onOpenChange={(open) => !open && setRemoveStudentId(null)}
+                            onConfirm={() => removeStudentMutation.mutate(student.id)}
+                            title="Retirer l'élève"
+                            description={`Êtes-vous sûr de vouloir retirer ${student.firstName} ${student.lastName} de cette classe ?`}
+                          />
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeStudentMutation.mutate(student.id)}
+                            onClick={() => setRemoveStudentId(student.id)}
                           >
                             <Cross2Icon className="h-4 w-4 text-destructive" />
                           </Button>

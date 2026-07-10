@@ -177,6 +177,7 @@ model User {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   refreshToken     String?
+  photoUrl         String?
   studentLinks     StudentParent[]  @relation("parentLinks")
   teacher          Teacher?
   messagesSent     Message[]        @relation("sentMessages")

@@ -32,4 +32,8 @@ export class UpdateUserDto {
   @ArrayMaxSize(3, { message: 'Maximum 3 numéros autorisés' })
   @IsString({ each: true })
   phones?: string[];
+
+  @IsOptional()
+  @IsString()
+  photoUrl?: string;
 }

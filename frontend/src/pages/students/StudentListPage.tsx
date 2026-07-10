@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import type { Student, PaginatedResponse } from '@/types'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getInitials } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 import {
   Table,
@@ -65,7 +66,7 @@ export function StudentListPage() {
     queryKey: ['classes-list'],
     queryFn: async () => {
       const { data } = await client.get('/classes')
-      return data.data as { id: string; name: string }[]
+      return (data.data ?? data) as { id: string; name: string }[]
     }
   })
 
@@ -186,6 +187,7 @@ export function StudentListPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Photo</TableHead>
                 <TableHead>Matricule</TableHead>
                 <TableHead>Nom</TableHead>
                 <TableHead>Prénom</TableHead>
@@ -197,13 +199,13 @@ export function StudentListPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : !studentsData?.data.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                     Aucun élève trouvé
                   </TableCell>
                 </TableRow>
@@ -216,6 +218,12 @@ export function StudentListPage() {
                       className="cursor-pointer"
                       onClick={() => navigate(`/students/${student.id}`)}
                     >
+                      <TableCell>
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={student.photoUrl || undefined} alt={student.firstName} />
+                          <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
+                        </Avatar>
+                      </TableCell>
                       <TableCell className="font-medium">{student.registrationNumber}</TableCell>
                       <TableCell>{student.lastName}</TableCell>
                       <TableCell>{student.firstName}</TableCell>

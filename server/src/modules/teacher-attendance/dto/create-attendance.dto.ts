@@ -1,4 +1,12 @@
-import { IsString, IsEnum, IsOptional, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum TeacherAttendanceStatus {
   PRESENT = 'PRESENT',
@@ -22,9 +30,24 @@ export class CreateTeacherAttendanceDto {
   justification?: string;
 }
 
+export class BulkRecordDto {
+  @IsString()
+  teacherId: string;
+
+  @IsEnum(TeacherAttendanceStatus)
+  status: TeacherAttendanceStatus;
+
+  @IsOptional()
+  @IsString()
+  justification?: string;
+}
+
 export class BulkTeacherAttendanceDto {
   @IsDateString()
   date: string;
 
-  records: { teacherId: string; status: TeacherAttendanceStatus; justification?: string }[];
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BulkRecordDto)
+  records: BulkRecordDto[];
 }

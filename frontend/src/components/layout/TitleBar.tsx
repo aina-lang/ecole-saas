@@ -34,7 +34,7 @@ function CloseIcon() {
 }
 
 const controlButton =
-  'flex h-8 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+  'flex h-14 w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
 
 export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -50,11 +50,11 @@ export function TitleBar() {
 
   return (
     <div
-      className="flex h-8 w-full select-none items-center justify-between border-b bg-background"
+      className="flex h-14 w-full select-none items-center justify-between border-b bg-background px-4"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      <div className="flex items-center gap-2 px-3 text-xs font-medium text-muted-foreground">
-        <span className="flex h-4 w-4 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
+      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <span className="flex h-5 w-5 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
           E
         </span>
         École SaaS
@@ -86,7 +86,7 @@ export function TitleBar() {
         </button>
         <button
           type="button"
-          className="flex h-8 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
+          className="flex h-14 w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
           onClick={() => window.api.window.close()}
           aria-label="Fermer"
         >

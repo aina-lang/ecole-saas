@@ -76,4 +76,12 @@ export class UpdateStudentDto {
   @ValidateNested({ each: true })
   @Type(() => StudentParentLinkDto)
   parents?: StudentParentLinkDto[];
+
+  @IsOptional()
+  @IsDateString()
+  enrollmentDate?: string;
+
+  @IsOptional()
+  @IsString()
+  photoUrl?: string;
 }

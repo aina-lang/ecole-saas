@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
@@ -10,6 +10,10 @@ export class AttendanceService {
     private prisma: PrismaService,
     private audit: AuditService,
   ) {}
+
+  private isEditable(date: Date): boolean {
+    return new Date(date).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+  }
 
   async findAll(tenantId: string, filters?: { studentId?: string; classId?: string; date?: string; status?: string; startDate?: string; endDate?: string }) {
     const where: any = { tenantId, deletedAt: null };
@@ -82,6 +86,7 @@ export class AttendanceService {
   async update(id: string, tenantId: string, dto: Partial<CreateAttendanceDto>, userId?: string) {
     const existing = await this.prisma.attendance.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) throw new NotFoundException('Présence non trouvée');
+    if (!this.isEditable(existing.date)) throw new ForbiddenException('Cette présence ne peut plus être modifiée après 24h');
 
     const data: any = { ...dto, updatedBy: userId };
     if (dto.date) data.date = new Date(dto.date);
@@ -110,6 +115,7 @@ export class AttendanceService {
   async remove(id: string, tenantId: string, userId?: string) {
     const existing = await this.prisma.attendance.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) throw new NotFoundException('Présence non trouvée');
+    if (!this.isEditable(existing.date)) throw new ForbiddenException('Cette présence ne peut plus être modifiée après 24h');
 
     await this.prisma.attendance.update({
       where: { id },
@@ -138,6 +144,11 @@ export class AttendanceService {
         });
 
         if (existing && !existing.deletedAt) {
+          if (!this.isEditable(existing.date)) {
+            results.errors.push({ studentId: record.studentId, error: 'Cette présence ne peut plus être modifiée après 24h' });
+            results.skipped++;
+            continue;
+          }
           await this.prisma.attendance.update({
             where: { id: existing.id },
             data: { status: record.status, justification: record.justification, updatedBy: userId },

@@ -28,19 +28,9 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import {
-  PlusIcon,
-  Pencil2Icon,
-  TrashIcon,
-  ReloadIcon
+  TrashIcon
 } from '@radix-ui/react-icons'
 
 interface Subject {
@@ -132,6 +122,8 @@ export function SubjectsPage() {
     onError: () => toast.error('Erreur lors de l\'enregistrement')
   })
 
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await client.delete(`/subjects/${id}`)
@@ -139,6 +131,7 @@ export function SubjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] })
       toast.success('Matière supprimée')
+      setDeleteId(null)
     },
     onError: () => toast.error('Erreur lors de la suppression')
   })
@@ -311,9 +304,23 @@ export function SubjectsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteMutation.mutate(subject.id)}
+                          onClick={() => openEdit(subject)}
                         >
-                          <TrashIcon className="h-4 w-4" />
+                          <Pencil2Icon className="h-4 w-4" />
+                        </Button>
+                        <ConfirmDialog
+                          open={deleteId === subject.id}
+                          onOpenChange={(open) => !open && setDeleteId(null)}
+                          onConfirm={() => deleteMutation.mutate(subject.id)}
+                          title="Supprimer la matière"
+                          description={`Êtes-vous sûr de vouloir supprimer la matière "${subject.name}" ? Cette action est irréversible.`}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteId(subject.id)}
+                        >
+                          <TrashIcon className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>

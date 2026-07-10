@@ -68,6 +68,28 @@ export class ClassesController {
     return this.classesService.remove(id, tenantId, userId);
   }
 
+  @Post(':id/students')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  assignStudent(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('id') userId: string,
+    @Body('studentId') studentId: string,
+  ) {
+    return this.classesService.assignStudent(id, studentId, tenantId, userId);
+  }
+
+  @Delete(':id/students/:studentId')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  removeStudent(
+    @Param('id') id: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.classesService.removeStudent(id, studentId, tenantId, userId);
+  }
+
   @Post(':id/teachers/:teacherId')
   @Roles('ADMIN', 'SUPER_ADMIN')
   assignTeacher(

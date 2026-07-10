@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 const routeTitles: Record<string, string> = {
   '/dashboard': 'Tableau de bord',
   '/students': 'Élèves',
+  '/teachers': 'Enseignants',
   '/classes': 'Classes',
   '/grades': 'Notes',
   '/attendance': 'Présences',

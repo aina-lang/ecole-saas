@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -624,6 +624,10 @@ export class SyncService {
       case 'Grade':
         return this.prisma.grade.update({ where, data });
       case 'Attendance':
+        const attendance = await this.prisma.attendance.findFirst({ where: { id, tenantId, deletedAt: null } });
+        if (attendance && new Date(attendance.date).getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+          throw new ForbiddenException('Cette présence ne peut plus être modifiée après 24h');
+        }
         return this.prisma.attendance.update({ where, data });
       case 'Class':
         return this.prisma.class.update({ where, data });
@@ -677,6 +681,10 @@ export class SyncService {
         await this.prisma.grade.update({ where: { id }, data: { deletedAt: new Date() } });
         break;
       case 'Attendance':
+        const attendance = await this.prisma.attendance.findFirst({ where: { id, tenantId, deletedAt: null } });
+        if (attendance && new Date(attendance.date).getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+          throw new ForbiddenException('Cette présence ne peut plus être modifiée après 24h');
+        }
         await this.prisma.attendance.update({ where: { id }, data: { deletedAt: new Date() } });
         break;
       case 'Class':

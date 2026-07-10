@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -6,6 +6,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -49,5 +50,22 @@ export class UsersController {
   @Roles('ADMIN', 'SUPER_ADMIN')
   remove(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
     return this.usersService.remove(id, tenantId);
+  }
+
+  @Post(':id/photo')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPhoto(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.usersService.uploadAvatar(id, tenantId, file);
+  }
+
+  @Delete(':id/photo')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  deletePhoto(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.usersService.deleteAvatar(id, tenantId);
   }
 }

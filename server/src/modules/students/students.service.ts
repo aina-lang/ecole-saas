@@ -1,9 +1,12 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class StudentsService {
@@ -11,6 +14,26 @@ export class StudentsService {
     private prisma: PrismaService,
     private audit: AuditService,
   ) {}
+
+  private getStoragePath(tenantId: string, category: string): string {
+    return path.join(process.cwd(), 'storage', `tenant_${tenantId}`, category);
+  }
+
+  private saveFile(tenantId: string, category: string, file: Express.Multer.File, prefix?: string): string {
+    const dir = this.getStoragePath(tenantId, category);
+    fs.mkdirSync(dir, { recursive: true });
+    const ext = path.extname(file.originalname) || '.bin';
+    const fileName = `${prefix || randomUUID()}${ext}`;
+    const filePath = path.join(dir, fileName);
+    fs.writeFileSync(filePath, file.buffer);
+    return `/storage/tenant_${tenantId}/${category}/${fileName}`;
+  }
+
+  private deleteFile(relativePath?: string | null) {
+    if (!relativePath) return;
+    const fullPath = path.join(process.cwd(), relativePath.replace(/^\//, ''));
+    if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+  }
 
   private async generateRegistrationNumber(tenantId: string): Promise<string> {
     const year = new Date().getFullYear();
@@ -106,6 +129,7 @@ export class StudentsService {
         tenantId,
         registrationNumber,
         birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+        enrollmentDate: dto.enrollmentDate ? new Date(dto.enrollmentDate) : undefined,
         parents: parents?.length
           ? {
               create: parents.map((p) => ({
@@ -155,6 +179,7 @@ export class StudentsService {
 
     const updateData: any = { ...studentData };
     if (dto.birthDate) updateData.birthDate = new Date(dto.birthDate);
+    if (dto.enrollmentDate) updateData.enrollmentDate = new Date(dto.enrollmentDate);
     updateData.version = { increment: 1 };
     if (userId) updateData.updatedBy = userId;
 
@@ -244,6 +269,69 @@ export class StudentsService {
     });
 
     return { message: 'Étudiant restauré avec succès' };
+  }
+
+  async uploadPhoto(studentId: string, tenantId: string, file: Express.Multer.File, userId?: string) {
+    const student = await this.prisma.student.findFirst({ where: { id: studentId, tenantId } });
+    if (!student) throw new NotFoundException('Étudiant non trouvé');
+
+    this.deleteFile(student.photoUrl);
+    const photoUrl = this.saveFile(tenantId, 'photos', file, `student-${studentId}`);
+
+    const updated = await this.prisma.student.update({
+      where: { id: studentId },
+      data: { photoUrl },
+      include: {
+        class: { select: { id: true, name: true } },
+        parents: {
+          include: {
+            parent: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    await this.audit.log({
+      tenantId,
+      userId,
+      action: 'UPDATE',
+      entityType: 'Student',
+      entityId: studentId,
+      metadata: { photoUrl },
+    });
+
+    return updated;
+  }
+
+  async deletePhoto(studentId: string, tenantId: string, userId?: string) {
+    const student = await this.prisma.student.findFirst({ where: { id: studentId, tenantId } });
+    if (!student) throw new NotFoundException('Étudiant non trouvé');
+
+    this.deleteFile(student.photoUrl);
+
+    const updated = await this.prisma.student.update({
+      where: { id: studentId },
+      data: { photoUrl: null },
+      include: {
+        class: { select: { id: true, name: true } },
+        parents: {
+          include: {
+            parent: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    await this.audit.log({
+      tenantId,
+      userId,
+      action: 'UPDATE',
+      entityType: 'Student',
+      entityId: studentId,
+      metadata: { photoDeleted: true },
+    });
+
+    return updated;
   }
 
   async findDeleted(tenantId: string) {

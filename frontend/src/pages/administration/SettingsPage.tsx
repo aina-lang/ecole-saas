@@ -115,7 +115,7 @@ export function SettingsPage() {
     queryKey: ['settings-school'],
     queryFn: async () => {
       const { data } = await client.get('/admin/settings/school')
-      return data.data as SchoolSettings
+      return (data.data ?? data) as SchoolSettings
     }
   })
 
@@ -123,7 +123,7 @@ export function SettingsPage() {
     queryKey: ['settings-academic'],
     queryFn: async () => {
       const { data } = await client.get('/admin/settings/academic-year')
-      return data.data as AcademicYear
+      return (data.data ?? data) as AcademicYear
     }
   })
 
@@ -131,7 +131,7 @@ export function SettingsPage() {
     queryKey: ['settings-sync-devices'],
     queryFn: async () => {
       const { data } = await client.get('/admin/settings/sync/devices')
-      return data.data as SyncDevice[]
+      return (data.data ?? data) as SyncDevice[]
     }
   })
 
@@ -139,7 +139,7 @@ export function SettingsPage() {
     queryKey: ['settings-sync-info'],
     queryFn: async () => {
       const { data } = await client.get('/admin/settings/sync/info')
-      return data.data as { lastSyncAt: string | null; pendingCount: number; online: boolean }
+      return (data.data ?? data) as { lastSyncAt: string | null; pendingCount: number; online: boolean }
     }
   })
 
@@ -147,7 +147,7 @@ export function SettingsPage() {
     queryKey: ['settings-security'],
     queryFn: async () => {
       const { data } = await client.get('/admin/settings/security')
-      return data.data as SecuritySettings
+      return (data.data ?? data) as SecuritySettings
     }
   })
 

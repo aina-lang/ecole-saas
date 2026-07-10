@@ -67,8 +67,9 @@ export function TeacherPayPage() {
   const { data: teachers } = useQuery({
     queryKey: ['teachers-list'],
     queryFn: async () => {
-      const { data } = await client.get('/teachers')
-      return data.data as Teacher[]
+      const res = await client.get('/teachers')
+      const raw = res.data
+      return (Array.isArray(raw) ? raw : raw.data ?? []) as Teacher[]
     }
   })
 

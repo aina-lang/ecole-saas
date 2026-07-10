@@ -6,7 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/stores/ui-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -55,6 +55,7 @@ export function Topbar({ title }: TopbarProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <Avatar className="h-8 w-8">
+                <AvatarImage src={user?.photoUrl || undefined} alt={user?.firstName} />
                 <AvatarFallback className="text-xs">
                   {user ? getInitials(user.firstName, user.lastName) : 'U'}
                 </AvatarFallback>

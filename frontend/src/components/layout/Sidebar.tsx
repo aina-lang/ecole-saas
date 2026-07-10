@@ -2,13 +2,14 @@ import { NavLink } from 'react-router-dom'
 import {
   PersonIcon,
   ReaderIcon,
-  RocketIcon,
   ChatBubbleIcon,
   ValueNoneIcon,
   GearIcon,
   UpdateIcon,
   BookmarkIcon,
-  CalendarIcon
+  CalendarIcon,
+  FileTextIcon,
+  BackpackIcon
 } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,8 +19,9 @@ import { useUIStore } from '@/stores/ui-store'
 const menuItems = [
   { label: 'Tableau de bord', path: '/dashboard', icon: HomeDashboardIcon },
   { label: 'Élèves', path: '/students', icon: PersonIcon },
+  { label: 'Enseignants', path: '/teachers', icon: BackpackIcon },
   { label: 'Classes', path: '/classes', icon: ReaderIcon },
-  { label: 'Notes', path: '/grades', icon: RocketIcon },
+  { label: 'Notes', path: '/grades', icon: FileTextIcon },
   { label: 'Présences', path: '/attendance', icon: AttendanceIcon },
   { label: 'Matières', path: '/subjects', icon: BookmarkIcon },
   { label: 'Emploi du temps', path: '/timetable', icon: CalendarIcon },

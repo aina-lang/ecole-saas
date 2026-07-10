@@ -12,6 +12,7 @@ export interface User {
   role: string
   tenantId: string
   isActive: boolean
+  photoUrl?: string | null
 }
 
 export interface StudentParentLink {
@@ -30,6 +31,7 @@ export interface Student {
   gender: 'M' | 'F'
   classId: string
   status: 'active' | 'inactive' | 'graduated' | 'suspended'
+  photoUrl?: string | null
   parentName?: string
   parentPhone?: string
   parentEmail?: string

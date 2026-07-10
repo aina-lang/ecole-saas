@@ -145,6 +145,60 @@ export class ClassesService {
     return { message: 'Classe supprimée' };
   }
 
+  async assignStudent(classId: string, studentId: string, tenantId: string, userId?: string) {
+    const cls = await this.prisma.class.findFirst({ where: { id: classId, tenantId } });
+    if (!cls) throw new NotFoundException('Classe non trouvée');
+
+    const student = await this.prisma.student.findFirst({ where: { id: studentId, tenantId } });
+    if (!student) throw new NotFoundException('Étudiant non trouvé');
+
+    const updated = await this.prisma.student.update({
+      where: { id: studentId },
+      data: { classId },
+      include: {
+        class: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'UPDATE',
+      entityType: 'Student',
+      entityId: studentId,
+      metadata: { classId },
+    });
+
+    return updated;
+  }
+
+  async removeStudent(classId: string, studentId: string, tenantId: string, userId?: string) {
+    const cls = await this.prisma.class.findFirst({ where: { id: classId, tenantId } });
+    if (!cls) throw new NotFoundException('Classe non trouvée');
+
+    const student = await this.prisma.student.findFirst({ where: { id: studentId, tenantId, classId } });
+    if (!student) throw new NotFoundException('Étudiant non trouvé dans cette classe');
+
+    const updated = await this.prisma.student.update({
+      where: { id: studentId },
+      data: { classId: null },
+      include: {
+        class: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'UPDATE',
+      entityType: 'Student',
+      entityId: studentId,
+      metadata: { removedFromClassId: classId },
+    });
+
+    return updated;
+  }
+
   async assignTeacher(classId: string, teacherId: string, tenantId: string, userId?: string) {
     const cls = await this.prisma.class.findFirst({ where: { id: classId, tenantId } });
     if (!cls) throw new NotFoundException('Classe non trouvée');
