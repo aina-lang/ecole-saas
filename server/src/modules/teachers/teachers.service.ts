@@ -75,7 +75,7 @@ export class TeachersService {
     if (dto.email) userData.email = dto.email;
     userData.passwordHash = dto.password
       ? await bcrypt.hash(dto.password, 12)
-      : await bcrypt.hash('Default123!', 12);
+      : await bcrypt.hash(Math.random().toString(36).slice(2, 10) + 'A1!', 12);
 
     const teacher = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({

@@ -104,7 +104,7 @@ export class UsersService {
     if (dto.email) data.email = dto.email;
     data.passwordHash = dto.password
       ? await bcrypt.hash(dto.password, 12)
-      : await bcrypt.hash('Default123!', 12);
+      : await bcrypt.hash(Math.random().toString(36).slice(2, 10) + 'A1!', 12);
 
     return this.prisma.user.create({
       data,

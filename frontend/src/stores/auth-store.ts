@@ -9,6 +9,7 @@ interface User {
   role: string
   tenantId: string
   isActive: boolean
+  photoUrl?: string | null
 }
 
 interface RegisterPayload {

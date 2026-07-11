@@ -6,6 +6,532 @@ datasource db {
   provider = "postgresql"
 }
 
+model Tenant {
+  id                 String              @id @default(cuid())
+  name               String
+  subdomain          String              @unique
+  logoUrl            String?
+  primaryColor       String              @default("#2563eb")
+  plan               SubscriptionPlan    @default(FREE)
+  status             TenantStatus        @default(TRIAL)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  trialEndsAt        DateTime?
+  suspendedAt        DateTime?
+  maxStudents        Int                 @default(100)
+  maxTeachers        Int                 @default(20)
+  maxStorageMb       Int                 @default(500)
+  settings           Json                @default("{}")
+  academicYears      AcademicYear[]
+  attendances        Attendance[]
+  auditLogs          AuditLog[]
+  classes            Class[]
+  documents          Document[]
+  feeStructures      FeeStructure[]
+  grades             Grade[]
+  messages           Message[]
+  payments           Payment[]
+  students           Student[]
+  subjects           Subject[]
+  syncDevices        SyncDevice[]
+  syncJobs           SyncJob[]
+  syncLogs           SyncLog[]
+  teacherAttendances TeacherAttendance[]
+  teacherContracts   TeacherContract[]
+  teacherPayments    TeacherPayment[]
+  teachers           Teacher[]
+  timetableSlots     TimetableSlot[]
+  users              User[]
+
+  @@map("tenants")
+}
+
+model AcademicYear {
+  id        String    @id @default(cuid())
+  tenantId  String
+  label     String
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean   @default(false)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  holidays  Holiday[]
+  periods   Period[]
+
+  @@unique([tenantId, label])
+  @@map("academic_years")
+}
+
+model Period {
+  id             String       @id @default(cuid())
+  academicYearId String
+  label          String
+  type           String       @default("TRIMESTER")
+  startDate      DateTime
+  endDate        DateTime
+  coefficient    Float        @default(1.0)
+  grades         Grade[]
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@map("periods")
+}
+
+model Holiday {
+  id             String       @id @default(cuid())
+  academicYearId String
+  label          String
+  startDate      DateTime
+  endDate        DateTime
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@map("holidays")
+}
+
+model User {
+  id               String             @id @default(cuid())
+  tenantId         String
+  email            String?
+  passwordHash     String
+  firstName        String?
+  lastName         String
+  role             UserRole           @default(TEACHER)
+  isActive         Boolean            @default(true)
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean            @default(false)
+  lastLoginAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  refreshToken     String?
+  auditLogs        AuditLog[]
+  messagesReceived MessageRecipient[]
+  messagesSent     Message[]          @relation("sentMessages")
+  studentLinks     StudentParent[]    @relation("parentLinks")
+  teacher          Teacher?
+  phones           UserPhone[]
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model UserPhone {
+  id        String @id @default(cuid())
+  userId    String
+  value     String
+  sortOrder Int    @default(0)
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, value])
+  @@map("user_phones")
+}
+
+model Student {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  registrationNumber String          @unique
+  firstName          String
+  lastName           String
+  birthDate          DateTime?
+  birthPlace         String?
+  gender             String?
+  nationality        String?
+  address            String?
+  phoneNumber        String?
+  email              String?
+  photoUrl           String?
+  bloodType          String?
+  medicalNotes       String?
+  allergies          String?
+  emergencyContact   String?
+  emergencyPhone     String?
+  status             String          @default("ACTIVE")
+  classId            String?
+  enrollmentDate     DateTime        @default(now())
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  deletedAt          DateTime?
+  version            Int             @default(1)
+  updatedBy          String?
+  deviceId           String?
+  attendances        Attendance[]
+  documents          Document[]
+  grades             Grade[]
+  payments           Payment[]
+  parents            StudentParent[] @relation("studentParents")
+  class              Class?          @relation(fields: [classId], references: [id])
+  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("students")
+}
+
+model StudentParent {
+  id        String  @id @default(cuid())
+  studentId String
+  parentId  String
+  relation  String?
+  isPrimary Boolean @default(false)
+  parent    User    @relation("parentLinks", fields: [parentId], references: [id], onDelete: Cascade)
+  student   Student @relation("studentParents", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, parentId])
+  @@map("student_parents")
+}
+
+model Class {
+  id             String          @id @default(cuid())
+  tenantId       String
+  name           String
+  level          String?
+  room           String?
+  capacity       Int             @default(30)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  students       Student[]
+  subjects       Subject[]
+  timetableSlots TimetableSlot[]
+  teachers       Teacher[]       @relation("ClassToTeacher")
+
+  @@unique([tenantId, name])
+  @@map("classes")
+}
+
+model Subject {
+  id          String          @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String?
+  coefficient Float           @default(1.0)
+  classId     String?
+  level       String?
+  grades      Grade[]
+  class       Class?          @relation(fields: [classId], references: [id])
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  timetable   TimetableSlot[]
+  teachers    Teacher[]       @relation("SubjectToTeacher")
+
+  @@unique([tenantId, name, level])
+  @@map("subjects")
+}
+
+model Teacher {
+  id          String              @id @default(cuid())
+  tenantId    String
+  userId      String              @unique
+  specialty   String?
+  grades      Grade[]
+  attendances TeacherAttendance[]
+  contract    TeacherContract?
+  payments    TeacherPayment[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timetable   TimetableSlot[]
+  classes     Class[]             @relation("ClassToTeacher")
+  subjects    Subject[]           @relation("SubjectToTeacher")
+
+  @@map("teachers")
+}
+
+model TimetableSlot {
+  id        String   @id @default(cuid())
+  tenantId  String
+  classId   String
+  subjectId String
+  teacherId String?
+  dayOfWeek Int      @default(1)
+  startTime String
+  endTime   String
+  room      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, classId])
+  @@map("timetable_slots")
+}
+
+model TeacherAttendance {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  teacherId     String
+  date          DateTime
+  status        TeacherAttendanceStatus @default(PRESENT)
+  justification String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  teacher       Teacher                 @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, date])
+  @@index([tenantId, date])
+  @@map("teacher_attendances")
+}
+
+model TeacherContract {
+  id            String       @id @default(cuid())
+  tenantId      String
+  teacherId     String       @unique
+  contractType  ContractType @default(HOURLY)
+  hourlyRate    Float?
+  monthlySalary Float?
+  fixedAmount   Float?
+  startDate     DateTime
+  endDate       DateTime?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  teacher       Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("teacher_contracts")
+}
+
+model TeacherPayment {
+  id              String               @id @default(cuid())
+  tenantId        String
+  teacherId       String
+  periodLabel     String
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalHours      Float                @default(0)
+  hourlyRate      Float?
+  baseAmount      Float                @default(0)
+  bonusAmount     Float                @default(0)
+  deductionAmount Float                @default(0)
+  totalAmount     Float                @default(0)
+  status          TeacherPaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  paymentMethod   String?
+  reference       String?
+  notes           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  teacher         Teacher              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, teacherId])
+  @@map("teacher_payments")
+}
+
+model Grade {
+  id              String    @id @default(cuid())
+  tenantId        String
+  studentId       String
+  subjectId       String
+  teacherId       String?
+  periodId        String?
+  value           Float
+  maxValue        Float     @default(20.0)
+  coefficient     Float     @default(1.0)
+  evaluationType  String    @default("EXAM")
+  evaluationLabel String?
+  comment         String?
+  semester        Int       @default(1)
+  isPublished     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  version         Int       @default(1)
+  updatedBy       String?
+  deviceId        String?
+  period          Period?   @relation(fields: [periodId], references: [id])
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject         Subject   @relation(fields: [subjectId], references: [id])
+  teacher         Teacher?  @relation(fields: [teacherId], references: [id])
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("grades")
+}
+
+model Attendance {
+  id            String           @id @default(cuid())
+  tenantId      String
+  studentId     String
+  date          DateTime
+  status        AttendanceStatus @default(PRESENT)
+  justification String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+  version       Int              @default(1)
+  updatedBy     String?
+  deviceId      String?
+  student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+  @@map("attendances")
+}
+
+model FeeStructure {
+  id          String    @id @default(cuid())
+  tenantId    String
+  label       String
+  amount      Float
+  dueDay      Int       @default(15)
+  description String?
+  isActive    Boolean   @default(true)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+
+  @@map("fee_structures")
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  tenantId       String
+  studentId      String
+  feeStructureId String?
+  amount         Float
+  paidAmount     Float         @default(0)
+  dueDate        DateTime
+  paidAt         DateTime?
+  status         PaymentStatus @default(PENDING)
+  paymentMethod  String?
+  reference      String?
+  receiptNumber  String?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  version        Int           @default(1)
+  updatedBy      String?
+  deviceId       String?
+  feeStructure   FeeStructure? @relation(fields: [feeStructureId], references: [id])
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Message {
+  id         String             @id @default(cuid())
+  tenantId   String
+  senderId   String
+  subject    String
+  body       String
+  priority   MessagePriority    @default(NORMAL)
+  status     MessageStatus      @default(SENT)
+  createdAt  DateTime           @default(now())
+  readAt     DateTime?
+  documents  Document[]
+  recipients MessageRecipient[]
+  sender     User               @relation("sentMessages", fields: [senderId], references: [id])
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model MessageRecipient {
+  id        String        @id @default(cuid())
+  messageId String
+  userId    String
+  status    MessageStatus @default(SENT)
+  readAt    DateTime?
+  createdAt DateTime      @default(now())
+  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
+  @@map("message_recipients")
+}
+
+model Document {
+  id           String           @id @default(cuid())
+  tenantId     String
+  studentId    String?
+  messageId    String?
+  category     DocumentCategory @default(OTHER)
+  fileName     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  uploadedBy   String
+  createdAt    DateTime         @default(now())
+  deletedAt    DateTime?
+  message      Message?         @relation(fields: [messageId], references: [id])
+  student      Student?         @relation(fields: [studentId], references: [id])
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, userId])
+  @@index([tenantId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+model SyncDevice {
+  id                String    @id @default(cuid())
+  tenantId          String
+  deviceId          String    @unique
+  deviceName        String?
+  lastSyncAt        DateTime?
+  lastSyncTimestamp DateTime?
+  createdAt         DateTime  @default(now())
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  syncLogs          SyncLog[]
+
+  @@unique([tenantId, deviceId])
+  @@map("sync_devices")
+}
+
+model SyncLog {
+  id            String        @id @default(cuid())
+  tenantId      String
+  deviceId      String
+  entityType    String
+  entityId      String
+  operation     SyncOperation
+  payload       Json
+  status        SyncStatus    @default(PENDING)
+  errorMessage  String?
+  serverVersion Int?
+  conflictData  Json?
+  createdAt     DateTime      @default(now())
+  syncedAt      DateTime?
+  syncDevice    SyncDevice    @relation(fields: [deviceId], references: [deviceId])
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("sync_logs")
+}
+
+model SyncJob {
+  id          String    @id @default(cuid())
+  tenantId    String
+  jobType     String
+  payload     Json
+  status      String    @default("PENDING")
+  priority    Int       @default(0)
+  retryCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("sync_jobs")
+}
+
 enum SubscriptionPlan {
   FREE
   STARTER
@@ -80,253 +606,6 @@ enum DocumentCategory {
   OTHER
 }
 
-model Tenant {
-  id              String           @id @default(cuid())
-  name            String
-  subdomain       String           @unique
-  logoUrl         String?
-  primaryColor    String           @default("#2563eb")
-  plan            SubscriptionPlan @default(FREE)
-  status          TenantStatus     @default(TRIAL)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  trialEndsAt     DateTime?
-  suspendedAt     DateTime?
-  maxStudents     Int              @default(100)
-  maxTeachers     Int              @default(20)
-  maxStorageMb    Int              @default(500)
-  settings        Json             @default("{}")
-  academicYears   AcademicYear[]
-  users           User[]
-  students        Student[]
-  classes         Class[]
-  subjects        Subject[]
-  teachers        Teacher[]
-  grades          Grade[]
-  attendances     Attendance[]
-  documents       Document[]
-  messages        Message[]
-  payments        Payment[]
-  syncDevices     SyncDevice[]
-  syncLogs        SyncLog[]
-  auditLogs       AuditLog[]
-  syncJobs        SyncJob[]
-  feeStructures   FeeStructure[]
-  timetableSlots    TimetableSlot[]
-  teacherAttendances TeacherAttendance[]
-  teacherContracts   TeacherContract[]
-  teacherPayments    TeacherPayment[]
-
-  @@map("tenants")
-}
-
-model AcademicYear {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  label     String
-  startDate DateTime
-  endDate   DateTime
-  isCurrent Boolean  @default(false)
-  periods   Period[]
-  holidays  Holiday[]
-
-  @@unique([tenantId, label])
-  @@map("academic_years")
-}
-
-model Period {
-  id            String       @id @default(cuid())
-  academicYearId String
-  academicYear  AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  label         String
-  type          String       @default("TRIMESTER")
-  startDate     DateTime
-  endDate       DateTime
-  coefficient   Float        @default(1.0)
-  grades        Grade[]
-
-  @@map("periods")
-}
-
-model Holiday {
-  id            String       @id @default(cuid())
-  academicYearId String
-  academicYear  AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  label         String
-  startDate     DateTime
-  endDate       DateTime
-
-  @@map("holidays")
-}
-
-model User {
-  id               String           @id @default(cuid())
-  tenantId         String
-  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email            String?
-  passwordHash     String
-  firstName        String?
-  lastName         String
-  role             UserRole         @default(TEACHER)
-  isActive         Boolean          @default(true)
-  phones           UserPhone[]
-  twoFactorSecret  String?
-  twoFactorEnabled Boolean          @default(false)
-  lastLoginAt      DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  refreshToken     String?
-  photoUrl         String?
-  studentLinks     StudentParent[]  @relation("parentLinks")
-  teacher          Teacher?
-  messagesSent     Message[]        @relation("sentMessages")
-  messagesReceived MessageRecipient[]
-  auditLogs        AuditLog[]
-
-  @@unique([tenantId, email])
-  @@map("users")
-}
-
-model UserPhone {
-  id        String @id @default(cuid())
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  value     String
-  sortOrder Int    @default(0)
-
-  @@unique([userId, value])
-  @@map("user_phones")
-}
-
-model Student {
-  id                 String           @id @default(cuid())
-  tenantId           String
-  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  registrationNumber String           @unique
-  firstName          String
-  lastName           String
-  birthDate          DateTime?
-  birthPlace         String?
-  gender             String?
-  nationality        String?
-  address            String?
-  phoneNumber        String?
-  email              String?
-  photoUrl           String?
-  bloodType          String?
-  medicalNotes       String?
-  allergies          String?
-  emergencyContact   String?
-  emergencyPhone     String?
-  status             String           @default("ACTIVE")
-  classId            String?
-  class              Class?           @relation(fields: [classId], references: [id])
-  enrollmentDate     DateTime         @default(now())
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  deletedAt          DateTime?
-  version            Int              @default(1)
-  updatedBy          String?
-  deviceId           String?
-  parents            StudentParent[]  @relation("studentParents")
-  grades             Grade[]
-  attendances        Attendance[]
-  payments           Payment[]
-  documents          Document[]
-
-  @@map("students")
-}
-
-model StudentParent {
-  id        String  @id @default(cuid())
-  studentId String
-  student   Student @relation("studentParents", fields: [studentId], references: [id], onDelete: Cascade)
-  parentId  String
-  parent    User    @relation("parentLinks", fields: [parentId], references: [id], onDelete: Cascade)
-  relation  String?
-  isPrimary Boolean @default(false)
-
-  @@unique([studentId, parentId])
-  @@map("student_parents")
-}
-
-model Class {
-  id        String    @id @default(cuid())
-  tenantId  String
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name      String
-  level     String?
-  room      String?
-  capacity  Int       @default(30)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  students  Student[]
-  teachers  Teacher[]
-  subjects  Subject[]
-  timetableSlots TimetableSlot[]
-
-  @@unique([tenantId, name])
-  @@map("classes")
-}
-
-model Subject {
-  id          String       @id @default(cuid())
-  tenantId    String
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String
-  code        String?
-  level       String?
-  coefficient Float        @default(1.0)
-  classId     String?
-  class       Class?       @relation(fields: [classId], references: [id])
-  grades      Grade[]
-  teachers    Teacher[]
-  timetable TimetableSlot[]
-
-  @@unique([tenantId, name, level])
-  @@map("subjects")
-}
-
-model Teacher {
-  id        String    @id @default(cuid())
-  tenantId  String
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  specialty String?
-  classes   Class[]
-  subjects  Subject[]
-  grades    Grade[]
-  timetable     TimetableSlot[]
-  attendances   TeacherAttendance[]
-  contract      TeacherContract?
-  payments      TeacherPayment[]
-
-  @@map("teachers")
-}
-
-model TimetableSlot {
-  id         String   @id @default(cuid())
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classId    String
-  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subjectId  String
-  subject    Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacherId  String?
-  teacher    Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  dayOfWeek  Int      @default(1)
-  startTime  String
-  endTime    String
-  room       String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([tenantId, classId])
-  @@map("timetable_slots")
-}
-
 enum TeacherAttendanceStatus {
   PRESENT
   ABSENT
@@ -344,284 +623,4 @@ enum TeacherPaymentStatus {
   PENDING
   PAID
   CANCELLED
-}
-
-model TeacherAttendance {
-  id             String                  @id @default(cuid())
-  tenantId       String
-  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  teacherId      String
-  teacher        Teacher                 @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  date           DateTime
-  status         TeacherAttendanceStatus @default(PRESENT)
-  justification  String?
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
-
-  @@unique([teacherId, date])
-  @@index([tenantId, date])
-  @@map("teacher_attendances")
-}
-
-model TeacherContract {
-  id            String       @id @default(cuid())
-  tenantId      String
-  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  teacherId     String       @unique
-  teacher       Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  contractType  ContractType @default(HOURLY)
-  hourlyRate    Float?
-  monthlySalary Float?
-  fixedAmount   Float?
-  startDate     DateTime
-  endDate       DateTime?
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  @@map("teacher_contracts")
-}
-
-model TeacherPayment {
-  id              String                @id @default(cuid())
-  tenantId        String
-  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  teacherId       String
-  teacher         Teacher               @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  periodLabel     String
-  periodStart     DateTime
-  periodEnd       DateTime
-  totalHours      Float                 @default(0)
-  hourlyRate      Float?
-  baseAmount      Float                 @default(0)
-  bonusAmount     Float                 @default(0)
-  deductionAmount Float                 @default(0)
-  totalAmount     Float                 @default(0)
-  status          TeacherPaymentStatus  @default(PENDING)
-  paidAt          DateTime?
-  paymentMethod   String?
-  reference       String?
-  notes           String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-
-  @@index([tenantId, teacherId])
-  @@map("teacher_payments")
-}
-
-model Grade {
-  id              String           @id @default(cuid())
-  tenantId        String
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  studentId       String
-  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subjectId       String
-  subject         Subject          @relation(fields: [subjectId], references: [id])
-  teacherId       String?
-  teacher         Teacher?         @relation(fields: [teacherId], references: [id])
-  periodId        String?
-  period          Period?          @relation(fields: [periodId], references: [id])
-  value           Float
-  maxValue        Float            @default(20.0)
-  coefficient     Float            @default(1.0)
-  evaluationType  String           @default("EXAM")
-  evaluationLabel String?
-  comment         String?
-  semester        Int              @default(1)
-  isPublished     Boolean          @default(false)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
-  version         Int              @default(1)
-  updatedBy       String?
-  deviceId        String?
-
-  @@map("grades")
-}
-
-model Attendance {
-  id        String           @id @default(cuid())
-  tenantId  String
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  studentId String
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  date      DateTime
-  status    AttendanceStatus @default(PRESENT)
-  justification String?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  deletedAt DateTime?
-  version   Int              @default(1)
-  updatedBy String?
-  deviceId  String?
-
-  @@unique([studentId, date])
-  @@map("attendances")
-}
-
-model FeeStructure {
-  id          String  @id @default(cuid())
-  tenantId    String
-  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  label       String
-  amount      Float
-  dueDay      Int     @default(15)
-  description String?
-  isActive    Boolean @default(true)
-  payments    Payment[]
-
-  @@map("fee_structures")
-}
-
-model Payment {
-  id            String        @id @default(cuid())
-  tenantId      String
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  studentId     String
-  student       Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  feeStructureId String?
-  feeStructure  FeeStructure? @relation(fields: [feeStructureId], references: [id])
-  amount        Float
-  paidAmount    Float         @default(0)
-  dueDate       DateTime
-  paidAt        DateTime?
-  status        PaymentStatus @default(PENDING)
-  paymentMethod String?
-  reference     String?
-  receiptNumber String?
-  notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  deletedAt     DateTime?
-  version       Int           @default(1)
-  updatedBy     String?
-  deviceId      String?
-
-  @@map("payments")
-}
-
-model Message {
-  id          String          @id @default(cuid())
-  tenantId    String
-  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  senderId    String
-  sender      User            @relation("sentMessages", fields: [senderId], references: [id])
-  subject     String
-  body        String
-  priority    MessagePriority @default(NORMAL)
-  status      MessageStatus   @default(SENT)
-  createdAt   DateTime        @default(now())
-  readAt      DateTime?
-  recipients  MessageRecipient[]
-  documents   Document[]
-
-  @@map("messages")
-}
-
-model MessageRecipient {
-  id        String        @id @default(cuid())
-  messageId String
-  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User          @relation(fields: [userId], references: [id])
-  status    MessageStatus @default(SENT)
-  readAt    DateTime?
-  createdAt DateTime      @default(now())
-
-  @@unique([messageId, userId])
-  @@map("message_recipients")
-}
-
-model Document {
-  id          String           @id @default(cuid())
-  tenantId    String
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  studentId   String?
-  student     Student?         @relation(fields: [studentId], references: [id])
-  messageId   String?
-  message     Message?         @relation(fields: [messageId], references: [id])
-  category    DocumentCategory @default(OTHER)
-  fileName    String
-  originalName String
-  mimeType    String
-  size        Int
-  path        String
-  uploadedBy  String
-  createdAt   DateTime         @default(now())
-  deletedAt   DateTime?
-
-  @@map("documents")
-}
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  action    String
-  entityType String
-  entityId  String?
-  oldValue  Json?
-  newValue  Json?
-  metadata  Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-
-  @@index([tenantId, createdAt(sort: Desc)])
-  @@index([tenantId, userId])
-  @@index([tenantId, entityType, entityId])
-  @@map("audit_logs")
-}
-
-model SyncDevice {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deviceId      String   @unique
-  deviceName    String?
-  lastSyncAt    DateTime?
-  lastSyncTimestamp DateTime?
-  createdAt     DateTime @default(now())
-  syncLogs      SyncLog[]
-
-  @@unique([tenantId, deviceId])
-  @@map("sync_devices")
-}
-
-model SyncLog {
-  id            String       @id @default(cuid())
-  tenantId      String
-  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deviceId      String
-  syncDevice    SyncDevice   @relation(fields: [deviceId], references: [deviceId])
-  entityType    String
-  entityId      String
-  operation     SyncOperation
-  payload       Json
-  status        SyncStatus   @default(PENDING)
-  errorMessage  String?
-  serverVersion Int?
-  conflictData  Json?
-  createdAt     DateTime     @default(now())
-  syncedAt      DateTime?
-
-  @@map("sync_logs")
-}
-
-model SyncJob {
-  id         String    @id @default(cuid())
-  tenantId   String
-  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  jobType    String
-  payload    Json
-  status     String    @default("PENDING")
-  priority   Int       @default(0)
-  retryCount Int       @default(0)
-  createdAt  DateTime  @default(now())
-  processedAt DateTime?
-  error      String?
-
-  @@map("sync_jobs")
 }
