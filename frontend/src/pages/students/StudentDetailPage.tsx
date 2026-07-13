@@ -7,7 +7,7 @@ import { formatDate, getInitials } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
@@ -125,7 +125,7 @@ export function StudentDetailPage() {
               </div>
               <div className="flex gap-4 text-sm text-muted-foreground">
                 <span>Matricule: {student.registrationNumber}</span>
-                <span>Classe: {student.classId}</span>
+                <span>Classe: {student.class?.name ?? student.classId}</span>
               </div>
             </div>
           </div>
@@ -220,7 +220,7 @@ export function StudentDetailPage() {
               <CardContent className="space-y-2 text-sm">
                 <div>
                   <span className="text-muted-foreground">Classe:</span>
-                  <p className="font-medium">{student.classId}</p>
+                  <p className="font-medium">{student.class?.name ?? student.classId}</p>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Statut:</span>

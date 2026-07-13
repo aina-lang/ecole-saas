@@ -200,21 +200,14 @@ export function UserManagementPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                      Chargement...
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              ) : !usersData?.data.length ? (
                 <TableRow>
                   <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    Aucun utilisateur trouvé
+                    Chargement...
                   </TableCell>
                 </TableRow>
               ) : !usersData?.data.length ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     Aucun utilisateur trouvé
                   </TableCell>
                 </TableRow>

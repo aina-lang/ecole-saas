@@ -101,6 +101,7 @@ model User {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   refreshToken     String?
+  photoUrl         String?
   auditLogs        AuditLog[]
   messagesReceived MessageRecipient[]
   messagesSent     Message[]          @relation("sentMessages")

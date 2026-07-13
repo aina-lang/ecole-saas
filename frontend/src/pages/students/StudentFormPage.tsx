@@ -474,6 +474,7 @@ export function StudentFormPage() {
                       </FormItem>
                     )}
                   />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

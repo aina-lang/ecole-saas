@@ -322,7 +322,15 @@ export function UserFormPage() {
             <CardHeader>
               <CardTitle>Informations personnelles</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+            <CardContent className="space-y-4">
+              <PhotoUpload
+                src={user?.photoUrl}
+                firstName={user?.firstName}
+                lastName={user?.lastName}
+                onUpload={(file) => photoMutation.mutateAsync(file)}
+                onDelete={() => deletePhotoMutation.mutateAsync()}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="lastName"
@@ -431,6 +439,7 @@ export function UserFormPage() {
                   </FormItem>
                 )}
               />
+            </div>
             </CardContent>
           </Card>
 
@@ -483,9 +492,10 @@ export function UserFormPage() {
                     placeholder="Sélectionner des matières"
                   />
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => navigate('/administration/users')}>
