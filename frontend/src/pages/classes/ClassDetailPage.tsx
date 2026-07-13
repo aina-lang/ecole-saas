@@ -99,6 +99,17 @@ export function ClassDetailPage() {
     onError: () => toast.error("Erreur lors du retrait de l'élève")
   })
 
+  const generateBulletinsMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await client.post(`/bulletins/class/${id}`)
+      return data.data ?? data
+    },
+    onSuccess: () => {
+      toast.success('Bulletins générés avec succès')
+    },
+    onError: () => toast.error('Erreur lors de la génération des bulletins')
+  })
+
   if (isLoading) {
     return (
       <div className="flex h-48 items-center justify-center text-muted-foreground">
@@ -128,10 +139,19 @@ export function ClassDetailPage() {
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
           Retour
         </Button>
-        <Button onClick={() => navigate(`/classes/${id}/edit`)}>
-          <Pencil2Icon className="mr-2 h-4 w-4" />
-          Modifier
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => navigate(`/classes/${id}/edit`)}>
+            <Pencil2Icon className="mr-2 h-4 w-4" />
+            Modifier
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => generateBulletinsMutation.mutate()}
+            disabled={generateBulletinsMutation.isPending}
+          >
+            {generateBulletinsMutation.isPending ? 'Génération...' : 'Générer les bulletins'}
+          </Button>
+        </div>
       </div>
 
       <Card>
