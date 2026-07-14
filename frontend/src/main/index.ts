@@ -7,7 +7,7 @@ import {
   getDatabase, closeDatabase, getPendingCount, getConflictCount, getDeviceId,
   addToOutbox, getLocalStudents, saveLocalStudents, saveLocalGrades,
   saveLocalAttendance, getConflicts, saveFileLocally, getFileUploadCount,
-  getFileUploadByEntity, saveEntity, queryEntities, getEntityById,
+  getFileUploadByEntity, saveEntity, queryEntities, countEntities, getEntityById,
   softDeleteEntity, markEntitySynced, getLocalTableConfig,
   getSetting, setSetting, getAllSettings,
   saveAuditLog, getAuditLogs,
@@ -141,6 +141,10 @@ function setupIPC() {
 
   ipcMain.handle('local:query', async (_event, entityType, filters) => {
     return queryEntities(entityType, filters)
+  })
+
+  ipcMain.handle('local:count', async (_event, entityType, filters) => {
+    return countEntities(entityType, filters)
   })
 
   ipcMain.handle('local:get-by-id', async (_event, entityType, id) => {

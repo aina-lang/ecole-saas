@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
-import { TrashIcon, PlusIcon, Pencil2Icon } from '@radix-ui/react-icons'
+import { TrashIcon, PlusIcon, Pencil2Icon, ReloadIcon } from '@radix-ui/react-icons'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 
 interface Subject {

@@ -11,14 +11,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import {
   Dialog,
   DialogContent,
@@ -188,58 +181,86 @@ export function TeacherPayPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Enseignant</TableHead>
-                <TableHead>Période</TableHead>
-                <TableHead>Heures</TableHead>
-                <TableHead>Base</TableHead>
-                <TableHead>Prime</TableHead>
-                <TableHead>Retenue</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">Chargement...</TableCell>
-                </TableRow>
-              ) : !payments?.length ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">Aucun paiement</TableCell>
-                </TableRow>
-              ) : (
-                payments.map((p: any) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">
-                      {p.teacher?.user?.firstName} {p.teacher?.user?.lastName}
-                    </TableCell>
-                    <TableCell className="text-sm">{p.periodLabel}</TableCell>
-                    <TableCell>{p.totalHours}h</TableCell>
-                    <TableCell>{p.baseAmount.toLocaleString()} XAF</TableCell>
-                    <TableCell className="text-green-600">+{p.bonusAmount.toLocaleString()}</TableCell>
-                    <TableCell className="text-red-600">-{p.deductionAmount.toLocaleString()}</TableCell>
-                    <TableCell className="font-bold">{p.totalAmount.toLocaleString()} XAF</TableCell>
-                    <TableCell>
-                      <Badge className={paymentStatusColors[p.status] || ''} variant="secondary">
-                        {paymentStatusLabels[p.status] || p.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {p.status === 'PENDING' && (
-                        <Button size="sm" variant="outline" onClick={() => markPaidMutation.mutate(p.id)}>
-                          Marquer payé
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            columns={[
+              {
+                key: 'teacherName',
+                label: 'Enseignant',
+                sortable: true,
+                className: 'font-medium',
+              },
+              {
+                key: 'periodLabel',
+                label: 'Période',
+                sortable: true,
+              },
+              {
+                key: 'totalHours',
+                label: 'Heures',
+                sortable: true,
+                render: (payment) => `${(payment as any).totalHours}h`,
+              },
+              {
+                key: 'baseAmount',
+                label: 'Base',
+                sortable: true,
+                render: (payment) => `${(payment as any).baseAmount.toLocaleString()} XAF`,
+              },
+              {
+                key: 'bonusAmount',
+                label: 'Prime',
+                sortable: true,
+                render: (payment) => `+${(payment as any).bonusAmount.toLocaleString()}`,
+                className: 'text-green-600',
+              },
+              {
+                key: 'deductionAmount',
+                label: 'Retenue',
+                sortable: true,
+                render: (payment) => `-${(payment as any).deductionAmount.toLocaleString()}`,
+                className: 'text-red-600',
+              },
+              {
+                key: 'totalAmount',
+                label: 'Total',
+                sortable: true,
+                render: (payment) => <span className="font-bold">{(payment as any).totalAmount.toLocaleString()} XAF</span>,
+              },
+              {
+                key: 'status',
+                label: 'Statut',
+                sortable: true,
+                render: (payment) => {
+                  const p = payment as any
+                  return (
+                    <Badge className={paymentStatusColors[p.status] || ''} variant="secondary">
+                      {paymentStatusLabels[p.status] || p.status}
+                    </Badge>
+                  )
+                },
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                render: (payment) => {
+                  const p = payment as any
+                  return p.status === 'PENDING' ? (
+                    <Button size="sm" variant="outline" onClick={() => markPaidMutation.mutate(p.id)}>
+                      Marquer payé
+                    </Button>
+                  ) : null
+                },
+              },
+            ]}
+            data={payments ?? []}
+            total={(payments ?? []).length}
+            page={1}
+            limit={100}
+            onPageChange={() => {}}
+            getRowId={(payment) => (payment as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucun paiement"
+          />
         </CardContent>
       </Card>
 

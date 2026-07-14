@@ -12,6 +12,7 @@ const api = {
   local: {
     save: (entityType: string, data: any) => ipcRenderer.invoke('local:save', entityType, data),
     query: (entityType: string, filters?: any) => ipcRenderer.invoke('local:query', entityType, filters),
+    count: (entityType: string, filters?: any) => ipcRenderer.invoke('local:count', entityType, filters),
     getById: (entityType: string, id: string) => ipcRenderer.invoke('local:get-by-id', entityType, id),
     delete: (entityType: string, id: string) => ipcRenderer.invoke('local:delete', entityType, id),
     markSynced: (entityType: string, id: string) => ipcRenderer.invoke('local:mark-synced', entityType, id),

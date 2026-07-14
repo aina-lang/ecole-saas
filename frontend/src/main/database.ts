@@ -758,6 +758,37 @@ export function queryEntities(entityType: string, filters?: Record<string, any>)
   return parseResults(stmt).map(snakeToCamel)
 }
 
+export function countEntities(entityType: string, filters?: Record<string, any>): number {
+  const config = LOCAL_TABLES[entityType]
+  if (!config) return 0
+
+  let sql = `SELECT COUNT(*) as count FROM ${config.table} WHERE deleted_at IS NULL`
+  const params: any[] = []
+
+  if (filters) {
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null) continue
+      if (key === 'limit' || key === 'offset' || key === 'page' || key === 'pageSize') continue
+      if (key === 'sortBy' || key === 'sort_by' || key === 'sort' || key === 'sortDirection' || key === 'sort_order' || key === 'direction' || key === 'order') continue
+      if (key === 'search') {
+        const searchCols = getSearchColumns(entityType)
+        const clauses = searchCols.map((col) => `${col} LIKE ?`).join(' OR ')
+        sql += ` AND (${clauses})`
+        const s = `%${value}%`
+        params.push(...searchCols.map(() => s))
+        continue
+      }
+      const col = key.replace(/([A-Z])/g, '_$1').toLowerCase()
+      sql += ` AND ${col} = ?`
+      params.push(value)
+    }
+  }
+
+  const stmt = db.exec(sql, params)
+  const row = stmt[0]?.values[0]
+  return row ? Number(row[0]) : 0
+}
+
 export function getEntityById(entityType: string, id: string): any | null {
   const config = LOCAL_TABLES[entityType]
   if (!config) return null

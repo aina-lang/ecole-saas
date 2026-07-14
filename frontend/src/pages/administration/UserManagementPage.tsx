@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import client from '@/api/client'
-import { saveEntity, queryEntities } from '@/lib/db/offline'
+import { saveEntity, queryEntities, countEntities } from '@/lib/db/offline'
 import type { User, PaginatedResponse } from '@/types'
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -79,11 +79,15 @@ export function UserManagementPage() {
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['admin-users', search, roleFilter, page],
     queryFn: async () => {
-      const params: Record<string, string | number> = { page, limit }
+      const offset = (page - 1) * limit
+      const params: Record<string, string | number> = { limit, offset }
       if (search) params.search = search
       if (roleFilter !== 'all') params.role = roleFilter
-      const result = await queryEntities<UserWithMeta>('User', params)
-      return { data: result, total: result.length } as PaginatedResponse<UserWithMeta>
+      const [data, total] = await Promise.all([
+        queryEntities<UserWithMeta>('User', params),
+        countEntities<UserWithMeta>('User', params),
+      ])
+      return { data, total } as PaginatedResponse<UserWithMeta>
     }
   })
 

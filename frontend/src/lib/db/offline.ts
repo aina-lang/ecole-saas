@@ -108,6 +108,13 @@ export async function queryEntities<T = any>(entityType: EntityType, filters?: R
   return onlineQuery(entityType, filters)
 }
 
+export async function countEntities(entityType: EntityType, filters?: Record<string, any>): Promise<number> {
+  if (await isElectron()) {
+    return await window.api.local.count(entityType, filters)
+  }
+  return 0
+}
+
 export async function getEntityById<T = any>(entityType: EntityType, id: string): Promise<T | null> {
   if (await isElectron()) {
     return window.api.local.getById(entityType, id)

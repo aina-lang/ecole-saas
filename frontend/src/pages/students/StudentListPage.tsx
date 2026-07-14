@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { deleteEntity, queryEntities } from '@/lib/db/offline'
+import { deleteEntity, queryEntities, countEntities } from '@/lib/db/offline'
 import type { Student, PaginatedResponse } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { StudentPhoto } from '@/components/ui/student-photo'
@@ -33,23 +33,30 @@ export function StudentListPage() {
   const [classFilter, setClassFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
+  const [sortBy, setSortBy] = useState<string>('')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const limit = 10
 
   const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
 
   const { data: studentsData, isLoading } = useQuery({
-    queryKey: ['students', search, classFilter, statusFilter, page],
+    queryKey: ['students', search, classFilter, statusFilter, page, sortBy, sortDirection],
     queryFn: async () => {
-      const params: Record<string, string | number> = {
-        page,
-        limit
-      }
+      const offset = (page - 1) * limit
+      const params: Record<string, string | number> = { limit, offset }
       if (search) params.search = search
       if (classFilter !== 'all') params.classId = classFilter
       if (statusFilter !== 'all') params.status = statusFilter
-      const result = await queryEntities<Student>('Student', params)
-      return { data: result, total: result.length } as PaginatedResponse<Student>
+      if (sortBy) {
+        params.sortBy = sortBy
+        params.sortDirection = sortDirection
+      }
+      const [data, total] = await Promise.all([
+        queryEntities<Student>('Student', params),
+        countEntities<Student>('Student', params),
+      ])
+      return { data, total } as PaginatedResponse<Student>
     }
   })
 
@@ -207,8 +214,12 @@ export function StudentListPage() {
             limit={limit}
             onPageChange={setPage}
             onSortChange={(key, direction) => {
-              // Sorting is handled server-side via query key change
+              setSortBy(key)
+              setSortDirection(direction)
+              setPage(1)
             }}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
             filters={{
               search,
               classId: classFilter === 'all' ? '' : classFilter,

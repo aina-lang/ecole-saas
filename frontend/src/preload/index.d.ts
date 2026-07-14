@@ -11,6 +11,7 @@ interface Api {
   local: {
     save: (entityType: string, data: any) => Promise<{ success: boolean }>
     query: (entityType: string, filters?: any) => Promise<any[]>
+    count: (entityType: string, filters?: any) => Promise<number>
     getById: (entityType: string, id: string) => Promise<any | null>
     delete: (entityType: string, id: string) => Promise<{ success: boolean }>
     markSynced: (entityType: string, id: string) => Promise<{ success: boolean }>

@@ -11,14 +11,7 @@ import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import { Badge } from '@/components/ui/badge'
 import { CalendarIcon, ReloadIcon } from '@radix-ui/react-icons'
 
@@ -90,65 +83,65 @@ export function TeacherAttendancePage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Enseignant</TableHead>
-                <TableHead>Spécialité</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="w-[300px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">Chargement...</TableCell>
-                </TableRow>
-              ) : !teachers?.length ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">Aucun enseignant</TableCell>
-                </TableRow>
-              ) : (
-                teachers.map((teacher) => {
-                  const att = attendanceMap.get(teacher.id)
-                  return (
-                    <TableRow key={teacher.id}>
-                      <TableCell className="font-medium">
-                        {teacher.user.firstName} {teacher.user.lastName}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {teacher.specialty || '-'}
-                      </TableCell>
-                      <TableCell>
-                        {att ? (
-                          <Badge className={statusColors[att.status] || ''} variant="secondary">
-                            {statusLabels[att.status] || att.status}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">Non marqué</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].map((status) => (
-                            <Button
-                              key={status}
-                              size="sm"
-                              variant={att?.status === status ? 'default' : 'outline'}
-                              onClick={() => setStatus(teacher.id, status)}
-                              disabled={bulkMutation.isPending}
-                            >
-                              {statusLabels[status]}
-                            </Button>
-                          ))}
-                        </div>
-                      </TableCell>
-                    </TableRow>
+          <DataTable
+            columns={[
+              {
+                key: 'name',
+                label: 'Enseignant',
+                render: (teacher) => `${(teacher as any).user.firstName} ${(teacher as any).user.lastName}`,
+                className: 'font-medium',
+              },
+              {
+                key: 'specialty',
+                label: 'Spécialité',
+                render: (teacher) => (teacher as any).specialty || '-',
+              },
+              {
+                key: 'status',
+                label: 'Statut',
+                render: (teacher) => {
+                  const att = attendanceMap.get((teacher as any).id)
+                  return att ? (
+                    <Badge className={statusColors[att.status] || ''} variant="secondary">
+                      {statusLabels[att.status] || att.status}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">Non marqué</span>
                   )
-                })
-              )}
-            </TableBody>
-          </Table>
+                },
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                render: (teacher) => {
+                  const att = attendanceMap.get((teacher as any).id)
+                  return (
+                    <div className="flex gap-1">
+                      {['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].map((status) => (
+                        <Button
+                          key={status}
+                          size="sm"
+                          variant={att?.status === status ? 'default' : 'outline'}
+                          onClick={() => setStatus((teacher as any).id, status)}
+                          disabled={bulkMutation.isPending}
+                        >
+                          {statusLabels[status]}
+                        </Button>
+                      ))}
+                    </div>
+                  )
+                },
+              },
+            ]}
+            data={teachers ?? []}
+            total={(teachers ?? []).length}
+            page={1}
+            limit={100}
+            onPageChange={() => {}}
+            getRowId={(teacher) => (teacher as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucun enseignant"
+          />
         </CardContent>
       </Card>
 
