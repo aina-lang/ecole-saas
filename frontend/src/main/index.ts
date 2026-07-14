@@ -11,7 +11,7 @@ import {
   softDeleteEntity, markEntitySynced, getLocalTableConfig,
   getSetting, setSetting, getAllSettings,
   saveAuditLog, getAuditLogs,
-  getPendingEntries, getLastSyncTimestamp,
+  getPendingEntries, getLastSyncTimestamp, setLastSyncTimestamp,
 } from './database'
 import { startSyncScheduler, stopSyncScheduler, performSync, getOnlineStatus, checkAndUpdateConnectivity, setAuthToken, getAuthToken } from './sync-engine'
 
@@ -218,6 +218,70 @@ function setupIPC() {
       request.on('error', reject)
       request.end()
     })
+  })
+
+  ipcMain.handle('sync:hydrate', async () => {
+    const token = getAuthToken()
+    if (!token) {
+      return { success: false, message: 'No auth token' }
+    }
+
+    const url = 'http://localhost:3000/api/v1/sync/snapshot'
+    const snapshot = await new Promise<any>((resolve, reject) => {
+      const request = net.request({ method: 'GET', url, timeout: 30000 })
+      request.setHeader('Content-Type', 'application/json')
+      request.setHeader('Authorization', `Bearer ${token}`)
+      request.on('response', (response) => {
+        let data = ''
+        response.on('data', (chunk) => { data += chunk.toString() })
+        response.on('end', () => {
+          if (response.statusCode >= 400) {
+            reject(new Error(data || `HTTP ${response.statusCode}`))
+          } else {
+            resolve(JSON.parse(data))
+          }
+        })
+      })
+      request.on('error', reject)
+      request.end()
+    })
+
+    const counts: Record<string, number> = {}
+
+    if (snapshot.students?.length) {
+      saveLocalStudents(snapshot.students)
+      counts.students = snapshot.students.length
+    }
+    if (snapshot.grades?.length) {
+      saveLocalGrades(snapshot.grades)
+      counts.grades = snapshot.grades.length
+    }
+    if (snapshot.attendance?.length) {
+      saveLocalAttendance(snapshot.attendance)
+      counts.attendance = snapshot.attendance.length
+    }
+    if (snapshot.classes?.length) {
+      for (const c of snapshot.classes) {
+        saveEntity('Class', c)
+      }
+      counts.classes = snapshot.classes.length
+    }
+    if (snapshot.subjects?.length) {
+      for (const s of snapshot.subjects) {
+        saveEntity('Subject', s)
+      }
+      counts.subjects = snapshot.subjects.length
+    }
+    if (snapshot.teachers?.length) {
+      for (const t of snapshot.teachers) {
+        saveEntity('Teacher', t)
+      }
+      counts.teachers = snapshot.teachers.length
+    }
+
+    setLastSyncTimestamp(snapshot.serverTimestamp || new Date().toISOString())
+
+    return { success: true, counts }
   })
 
   ipcMain.handle('auth:set-token', async (_event, token) => {

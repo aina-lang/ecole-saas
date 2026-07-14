@@ -23,6 +23,8 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DatePicker } from '@/components/ui/date-picker'
+import { format } from 'date-fns'
 import {
   Form,
   FormControl,
@@ -380,7 +382,10 @@ export function SettingsPage() {
                         <FormItem>
                           <FormLabel>Date de début</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <DatePicker
+                              value={field.value}
+                              onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -393,7 +398,10 @@ export function SettingsPage() {
                         <FormItem>
                           <FormLabel>Date de fin</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <DatePicker
+                              value={field.value}
+                              onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

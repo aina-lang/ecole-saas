@@ -39,6 +39,7 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 
 const statusConfig: Record<
   string,
@@ -200,19 +201,17 @@ export function PaymentListPage() {
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Du</label>
-              <Input
-                type="date"
+              <DatePicker
                 value={filters.dateFrom ?? ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                onChange={(d) => setFilters((prev) => ({ ...prev, dateFrom: d ? format(d, 'yyyy-MM-dd') : '' }))}
                 className="w-[150px]"
               />
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Au</label>
-              <Input
-                type="date"
+              <DatePicker
                 value={filters.dateTo ?? ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                onChange={(d) => setFilters((prev) => ({ ...prev, dateTo: d ? format(d, 'yyyy-MM-dd') : '' }))}
                 className="w-[150px]"
               />
             </div>

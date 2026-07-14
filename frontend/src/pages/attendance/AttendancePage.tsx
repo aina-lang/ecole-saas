@@ -11,8 +11,7 @@ import { cn } from '@/lib/utils'
 
 import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent } from '@/components/ui/card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 
@@ -138,20 +137,10 @@ export function AttendancePage() {
       <div className="flex flex-wrap gap-4 items-end">
         <div className="w-56 space-y-1.5">
           <label className="text-sm font-medium">Date</label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="w-full justify-start text-left font-normal inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(date, 'EEEE d MMMM yyyy', { locale: fr })}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus />
-            </PopoverContent>
-          </Popover>
+          <DatePicker
+            value={date}
+            onChange={(d) => d && setDate(d)}
+          />
         </div>
         <div className="w-48 space-y-1.5">
           <label className="text-sm font-medium">Classe</label>

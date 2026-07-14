@@ -700,6 +700,8 @@ export function queryEntities(entityType: string, filters?: Record<string, any>)
   const params: any[] = []
   let limit: number | null = null
   let offset: number | null = null
+  let sortBy: string | null = null
+  let sortDirection: 'asc' | 'desc' = 'desc'
 
   if (filters) {
     for (const [key, value] of Object.entries(filters)) {
@@ -713,6 +715,14 @@ export function queryEntities(entityType: string, filters?: Record<string, any>)
         continue
       }
       if (key === 'page' || key === 'pageSize') {
+        continue
+      }
+      if (key === 'sortBy' || key === 'sort_by' || key === 'sort') {
+        sortBy = value
+        continue
+      }
+      if (key === 'sortDirection' || key === 'sort_order' || key === 'direction' || key === 'order') {
+        sortDirection = value === 'asc' ? 'asc' : 'desc'
         continue
       }
       if (key === 'search') {
@@ -729,7 +739,12 @@ export function queryEntities(entityType: string, filters?: Record<string, any>)
     }
   }
 
-  sql += ' ORDER BY created_at DESC'
+  if (sortBy) {
+    const snakeSortBy = sortBy.replace(/([A-Z])/g, '_$1').toLowerCase()
+    sql += ` ORDER BY ${snakeSortBy} ${sortDirection}`
+  } else {
+    sql += ' ORDER BY created_at DESC'
+  }
   if (limit !== null) {
     sql += ' LIMIT ?'
     params.push(limit)

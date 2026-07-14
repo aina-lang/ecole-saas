@@ -68,6 +68,9 @@ export async function checkAndUpdateConnectivity(): Promise<boolean> {
   onlineStatus = await checkConnectivity()
   if (wasOnline !== onlineStatus) {
     notifyStatusChange()
+    if (onlineStatus && !wasOnline) {
+      performSync().catch(() => {})
+    }
   }
   return onlineStatus
 }

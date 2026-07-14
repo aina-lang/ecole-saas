@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,26 +15,49 @@ import { getPhotoUrl } from '@/api/client'
 import { useSyncStore } from '@/stores/sync-store'
 import { getInitials } from '@/lib/utils'
 import { HamburgerMenuIcon } from '@radix-ui/react-icons'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { SidebarContent } from './SidebarContent'
+import { ModeToggle } from '../mode-toggle'
 
 interface TopbarProps {
   title: string
 }
 
 export function Topbar({ title }: TopbarProps) {
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const isOnline = useSyncStore((s) => s.isOnline)
   const isSyncing = useSyncStore((s) => s.isSyncing)
   const pendingCount = useSyncStore((s) => s.pendingCount)
+  const tenant = useUIStore((s) => s.tenant)
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-background px-4">
+    <header className="flex h-14 items-center justify-between border-b bg-background px-4 shrink-0">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="lg:hidden" onClick={toggleSidebar}>
-          <HamburgerMenuIcon className="h-5 w-5" />
-        </Button>
-        <h1 className="text-lg font-semibold">{title}</h1>
+        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="lg:hidden">
+              <HamburgerMenuIcon className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="flex flex-col p-0">
+            <SheetHeader className="h-14 flex items-center gap-2 border-b px-4 text-left">
+              {tenant.logoUrl ? (
+                <img src={tenant.logoUrl} alt={tenant.name} className="h-8 w-8 rounded" />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
+                  {tenant.name ? tenant.name.charAt(0) : 'E'}
+                </div>
+              )}
+              <SheetTitle className="text-sm font-semibold">
+                {tenant.name || 'École SaaS'}
+              </SheetTitle>
+            </SheetHeader>
+            <SidebarContent forceShowLabels onItemClick={() => setIsMobileMenuOpen(false)} />
+          </SheetContent>
+        </Sheet>
+        <h1 className="text-lg font-semibold truncate">{title}</h1>
       </div>
 
       <div className="flex items-center gap-4">
@@ -51,6 +75,8 @@ export function Topbar({ title }: TopbarProps) {
                 : `Hors ligne (${pendingCount} en attente)`}
           </span>
         </div>
+
+        <ModeToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

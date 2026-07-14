@@ -68,9 +68,36 @@ function camelToSnake(obj: any): any {
 export async function saveEntity(entityType: EntityType, data: any): Promise<any> {
   if (await isElectron()) {
     await window.api.local.save(entityType, data)
-    return { ...data, _offline: true }
+    const result = { ...data, _offline: true }
+    if (window.api?.sync?.forceSync) {
+      window.api.sync.forceSync().catch(() => {})
+    }
+    return result
   }
   return onlineSave(entityType, data)
+}
+
+export async function deleteEntity(entityType: EntityType, id: string): Promise<boolean> {
+  if (await isElectron()) {
+    const result = await window.api.local.delete(entityType, id)
+    if (window.api?.sync?.forceSync) {
+      window.api.sync.forceSync().catch(() => {})
+    }
+    return result.success
+  }
+  const endpoints: Record<string, string> = {
+    Student: '/students',
+    User: '/users',
+    Teacher: '/teachers',
+    Subject: '/subjects',
+    Class: '/classes',
+    Grade: '/grades',
+    Attendance: '/attendance',
+  }
+  const base = endpoints[entityType]
+  if (!base) return false
+  await client.delete(`${base}/${id}`)
+  return true
 }
 
 export async function queryEntities<T = any>(entityType: EntityType, filters?: Record<string, any>): Promise<T[]> {
@@ -98,26 +125,6 @@ export async function getEntityById<T = any>(entityType: EntityType, id: string)
   if (!base) return null
   const { data } = await client.get(`${base}/${id}`)
   return data?.data ?? data ?? null
-}
-
-export async function deleteEntity(entityType: EntityType, id: string): Promise<boolean> {
-  if (await isElectron()) {
-    const result = await window.api.local.delete(entityType, id)
-    return result.success
-  }
-  const endpoints: Record<string, string> = {
-    Student: '/students',
-    User: '/users',
-    Teacher: '/teachers',
-    Subject: '/subjects',
-    Class: '/classes',
-    Grade: '/grades',
-    Attendance: '/attendance',
-  }
-  const base = endpoints[entityType]
-  if (!base) return false
-  await client.delete(`${base}/${id}`)
-  return true
 }
 
 export async function loadStaticData(): Promise<void> {

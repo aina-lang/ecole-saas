@@ -2,6 +2,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { AppRouter } from '@/router'
+import { useSyncInvalidation } from '@/lib/db/hooks'
+import { useEffect } from 'react'
 import '@/global.css'
 
 const queryClient = new QueryClient({
@@ -14,13 +16,27 @@ const queryClient = new QueryClient({
   },
 })
 
+function AppInner() {
+  useSyncInvalidation()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
+      window.api.sync.hydrate().catch(() => {})
+    }
+  }, [])
+
+  return (
+    <BrowserRouter>
+      <AppRouter />
+      <Toaster position="top-right" richColors />
+    </BrowserRouter>
+  )
+}
+
 function App(): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppRouter />
-        <Toaster position="top-right" richColors />
-      </BrowserRouter>
+      <AppInner />
     </QueryClientProvider>
   )
 }

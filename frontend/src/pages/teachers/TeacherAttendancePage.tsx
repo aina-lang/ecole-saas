@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { format, isPast, parseISO } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { format } from 'date-fns'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -81,12 +80,10 @@ export function TeacherAttendancePage() {
           <p className="text-muted-foreground">Marquer la présence des professeurs</p>
         </div>
         <div className="flex items-center gap-2">
-          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-          <Input
-            type="date"
+          <DatePicker
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-fit"
+            onChange={(d) => d && setDate(format(d, 'yyyy-MM-dd'))}
+            className="w-[180px]"
           />
         </div>
       </div>

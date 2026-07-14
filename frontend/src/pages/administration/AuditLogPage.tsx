@@ -19,7 +19,7 @@ import {
   CardDescription
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -188,17 +188,15 @@ export function AuditLogPage() {
               placeholder="Entité"
               className="w-[160px]"
             />
-            <Input
-              type="date"
+            <DatePicker
               value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
+              onChange={(d) => { setDateFrom(d ? format(d, 'yyyy-MM-dd') : ''); setPage(1) }}
               className="w-[160px]"
               placeholder="Date début"
             />
-            <Input
-              type="date"
+            <DatePicker
               value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
+              onChange={(d) => { setDateTo(d ? format(d, 'yyyy-MM-dd') : ''); setPage(1) }}
               className="w-[160px]"
               placeholder="Date fin"
             />

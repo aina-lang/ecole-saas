@@ -75,6 +75,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
       window.api.auth.setToken(accessToken).catch(() => {})
     }
+
+    if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
+      window.api.sync.hydrate().catch(() => {})
+    }
   },
 
   logout: () => {
@@ -123,6 +127,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
         window.api.auth.setToken(accessToken).catch(() => {})
+      }
+
+      if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
+        window.api.sync.hydrate().catch(() => {})
       }
     } catch {
       get().logout()

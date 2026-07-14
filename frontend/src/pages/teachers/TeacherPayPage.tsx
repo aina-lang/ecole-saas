@@ -7,7 +7,8 @@ import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
+import { format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -159,11 +160,19 @@ export function TeacherPayPage() {
             </div>
             <div>
               <label className="text-sm font-medium">Début période</label>
-              <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+              <DatePicker
+                value={periodStart}
+                onChange={(d) => setPeriodStart(d ? format(d, 'yyyy-MM-dd') : '')}
+                className="w-[180px]"
+              />
             </div>
             <div>
               <label className="text-sm font-medium">Fin période</label>
-              <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+              <DatePicker
+                value={periodEnd}
+                onChange={(d) => setPeriodEnd(d ? format(d, 'yyyy-MM-dd') : '')}
+                className="w-[180px]"
+              />
             </div>
             <Button
               disabled={!selectedTeacher || !periodStart || !periodEnd || calculateMutation.isPending}

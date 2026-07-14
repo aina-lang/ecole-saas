@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, queryEntities, getEntityById, type EntityType } from '@/lib/db/offline'
+import { saveEntity, getEntityById } from '@/lib/db/offline'
 import type { Student } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,8 @@ import {
 import { PlusIcon } from '@radix-ui/react-icons'
 import { Textarea } from '@/components/ui/textarea'
 import { PhotoUpload } from '@/components/ui/photo-upload'
+import { DatePicker } from '@/components/ui/date-picker'
+import { format } from 'date-fns'
 import {
   Form,
   FormControl,
@@ -456,7 +458,10 @@ export function StudentFormPage() {
                       <FormItem>
                         <FormLabel>Date de naissance *</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <DatePicker
+                            value={field.value}
+                            onChange={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : '')}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -680,7 +685,10 @@ export function StudentFormPage() {
                       <FormItem>
                         <FormLabel>Date d'inscription *</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <DatePicker
+                            value={field.value}
+                            onChange={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : '')}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

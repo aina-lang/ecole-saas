@@ -39,10 +39,7 @@ export function AppLayout() {
       <Sidebar />
 
       <div
-        className={cn(
-          'flex flex-1 flex-col transition-all duration-300',
-          sidebarOpen ? 'lg:ml-60' : 'lg:ml-16'
-        )}
+        className="flex flex-1 flex-col overflow-hidden"
       >
         <Topbar title={title} />
 

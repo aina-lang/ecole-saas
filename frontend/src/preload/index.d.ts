@@ -34,6 +34,7 @@ interface Api {
   sync: {
     getStatus: () => Promise<{ isOnline: boolean; pendingCount: number; conflictCount: number; deviceId: string }>
     forceSync: () => Promise<{ synced: number; conflicts: number; errors: number }>
+    hydrate: () => Promise<{ success: boolean; counts?: Record<string, number> }>
     getConflicts: () => Promise<any[]>
     addToOutbox: (entry: any) => Promise<string>
     getPendingEntries: () => Promise<any[]>

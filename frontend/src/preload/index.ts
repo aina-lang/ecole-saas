@@ -36,6 +36,7 @@ const api = {
   sync: {
     getStatus: () => ipcRenderer.invoke('sync:status'),
     forceSync: () => ipcRenderer.invoke('sync:force'),
+    hydrate: () => ipcRenderer.invoke('sync:hydrate'),
     getConflicts: () => ipcRenderer.invoke('sync:conflicts'),
     addToOutbox: (entry: any) => ipcRenderer.invoke('sync:add-to-outbox', entry),
     getPendingEntries: () => ipcRenderer.invoke('sync:get-pending-entries'),

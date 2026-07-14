@@ -10,7 +10,8 @@ import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
+import { format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -277,7 +278,10 @@ export function TeacherContractPage() {
                     <FormItem>
                       <FormLabel>Date de début</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <DatePicker
+                          value={field.value}
+                          onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -290,7 +294,10 @@ export function TeacherContractPage() {
                     <FormItem>
                       <FormLabel>Date de fin</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <DatePicker
+                          value={field.value}
+                          onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

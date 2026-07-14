@@ -12,8 +12,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
@@ -220,31 +219,19 @@ export function AttendanceStatsPage() {
             </div>
             <div className="w-44">
               <Label className="mb-1.5 block text-sm">Du</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateFrom ? format(dateFrom, 'dd/MM/yyyy') : 'Date début'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
-                </PopoverContent>
-              </Popover>
+              <DatePicker
+                value={dateFrom}
+                onChange={setDateFrom}
+                placeholder="Date début"
+              />
             </div>
             <div className="w-44">
               <Label className="mb-1.5 block text-sm">Au</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateTo ? format(dateTo, 'dd/MM/yyyy') : 'Date fin'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus />
-                </PopoverContent>
-              </Popover>
+              <DatePicker
+                value={dateTo}
+                onChange={setDateTo}
+                placeholder="Date fin"
+              />
             </div>
             {(dateFrom || dateTo || classId || studentId) && (
               <div className="flex items-end">

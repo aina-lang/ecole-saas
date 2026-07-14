@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import client, { extractErrorMessage } from '@/api/client'
 import { queryEntities, saveEntity, deleteEntity, getEntityById, type EntityType, staticData, loadStaticData } from './offline'
 
@@ -15,6 +16,29 @@ interface MutationResult<T> {
   error: string | null
   mutate: (data: any) => Promise<T | null>
   reset: () => void
+}
+
+export function useSyncInvalidation() {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.api?.sync) return
+
+    const unsubscribeProgress = window.api.sync.onProgress((stats: any) => {
+      queryClient.invalidateQueries()
+    })
+
+    const unsubscribeStatus = window.api.sync.onStatusChanged((status: any) => {
+      if (status.isOnline) {
+        queryClient.invalidateQueries()
+      }
+    })
+
+    return () => {
+      unsubscribeProgress?.()
+      unsubscribeStatus?.()
+    }
+  }, [queryClient])
 }
 
 export function useLocalQuery<T = any>(
