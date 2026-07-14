@@ -35,7 +35,7 @@ interface ComboboxProps {
 }
 
 export function Combobox({
-  options,
+  options: rawOptions,
   value,
   onValueChange,
   placeholder = 'Sélectionner...',
@@ -45,6 +45,11 @@ export function Combobox({
   className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+
+  const options = React.useMemo(
+    () => rawOptions.filter((o) => o.value != null && o.value !== ''),
+    [rawOptions]
+  )
 
   const selectedLabel = options.find((o) => o.value === value)?.label
 
@@ -58,7 +63,7 @@ export function Combobox({
           aria-expanded={open}
           className={cn('w-full justify-between font-normal', !selectedLabel && 'text-muted-foreground', className)}
         >
-          {selectedLabel ?? placeholder}
+          <span className="truncate">{selectedLabel ?? placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -84,7 +89,7 @@ export function Combobox({
                       value === opt.value ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {opt.label}
+                  <span>{opt.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

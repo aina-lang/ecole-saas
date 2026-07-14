@@ -598,6 +598,36 @@ export class SyncService {
     };
   }
 
+  async pollChanges(tenantId: string, deviceId: string, lastSyncTimestamp?: string): Promise<any> {
+    const changes = await this.getChangesSince(tenantId, deviceId, lastSyncTimestamp)
+    await this.upsertDevice(tenantId, deviceId, 'Electron Desktop')
+    return {
+      changes,
+      serverTimestamp: new Date().toISOString(),
+    }
+  }
+
+  async getSnapshot(tenantId: string): Promise<any> {
+    const [students, grades, attendance, classes, subjects, teachers] = await Promise.all([
+      this.prisma.student.findMany({ where: { tenantId, deletedAt: null } }),
+      this.prisma.grade.findMany({ where: { tenantId } }),
+      this.prisma.attendance.findMany({ where: { tenantId } }),
+      this.prisma.class.findMany({ where: { tenantId } }),
+      this.prisma.subject.findMany({ where: { tenantId } }),
+      this.prisma.teacher.findMany({ where: { tenantId } }),
+    ])
+
+    return {
+      students,
+      grades,
+      attendance,
+      classes,
+      subjects,
+      teachers,
+      serverTimestamp: new Date().toISOString(),
+    }
+  }
+
   async createEntity(tenantId: string, userId: string, entityType: string, data: any): Promise<any> {
     switch (entityType) {
       case 'Student':

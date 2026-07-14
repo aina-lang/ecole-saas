@@ -13,7 +13,7 @@ import {
   saveAuditLog, getAuditLogs,
   getPendingEntries, getLastSyncTimestamp,
 } from './database'
-import { startSyncScheduler, stopSyncScheduler, performSync, getOnlineStatus, checkAndUpdateConnectivity } from './sync-engine'
+import { startSyncScheduler, stopSyncScheduler, performSync, getOnlineStatus, checkAndUpdateConnectivity, setAuthToken, getAuthToken } from './sync-engine'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -196,11 +196,37 @@ function setupIPC() {
   })
 
   ipcMain.handle('sync:resolve-conflict', async (_event, conflictId, resolution, mergedValues) => {
-    import('./sync-engine').then(({ performSync }) => {
-      markEntrySynced(conflictId)
-      performSync()
+    const token = getAuthToken()
+    const url = `http://localhost:3000/api/v1/sync/conflicts/${conflictId}/resolve`
+    return new Promise((resolve, reject) => {
+      const request = net.request({ method: 'POST', url, timeout: 30000 })
+      request.setHeader('Content-Type', 'application/json')
+      if (token) request.setHeader('Authorization', `Bearer ${token}`)
+      const body = { resolution, mergedPayload: mergedValues }
+      request.write(JSON.stringify(body))
+      request.on('response', (response) => {
+        let data = ''
+        response.on('data', (chunk) => { data += chunk.toString() })
+        response.on('end', () => {
+          if (response.statusCode >= 400) {
+            reject(new Error(data || `HTTP ${response.statusCode}`))
+          } else {
+            resolve(JSON.parse(data))
+          }
+        })
+      })
+      request.on('error', reject)
+      request.end()
     })
+  })
+
+  ipcMain.handle('auth:set-token', async (_event, token) => {
+    setAuthToken(token)
     return { success: true }
+  })
+
+  ipcMain.handle('auth:get-token', async () => {
+    return getAuthToken()
   })
 
   ipcMain.handle('file:save', async (_event, { buffer, entityType, entityId, fieldName, originalName, mimeType }) => {

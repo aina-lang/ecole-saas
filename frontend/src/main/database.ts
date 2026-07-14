@@ -546,6 +546,19 @@ function mapStudentRow(row: any): any {
   }
 }
 
+function getSearchColumns(entityType: string): string[] {
+  const map: Record<string, string[]> = {
+    Student: ['first_name', 'last_name', 'registration_number'],
+    Subject: ['name', 'code'],
+    Class: ['name', 'level'],
+    Grade: ['evaluation_type', 'evaluation_label'],
+    Attendance: ['status', 'justification'],
+    Teacher: ['specialty', 'employee_id'],
+    User: ['email', 'first_name', 'last_name'],
+  }
+  return map[entityType] || ['name', 'code']
+}
+
 function parseResults(stmts: any[]): any[] {
   if (stmts.length === 0) return []
   const stmt = stmts[0]
@@ -670,26 +683,11 @@ export function saveEntity(entityType: string, data: any) {
   }
 
   const allPlaceholders = config.placeholders(data)
-  const providedCols: string[] = []
-  const providedVals: any[] = []
-  const excludedSet: string[] = []
-
-  config.columns.forEach((col, i) => {
-    const val = allPlaceholders[i]
-    if (val !== undefined && val !== null) {
-      providedCols.push(col)
-      providedVals.push(val)
-      excludedSet.push(`${col}=excluded.${col}`)
-    }
-  })
-
-  if (providedCols.length === 0) return false
-
-  const cols = providedCols.join(', ')
-  const placeholders = providedCols.map(() => '?').join(', ')
-  const updateCols = excludedSet.join(', ')
-  const sql = `INSERT INTO ${config.table} (${cols}) VALUES (${placeholders}) ON CONFLICT(${config.conflicts}) DO UPDATE SET ${updateCols}, updated_at=datetime('now')`
-  db.run(sql, providedVals)
+  const cols = config.columns.join(', ')
+  const placeholders = config.columns.map(() => '?').join(', ')
+  const excludedCols = config.columns.map((col) => `${col}=excluded.${col}`).join(', ')
+  const sql = `INSERT INTO ${config.table} (${cols}) VALUES (${placeholders}) ON CONFLICT(${config.conflicts}) DO UPDATE SET ${excludedCols}, updated_at=datetime('now')`
+  db.run(sql, allPlaceholders)
   saveDatabase()
   return true
 }
@@ -718,9 +716,11 @@ export function queryEntities(entityType: string, filters?: Record<string, any>)
         continue
       }
       if (key === 'search') {
-        sql += ` AND (first_name LIKE ? OR last_name LIKE ?)`
+        const searchCols = getSearchColumns(entityType)
+        const clauses = searchCols.map((col) => `${col} LIKE ?`).join(' OR ')
+        sql += ` AND (${clauses})`
         const s = `%${value}%`
-        params.push(s, s)
+        params.push(...searchCols.map(() => s))
         continue
       }
       const col = key.replace(/([A-Z])/g, '_$1').toLowerCase()

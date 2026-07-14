@@ -71,6 +71,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       tenantId,
       isAuthenticated: true
     })
+
+    if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
+      window.api.auth.setToken(accessToken).catch(() => {})
+    }
   },
 
   logout: () => {
@@ -116,6 +120,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         refreshToken: newRefreshToken,
         isAuthenticated: true
       })
+
+      if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
+        window.api.auth.setToken(accessToken).catch(() => {})
+      }
     } catch {
       get().logout()
     }

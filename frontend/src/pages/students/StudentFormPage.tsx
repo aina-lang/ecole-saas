@@ -82,31 +82,6 @@ interface ParentLink {
 
 type StudentFormValues = z.infer<typeof studentFormSchema>
 
-async function syncToServer(entityType: string, localId: string): Promise<void> {
-  const api = window.api
-  if (!api?.local) return
-
-  const data = await api.local.getById(entityType, localId)
-  if (!data) return
-
-  const endpoints: Record<string, string> = {
-    Student: '/students', User: '/users', Teacher: '/teachers',
-    Subject: '/subjects', Class: '/classes',
-  }
-  const base = endpoints[entityType]
-  if (!base) return
-
-  try {
-    const { data: res } = await client.post(base, data)
-    const serverData = res.data ?? res
-    if (serverData?.id && serverData.id !== localId) {
-      await api.local.save(entityType, { ...data, id: serverData.id })
-    }
-  } catch {
-    // Will be synced by sync engine
-  }
-}
-
 export function StudentFormPage() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -272,8 +247,6 @@ export function StudentFormPage() {
       queryClient.invalidateQueries({ queryKey: ['students'] })
       toast.success('Élève créé (mode hors-ligne)')
       navigate('/students')
-
-      syncToServer('Student', localId).catch(() => {})
     },
     onError: () => {
       toast.error("Erreur lors de la création de l'élève")
@@ -339,8 +312,6 @@ export function StudentFormPage() {
       queryClient.invalidateQueries({ queryKey: ['students'] })
       toast.success('Élève mis à jour (mode hors-ligne)')
       navigate('/students')
-
-      if (id) syncToServer('Student', id).catch(() => {})
     },
     onError: () => {
       toast.error('Erreur lors de la mise à jour')

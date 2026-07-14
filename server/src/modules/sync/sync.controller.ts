@@ -30,6 +30,20 @@ export class SyncController {
     return this.syncService.registerDevice(tenantId, deviceId, deviceName, user?.id);
   }
 
+  @Post('poll')
+  pollChanges(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: any,
+    @Body() body: { deviceId: string; lastSyncTimestamp?: string },
+  ) {
+    return this.syncService.pollChanges(tenantId, body.deviceId, body.lastSyncTimestamp);
+  }
+
+  @Get('snapshot')
+  getSnapshot(@CurrentUser('tenantId') tenantId: string) {
+    return this.syncService.getSnapshot(tenantId);
+  }
+
   @Post('conflicts/:id/resolve')
   @Roles('ADMIN', 'SUPER_ADMIN')
   resolveConflict(

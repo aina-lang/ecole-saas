@@ -51,6 +51,10 @@ const api = {
       return () => ipcRenderer.removeAllListeners('sync:progress')
     },
   },
+  auth: {
+    setToken: (token: string) => ipcRenderer.invoke('auth:set-token', token),
+    getToken: () => ipcRenderer.invoke('auth:get-token'),
+  },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     toggleMaximize: () => ipcRenderer.send('window:toggle-maximize'),

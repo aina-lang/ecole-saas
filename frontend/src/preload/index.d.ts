@@ -42,6 +42,10 @@ interface Api {
     onStatusChanged: (callback: (status: any) => void) => () => void
     onProgress: (callback: (progress: any) => void) => () => void
   }
+  auth: {
+    setToken: (token: string) => Promise<{ success: boolean }>
+    getToken: () => Promise<string | null>
+  }
   window: {
     minimize: () => void
     toggleMaximize: () => void

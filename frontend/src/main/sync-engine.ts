@@ -28,8 +28,17 @@ import {
 let syncInterval: ReturnType<typeof setInterval> | null = null
 let isSyncing = false
 let onlineStatus = false
+let authToken: string | null = null
 
 const API_BASE = 'http://localhost:3000/api/v1'
+
+export function setAuthToken(token: string | null) {
+  authToken = token
+}
+
+export function getAuthToken(): string | null {
+  return authToken
+}
 
 export function getOnlineStatus(): boolean {
   return onlineStatus
@@ -71,6 +80,31 @@ function notifyStatusChange() {
   }
 }
 
+function reconcileLocalIds(localId: string, serverId: string, entityType: string) {
+  if (!entityType || localId === serverId) return
+
+  const db = getDatabase()
+  const tableMap: Record<string, { table: string; fk: string }> = {
+    Student: { table: 'grades_local', fk: 'student_id' },
+    Class: { table: 'grades_local', fk: 'class_id' },
+    Subject: { table: 'grades_local', fk: 'subject_id' },
+    Teacher: { table: 'grades_local', fk: 'teacher_id' },
+  }
+
+  db.run('UPDATE sync_outbox SET entity_id = ? WHERE entity_id = ? AND entity_type = ?', [serverId, localId, entityType])
+
+  const mapping = tableMap[entityType]
+  if (mapping) {
+    db.run(`UPDATE ${mapping.table} SET ${mapping.fk} = ? WHERE ${mapping.fk} = ?`, [serverId, localId])
+  }
+
+  db.run(
+    'INSERT OR REPLACE INTO id_mappings (local_id, server_id, entity_type) VALUES (?, ?, ?)',
+    [localId, serverId, entityType],
+  )
+  saveDatabase()
+}
+
 async function makeApiRequest(
   method: string,
   path: string,
@@ -87,11 +121,8 @@ async function makeApiRequest(
 
       request.setHeader('Content-Type', 'application/json')
 
-      const token = localStorage ? null : null
-      const { BrowserWindow } = require('electron')
-      const windows = BrowserWindow.getAllWindows()
-      if (windows.length > 0) {
-        // We pass auth via query for simplicity in this setup
+      if (authToken) {
+        request.setHeader('Authorization', `Bearer ${authToken}`)
       }
 
       let responseData = ''
@@ -272,6 +303,9 @@ export async function performSync(): Promise<{
         for (const r of result.results || []) {
           if (r.status === 'SYNCED') {
             markEntrySynced(r.localId, r.serverId)
+            if (r.serverId && r.serverId !== r.localId) {
+              reconcileLocalIds(r.localId, r.serverId, r.entityType || pendingEntries.find(e => e.id === r.localId)?.entity_type)
+            }
             synced++
           } else if (r.status === 'CONFLICT') {
             markEntryConflict(r.localId, JSON.stringify(r.conflictData))
