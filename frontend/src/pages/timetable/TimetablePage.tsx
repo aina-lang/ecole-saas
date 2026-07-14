@@ -9,6 +9,7 @@ import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
+import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -71,9 +72,9 @@ export function TimetablePage() {
   const [selectedDay, setSelectedDay] = useState<number>(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
+  const { data: classes, loading: loadingClasses, refetch: refetchClasses } = useLocalQuery<{ id: string; name: string }>('Class')
 
-  const { data: slots, isLoading } = useQuery<TimetableSlot[]>({
+  const { data: slots, isLoading: isLoadingSlots } = useQuery<TimetableSlot[]>({
     queryKey: ['timetable', classId],
     enabled: !!classId,
     queryFn: async () => {
@@ -82,9 +83,18 @@ export function TimetablePage() {
     }
   })
 
-  const { data: subjects } = useLocalQuery<Subject>('Subject')
+  const { data: subjects, loading: loadingSubjects, refetch: refetchSubjects } = useLocalQuery<Subject>('Subject')
 
-  const { data: teachers } = useLocalQuery<{ id: string; user: { firstName: string; lastName: string } }>('Teacher')
+  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<{ id: string; user: { firstName: string; lastName: string } }>('Teacher')
+
+  const isLoading = loadingClasses || isLoadingSlots || loadingSubjects || loadingTeachers
+
+  const handleRefresh = () => {
+    refetchClasses()
+    refetchSubjects()
+    refetchTeachers()
+    if (classId) queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
+  }
 
   const form = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema),
@@ -159,14 +169,24 @@ export function TimetablePage() {
           <h2 className="text-2xl font-bold tracking-tight">Emploi du temps</h2>
           <p className="text-muted-foreground">Planifiez les cours par classe et par jour.</p>
         </div>
-        <div className="w-56">
-          <Combobox
-            value={classId}
-            onValueChange={setClassId}
-            placeholder="Sélectionner une classe"
-            searchPlaceholder="Rechercher une classe..."
-            options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
-          />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <div className="w-56">
+            <Combobox
+              value={classId}
+              onValueChange={setClassId}
+              placeholder="Sélectionner une classe"
+              searchPlaceholder="Rechercher une classe..."
+              options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </div>
         </div>
       </div>
 

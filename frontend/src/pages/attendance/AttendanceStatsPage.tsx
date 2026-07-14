@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { CalendarIcon, Users, TrendingUp, Award, ChevronDown, ChevronRight } from 'lucide-react'
+import { CalendarIcon, Users, TrendingUp, Award, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities } from '@/lib/db/offline'
@@ -66,10 +66,11 @@ export function AttendanceStatsPage() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  const { data: classes } = useLocalQuery<ClassOption>('Class')
+  const { data: classes, loading: loadingClasses, refetch: refetchClasses } = useLocalQuery<ClassOption>('Class')
 
-  const { data: students } = useQuery<StudentOption[]>({
+  const { data: students, isLoading: loadingStudents } = useQuery<StudentOption[]>({
     queryKey: ['students', classId],
     queryFn: async () => {
       if (!classId) return []
@@ -79,7 +80,7 @@ export function AttendanceStatsPage() {
     enabled: !!classId
   })
 
-  const { data: stats, isLoading } = useQuery<AttendanceStats>({
+  const { data: stats, isLoading: isLoadingStats } = useQuery<AttendanceStats>({
     queryKey: [
       'attendance-stats',
       classId,
@@ -97,6 +98,14 @@ export function AttendanceStatsPage() {
       return res.data.data ?? res.data
     }
   })
+
+  const isLoading = loadingClasses || loadingStudents || isLoadingStats
+
+  const handleRefresh = () => {
+    refetchClasses()
+    queryClient.invalidateQueries({ queryKey: ['students'] })
+    queryClient.invalidateQueries({ queryKey: ['attendance-stats'] })
+  }
 
   const statusColors: Record<string, string> = {
     present: 'bg-green-500',
@@ -171,11 +180,21 @@ export function AttendanceStatsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Statistiques de présence</h2>
-        <p className="text-muted-foreground">
-          Analysez les taux de présence par classe et par élève.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Statistiques de présence</h2>
+          <p className="text-muted-foreground">
+            Analysez les taux de présence par classe et par élève.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={isLoading}
+        >
+          <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+        </Button>
       </div>
 
       <Card>

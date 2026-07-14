@@ -121,7 +121,11 @@ export function SubjectsPage() {
           <h2 className="text-2xl font-bold tracking-tight">Matières</h2>
           <p className="text-muted-foreground">Gérer les matières et leurs coefficients</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ['subjects'] })}>
+            <ReloadIcon className="h-4 w-4" />
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={openCreate}>
               <PlusIcon className="mr-2 h-4 w-4" />
@@ -239,8 +243,9 @@ export function SubjectsPage() {
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
-      <Card>
+    <Card>
         <CardContent className="p-0">
           <DataTable
             columns={[

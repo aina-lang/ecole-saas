@@ -21,8 +21,10 @@ import { getPhotoUrl } from '@/api/client'
 import {
   PlusIcon,
   MagnifyingGlassIcon,
-  Pencil2Icon
+  Pencil2Icon,
+  ReloadIcon
 } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 const roleColors: Record<string, string> = {
   ADMIN: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
@@ -129,10 +131,20 @@ export function UserManagementPage() {
           <h2 className="text-2xl font-bold tracking-tight">Gestion des utilisateurs</h2>
           <p className="text-muted-foreground">Gérer les comptes utilisateurs de l'établissement</p>
         </div>
-        <Button onClick={() => navigate('/administration/users/new')}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Ajouter un utilisateur
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['admin-users'] })}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button onClick={() => navigate('/administration/users/new')}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Ajouter un utilisateur
+          </Button>
+        </div>
       </div>
 
       <Card>

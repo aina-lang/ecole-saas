@@ -76,6 +76,8 @@ export interface Grade {
   coefficient: number
   evaluationType: 'exam' | 'test' | 'homework' | 'project'
   comment?: string
+  periodId?: string
+  semester?: number
 }
 
 export interface Attendance {

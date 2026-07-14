@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Save, ArrowLeft } from 'lucide-react'
 
-import { useLocalQuery } from '@/lib/db/hooks'
+import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
 import { saveEntity } from '@/lib/db/offline'
 import type { Student, Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'

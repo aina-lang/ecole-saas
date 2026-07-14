@@ -5,12 +5,13 @@ import type { Class } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PlusIcon, PersonIcon, ReaderIcon } from '@radix-ui/react-icons'
+import { PlusIcon, PersonIcon, ReaderIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 export function ClassListPage() {
   const navigate = useNavigate()
 
-  const { data: classes, loading: isLoading } = useLocalQuery<Class>('Class')
+  const { data: classes, loading: isLoading, refetch } = useLocalQuery<Class>('Class')
 
   return (
     <div className="space-y-6">
@@ -19,10 +20,20 @@ export function ClassListPage() {
           <h2 className="text-2xl font-bold tracking-tight">Classes</h2>
           <p className="text-muted-foreground">Gérer les classes de l'établissement</p>
         </div>
-        <Button onClick={() => navigate('/classes/new')}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Ajouter une classe
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button onClick={() => navigate('/classes/new')}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Ajouter une classe
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

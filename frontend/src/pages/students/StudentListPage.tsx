@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { deleteEntity, queryEntities, countEntities } from '@/lib/db/offline'
 import type { Student, PaginatedResponse } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
+import { formatDate, getInitials, cn } from '@/lib/utils'
 import { StudentPhoto } from '@/components/ui/student-photo'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
-import { PlusIcon, Pencil2Icon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
+import { PlusIcon, Pencil2Icon, MagnifyingGlassIcon, ReloadIcon } from '@radix-ui/react-icons'
 
 const statusLabels: Record<
   string,
@@ -99,10 +99,20 @@ export function StudentListPage() {
           <h2 className="text-2xl font-bold tracking-tight">Élèves</h2>
           <p className="text-muted-foreground">Gérer les élèves de l'établissement</p>
         </div>
-        <Button onClick={() => navigate('/students/new')}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Ajouter un élève
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['students'] })}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button onClick={() => navigate('/students/new')}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Ajouter un élève
+          </Button>
+        </div>
       </div>
 
       <Card>

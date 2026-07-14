@@ -11,9 +11,10 @@ import {
   EnvelopeOpenIcon,
   PlusIcon,
   ReaderIcon,
-  TrashIcon
+  TrashIcon,
+  ReloadIcon
 } from '@radix-ui/react-icons'
-import { Send } from 'lucide-react'
+import { Send, RotateCw } from 'lucide-react'
 import client from '@/api/client'
 import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Message, ApiResponse, PaginatedResponse } from '@/types'
@@ -103,8 +104,11 @@ export function InboxPage() {
     <div className="flex h-[calc(100vh-8rem)] gap-0 overflow-hidden rounded-lg border">
       {/* Sidebar */}
       <div className="flex w-64 flex-col border-r bg-muted/30">
-        <div className="p-4">
-          <Button className="w-full gap-2" onClick={() => navigate('/communications/compose')}>
+        <div className="p-4 flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ['messages'] })} disabled={isLoading}>
+            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button className="flex-1 gap-2" onClick={() => navigate('/communications/compose')}>
             <PlusIcon className="h-4 w-4" />
             Nouveau message
           </Button>

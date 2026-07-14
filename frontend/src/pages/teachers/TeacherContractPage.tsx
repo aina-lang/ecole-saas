@@ -14,23 +14,8 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import {
   Dialog,
   DialogContent,
@@ -38,6 +23,10 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
+import { ReloadIcon } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
 
 const contractSchema = z.object({
   teacherId: z.string().min(1, 'Enseignant requis'),
@@ -62,12 +51,19 @@ export function TeacherContractPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
-  const { data: contracts, isLoading } = useQuery({
+  const { data: contracts, isLoading: isLoadingContracts } = useQuery({
     queryKey: ['teacher-contracts'],
     queryFn: () => queryEntities('TeacherContract')
   })
+
+  const isLoading = loadingTeachers || isLoadingContracts
+
+  const handleRefresh = () => {
+    refetchTeachers()
+    queryClient.invalidateQueries({ queryKey: ['teacher-contracts'] })
+  }
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractSchema),
@@ -128,53 +124,70 @@ export function TeacherContractPage() {
           <h2 className="text-2xl font-bold tracking-tight">Contrats enseignants</h2>
           <p className="text-muted-foreground">Gérer les contrats des enseignants</p>
         </div>
-        <Button onClick={() => { form.reset(); setDialogOpen(true) }}>
-          Nouveau contrat
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button onClick={() => { form.reset(); setDialogOpen(true) }}>
+            Nouveau contrat
+          </Button>
+        </div>
       </div>
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Enseignant</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Taux</TableHead>
-                <TableHead>Début</TableHead>
-                <TableHead>Fin</TableHead>
-                <TableHead>Statut</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">Chargement...</TableCell>
-                </TableRow>
-              ) : !contracts?.length ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">Aucun contrat</TableCell>
-                </TableRow>
-              ) : (
-                contracts.map((contract: any) => (
-                  <TableRow key={contract.id}>
-                    <TableCell className="font-medium">
-                      {contract.teacher?.user?.firstName} {contract.teacher?.user?.lastName}
-                    </TableCell>
-                    <TableCell>{contractTypeLabels[contract.contractType]}</TableCell>
-                    <TableCell>{getContractInfo(contract)}</TableCell>
-                    <TableCell>{contract.startDate?.split('T')[0]}</TableCell>
-                    <TableCell>{contract.endDate?.split('T')[0] || 'Indéfini'}</TableCell>
-                    <TableCell>
-                      <Badge variant={contract.isActive ? 'default' : 'secondary'}>
-                        {contract.isActive ? 'Actif' : 'Inactif'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            columns={[
+              {
+                key: 'teacherName',
+                label: 'Enseignant',
+                render: (contract) => `${(contract as any).teacher?.user?.firstName} ${(contract as any).teacher?.user?.lastName}`,
+                className: 'font-medium',
+              },
+              {
+                key: 'contractType',
+                label: 'Type',
+                render: (contract) => contractTypeLabels[(contract as any).contractType],
+              },
+              {
+                key: 'rate',
+                label: 'Taux',
+                render: (contract) => getContractInfo(contract as any),
+              },
+              {
+                key: 'startDate',
+                label: 'Début',
+                render: (contract) => (contract as any).startDate?.split('T')[0],
+              },
+              {
+                key: 'endDate',
+                label: 'Fin',
+                render: (contract) => (contract as any).endDate?.split('T')[0] || 'Indéfini',
+              },
+              {
+                key: 'status',
+                label: 'Statut',
+                render: (contract) => (
+                  <Badge variant={(contract as any).isActive ? 'default' : 'secondary'}>
+                    {(contract as any).isActive ? 'Actif' : 'Inactif'}
+                  </Badge>
+                ),
+              },
+            ]}
+            data={contracts ?? []}
+            total={(contracts ?? []).length}
+            page={1}
+            limit={100}
+            onPageChange={() => {}}
+            getRowId={(contract) => (contract as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucun contrat"
+          />
         </CardContent>
       </Card>
 

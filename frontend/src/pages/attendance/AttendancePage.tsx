@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { CalendarIcon, Check, X, Ban, Users } from 'lucide-react'
+import { CalendarIcon, Check, X, Ban, Users, RotateCw } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities } from '@/lib/db/offline'
@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'EXCUSED'
 
@@ -64,7 +65,7 @@ export function AttendancePage() {
   const [entries, setEntries] = useState<StudentAttendanceEntry[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-
+  const queryClient = useQueryClient()
   const { data: classes } = useLocalQuery<ClassOption>('Class')
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
@@ -125,13 +126,28 @@ export function AttendancePage() {
   const excusedCount = entries.filter((e) => e.status === 'EXCUSED').length
   const markedCount = presentCount + absentCount + excusedCount
 
+  const isLoading = loadingStudents
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Présences</h2>
-        <p className="text-muted-foreground">
-          Consultez la liste des présences par classe et par jour.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Présences</h2>
+          <p className="text-muted-foreground">
+            Consultez la liste des présences par classe et par jour.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ['students'] })
+            queryClient.invalidateQueries({ queryKey: ['attendance'] })
+          }}
+          disabled={isLoading}
+        >
+          <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-4 items-end">

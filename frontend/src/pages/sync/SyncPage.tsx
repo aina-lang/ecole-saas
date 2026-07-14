@@ -48,6 +48,7 @@ import {
   ExclamationTriangleIcon,
   CaretSortIcon
 } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 interface SyncDevice {
   id: string
@@ -224,11 +225,20 @@ export function SyncPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Synchronisation</h2>
-          <p className="text-muted-foreground">
-            Gérez la synchronisation des données entre l'application locale et le serveur
-          </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries()}
+          >
+            <ReloadIcon className="h-4 w-4" />
+          </Button>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Synchronisation</h2>
+            <p className="text-muted-foreground">
+              Gérez la synchronisation des données entre l'application locale et le serveur
+            </p>
+          </div>
         </div>
         <Button
           onClick={handleForceSync}

@@ -141,6 +141,55 @@ export function useLocalDelete(entityType: EntityType) {
   return { remove, loading, error }
 }
 
+export function usePeriods() {
+  const [periods, setPeriods] = useState<{ value: string; label: string }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const rawSystem = await window.api.settings.get('period_system')
+        const system = rawSystem || 'TRIMESTER'
+        const rawAcademic = await window.api.settings.get('academic_year')
+        const academic = rawAcademic ? JSON.parse(rawAcademic) : null
+
+        if (cancelled) return
+
+        const savedPeriods = academic?.periods
+        if (savedPeriods?.length) {
+          setPeriods(savedPeriods.map((p: any) => ({ value: p.id, label: p.name })))
+        } else {
+          const labels: Record<string, string[]> = {
+            TRIMESTER: ['Trimestre 1', 'Trimestre 2', 'Trimestre 3'],
+            SEMESTER: ['Semestre 1', 'Semestre 2'],
+            BIMESTER: ['Bimestre 1', 'Bimestre 2'],
+          }
+          const items = (labels[system] || labels.TRIMESTER).map((label, i) => ({
+            value: String(i + 1),
+            label,
+          }))
+          setPeriods(items)
+        }
+      } catch {
+        if (!cancelled) {
+          setPeriods([
+            { value: '1', label: 'Trimestre 1' },
+            { value: '2', label: 'Trimestre 2' },
+            { value: '3', label: 'Trimestre 3' },
+          ])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  return { periods, loading }
+}
+
 export function useStaticData() {
   const [loading, setLoading] = useState(!staticData.loaded)
 

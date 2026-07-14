@@ -14,6 +14,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import { Badge } from '@/components/ui/badge'
 import { CalendarIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 const statusColors: Record<string, string> = {
   PRESENT: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -33,12 +34,19 @@ export function TeacherAttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const queryClient = useQueryClient()
 
-  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
-  const { data: attendances, isLoading } = useQuery({
+  const { data: attendances, isLoading: isLoadingAttendances } = useQuery({
     queryKey: ['teacher-attendance', date],
     queryFn: () => queryEntities('TeacherAttendance', { date })
   })
+
+  const isLoading = loadingTeachers || isLoadingAttendances
+
+  const handleRefresh = () => {
+    refetchTeachers()
+    queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] })
+  }
 
   const attendanceMap = new Map((attendances ?? []).map((a: any) => [a.teacherId, a]))
 
@@ -73,6 +81,14 @@ export function TeacherAttendancePage() {
           <p className="text-muted-foreground">Marquer la présence des professeurs</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
           <DatePicker
             value={date}
             onChange={(d) => d && setDate(format(d, 'yyyy-MM-dd'))}

@@ -44,10 +44,18 @@ import {
   TableRow
 } from '@/components/ui/table'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   ReloadIcon,
   CheckCircledIcon,
   CrossCircledIcon
 } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 interface SchoolSettings {
   schoolName: string
@@ -76,6 +84,20 @@ interface SyncDevice {
 
 interface SecuritySettings {
   twoFactorEnabled: boolean
+}
+
+interface PaymentConfig {
+  monthlyTuition: number
+  annualFee: number
+  dueDay: number
+}
+
+type PeriodSystem = 'TRIMESTER' | 'SEMESTER' | 'BIMESTER'
+
+const periodSystemLabels: Record<PeriodSystem, string> = {
+  TRIMESTER: 'Trimestre (3 périodes)',
+  SEMESTER: 'Semestre (2 périodes)',
+  BIMESTER: 'Bimestre (2 périodes)',
 }
 
 const generalSchema = z.object({
@@ -112,7 +134,11 @@ export function SettingsPage() {
   const [savingAcademic, setSavingAcademic] = useState(false)
   const [savingSecurity, setSavingSecurity] = useState(false)
 
-  const { data: schoolData } = useQuery({
+  const handleRefresh = () => {
+    queryClient.invalidateQueries()
+  }
+
+  const { data: schoolData, isLoading: loadingSchool } = useQuery({
     queryKey: ['settings-school'],
     queryFn: async () => {
       const raw = await window.api.settings.get('school')
@@ -120,7 +146,7 @@ export function SettingsPage() {
     }
   })
 
-  const { data: academicData } = useQuery({
+  const { data: academicData, isLoading: loadingAcademic } = useQuery({
     queryKey: ['settings-academic'],
     queryFn: async () => {
       const raw = await window.api.settings.get('academic_year')
@@ -128,7 +154,7 @@ export function SettingsPage() {
     }
   })
 
-  const { data: syncDevices } = useQuery({
+  const { data: syncDevices, isLoading: loadingDevices } = useQuery({
     queryKey: ['settings-sync-devices'],
     queryFn: async () => {
       const devices = await window.api.sync.getDevices() as SyncDevice[]
@@ -136,7 +162,7 @@ export function SettingsPage() {
     }
   })
 
-  const { data: syncInfo } = useQuery({
+  const { data: syncInfo, isLoading: loadingSyncInfo } = useQuery({
     queryKey: ['settings-sync-info'],
     queryFn: async () => {
       const info = await window.api.sync.getStatus() as { lastSyncAt: string | null; pendingCount: number; online: boolean }
@@ -144,13 +170,31 @@ export function SettingsPage() {
     }
   })
 
-  const { data: securityData } = useQuery({
+  const { data: securityData, isLoading: loadingSecurity } = useQuery({
     queryKey: ['settings-security'],
     queryFn: async () => {
       const raw = await window.api.settings.get('security')
       return JSON.parse(raw) as SecuritySettings
     }
   })
+
+  const { data: periodSystem, isLoading: loadingPeriodSystem } = useQuery({
+    queryKey: ['settings-period-system'],
+    queryFn: async () => {
+      const raw = await window.api.settings.get('period_system')
+      return (raw || 'TRIMESTER') as PeriodSystem
+    }
+  })
+
+  const { data: paymentConfig, isLoading: loadingPayment } = useQuery({
+    queryKey: ['settings-payment'],
+    queryFn: async () => {
+      const raw = await window.api.settings.get('payment_config')
+      return JSON.parse(raw || '{}') as PaymentConfig
+    }
+  })
+
+  const isLoading = loadingSchool || loadingAcademic || loadingDevices || loadingSyncInfo || loadingSecurity || loadingPeriodSystem || loadingPayment
 
   const generalForm = useForm<GeneralValues>({
     resolver: zodResolver(generalSchema),
@@ -200,6 +244,8 @@ export function SettingsPage() {
     }
   }
 
+  const [savingPayment, setSavingPayment] = useState(false)
+
   async function handleSaveAcademic(values: AcademicYearValues) {
     setSavingAcademic(true)
     try {
@@ -210,6 +256,25 @@ export function SettingsPage() {
       toast.error('Erreur lors de l\'enregistrement')
     } finally {
       setSavingAcademic(false)
+    }
+  }
+
+  async function handleSavePeriodSystem(system: PeriodSystem) {
+    await window.api.settings.set('period_system', system)
+    queryClient.invalidateQueries({ queryKey: ['settings-period-system'] })
+    toast.success('Système de périodes mis à jour')
+  }
+
+  async function handleSavePaymentConfig(values: PaymentConfig) {
+    setSavingPayment(true)
+    try {
+      await window.api.settings.set('payment_config', JSON.stringify(values))
+      queryClient.invalidateQueries({ queryKey: ['settings-payment'] })
+      toast.success('Configuration de paiement enregistrée')
+    } catch {
+      toast.error('Erreur lors de l\'enregistrement')
+    } finally {
+      setSavingPayment(false)
     }
   }
 
@@ -251,15 +316,26 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Paramètres</h2>
-        <p className="text-muted-foreground">Configurer les paramètres de l'établissement</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Paramètres</h2>
+          <p className="text-muted-foreground">Configurer les paramètres de l'établissement</p>
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={isLoading}
+        >
+          <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="general">Général</TabsTrigger>
           <TabsTrigger value="academic">Année scolaire</TabsTrigger>
+          <TabsTrigger value="payment">Paiements</TabsTrigger>
           <TabsTrigger value="sync">Synchronisation</TabsTrigger>
           <TabsTrigger value="security">Sécurité</TabsTrigger>
         </TabsList>
@@ -412,6 +488,28 @@ export function SettingsPage() {
 
               <Separator />
 
+              <div className="space-y-3">
+                <Label>Système de périodes</Label>
+                <p className="text-sm text-muted-foreground">
+                  Définit le découpage de l'année scolaire en périodes d'évaluation
+                </p>
+                <Select
+                  value={periodSystem || 'TRIMESTER'}
+                  onValueChange={(v) => handleSavePeriodSystem(v as PeriodSystem)}
+                >
+                  <SelectTrigger className="w-[280px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['TRIMESTER', 'SEMESTER', 'BIMESTER'] as PeriodSystem[]).map((s) => (
+                      <SelectItem key={s} value={s}>{periodSystemLabels[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label>Périodes</Label>
@@ -475,6 +573,64 @@ export function SettingsPage() {
             <CardFooter className="border-t px-6 py-4">
               <Button type="submit" form="academic-form" disabled={savingAcademic}>
                 {savingAcademic ? (
+                  <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
+                ) : 'Enregistrer'}
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payment" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configuration des paiements</CardTitle>
+              <CardDescription>Définir les montants d'écolage mensuel et des frais annuels</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form id="payment-form" onSubmit={(e) => { e.preventDefault(); handleSavePaymentConfig({ monthlyTuition: Number((e.target as any).monthlyTuition.value) || 0, annualFee: Number((e.target as any).annualFee.value) || 0, dueDay: Number((e.target as any).dueDay.value) || 15 }) }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyTuition">Écolage mensuel (XAF)</Label>
+                  <Input
+                    id="monthlyTuition"
+                    name="monthlyTuition"
+                    type="number"
+                    min="0"
+                    step="100"
+                    defaultValue={paymentConfig?.monthlyTuition || 0}
+                    placeholder="Ex: 25000"
+                  />
+                  <p className="text-sm text-muted-foreground">Montant mensuel par élève</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="annualFee">Frais scolaires annuels (XAF)</Label>
+                  <Input
+                    id="annualFee"
+                    name="annualFee"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    defaultValue={paymentConfig?.annualFee || 0}
+                    placeholder="Ex: 150000"
+                  />
+                  <p className="text-sm text-muted-foreground">Frais d'inscription ou frais fixes par année</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dueDay">Jour d'échéance</Label>
+                  <Input
+                    id="dueDay"
+                    name="dueDay"
+                    type="number"
+                    min="1"
+                    max="28"
+                    defaultValue={paymentConfig?.dueDay || 15}
+                  />
+                  <p className="text-sm text-muted-foreground">Jour du mois pour les échéances de paiement</p>
+                </div>
+              </form>
+            </CardContent>
+            <CardFooter className="border-t px-6 py-4">
+              <Button type="submit" form="payment-form" disabled={savingPayment}>
+                {savingPayment ? (
                   <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
                 ) : 'Enregistrer'}
               </Button>

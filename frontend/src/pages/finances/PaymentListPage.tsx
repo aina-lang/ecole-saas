@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { Download } from 'lucide-react'
+import { Download, RotateCw } from 'lucide-react'
 import { PlusIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
 import { queryEntities, saveEntity } from '@/lib/db/offline'
@@ -157,6 +157,14 @@ export function PaymentListPage() {
           <p className="text-muted-foreground">Gérer les paiements des frais de scolarité.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['payments'] })}
+            disabled={isLoading}
+          >
+            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
           <Button variant="outline" className="gap-2" onClick={() => exportCsv(filters)}>
             <Download className="h-4 w-4" />
             Exporter CSV

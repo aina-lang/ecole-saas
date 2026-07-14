@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Edit, Trash2, Plus } from 'lucide-react'
+import { Edit, Trash2, Plus, RotateCw } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { deleteEntity, queryEntities } from '@/lib/db/offline'
@@ -188,12 +188,22 @@ export function GradeListPage() {
           <h2 className="text-2xl font-bold tracking-tight">Notes</h2>
           <p className="text-muted-foreground">Consultez et gérez les notes des élèves.</p>
         </div>
-        <Button asChild>
-          <Link to="/grades/entry">
-            <Plus className="mr-2 h-4 w-4" />
-            Saisie de notes
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['grades'] })}
+            disabled={isLoading}
+          >
+            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button asChild>
+            <Link to="/grades/entry">
+              <Plus className="mr-2 h-4 w-4" />
+              Saisie de notes
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card>

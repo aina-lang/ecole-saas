@@ -22,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { ReloadIcon } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 interface CalculatedPayment {
   teacherId: string
@@ -60,9 +61,9 @@ export function TeacherPayPage() {
   const [calcDialogOpen, setCalcDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
-  const { data: payments, isLoading } = useQuery({
+  const { data: payments, isLoading: isLoadingPayments } = useQuery({
     queryKey: ['teacher-payments', selectedTeacher],
     queryFn: async () => {
       const filters: any = {}
@@ -70,6 +71,13 @@ export function TeacherPayPage() {
       return queryEntities('TeacherPayment', filters)
     }
   })
+
+  const isLoading = loadingTeachers || isLoadingPayments
+
+  const handleRefresh = () => {
+    refetchTeachers()
+    queryClient.invalidateQueries({ queryKey: ['teacher-payments'] })
+  }
 
   const calculateMutation = useMutation({
     mutationFn: async () => {
@@ -134,6 +142,14 @@ export function TeacherPayPage() {
           <h2 className="text-2xl font-bold tracking-tight">Paiements enseignants</h2>
           <p className="text-muted-foreground">Calculer et gérer les paiements</p>
         </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={isLoading}
+        >
+          <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+        </Button>
       </div>
 
       <Card>

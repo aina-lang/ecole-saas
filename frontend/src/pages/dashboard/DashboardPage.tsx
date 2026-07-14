@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
-import { PersonIcon, ReaderIcon, BellIcon, StarIcon } from '@radix-ui/react-icons'
+import { PersonIcon, ReaderIcon, BellIcon, StarIcon, ReloadIcon } from '@radix-ui/react-icons'
 import { Link } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 
 const stats = [
   {
@@ -57,11 +58,20 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Bonjour, {user?.firstName || 'Utilisateur'}
-        </h2>
-        <p className="text-muted-foreground">Voici un aperçu de votre établissement aujourd'hui.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Bonjour, {user?.firstName || 'Utilisateur'}
+          </h2>
+          <p className="text-muted-foreground">Voici un aperçu de votre établissement aujourd'hui.</p>
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => window.location.reload()}
+        >
+          <ReloadIcon className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
