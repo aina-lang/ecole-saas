@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import client from '@/api/client'
+import { getEntityById, queryEntities } from '@/lib/db/offline'
 import type { Class, Student, Subject, Teacher } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -29,6 +29,75 @@ import { Combobox } from '@/components/ui/combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Pencil2Icon, ArrowLeftIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
 
+async function generateBulletinHtml(classId: string): Promise<string> {
+  const [classData, students, grades, subjects] = await Promise.all([
+    getEntityById<any>('Class', classId),
+    queryEntities<any>('Student', { classId }),
+    queryEntities<any>('Grade'),
+    queryEntities<any>('Subject'),
+  ])
+
+  const gradeMap: Record<string, any[]> = {}
+  for (const g of grades) {
+    if (!gradeMap[g.studentId]) gradeMap[g.studentId] = []
+    gradeMap[g.studentId].push(g)
+  }
+  const subjectMap: Record<string, any> = {}
+  for (const s of subjects) subjectMap[s.id] = s
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulletins - ${classData?.name || ''}</title>
+<style>
+  @page { margin: 15mm; }
+  body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; color: #333; }
+  .bulletin { page-break-after: always; max-width: 800px; margin: 0 auto 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+  h1 { text-align: center; color: #1a365d; font-size: 22px; margin-bottom: 5px; }
+  .school { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+  .student-info { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: #f7fafc; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+  th { background: #edf2f7; font-weight: 600; color: #2d3748; }
+  .footer { text-align: center; color: #a0aec0; font-size: 11px; margin-top: 30px; }
+  .average { text-align: right; font-weight: bold; font-size: 16px; margin-top: 15px; padding: 10px; background: #ebf8ff; border-radius: 6px; }
+</style></head><body>`
+
+  for (const student of (students ?? [])) {
+    const studentGrades = gradeMap[student.id] || []
+    const avg = studentGrades.length > 0
+      ? (studentGrades.reduce((s, g) => s + (g.value || 0) * (g.coefficient || 1), 0) /
+         studentGrades.reduce((s, g) => s + (g.coefficient || 1), 0)).toFixed(2)
+      : '—'
+
+    html += `<div class="bulletin">
+      <h1>Bulletin de Notes</h1>
+      <div class="school">${classData?.name || ''} — Année scolaire ${new Date().getFullYear()}/${new Date().getFullYear() + 1}</div>
+      <div class="student-info">
+        <div><strong>Élève :</strong> ${student.firstName || ''} ${student.lastName || ''}</div>
+        <div><strong>Matricule :</strong> ${student.registrationNumber || '—'}</div>
+      </div>
+      <table><thead><tr><th>Matière</th><th>Note</th><th>Coeff.</th><th>Moyenne</th></tr></thead><tbody>`
+
+    const bySubject: Record<string, { values: number[]; coeff: number }> = {}
+    for (const g of studentGrades) {
+      if (!bySubject[g.subjectId]) bySubject[g.subjectId] = { values: [], coeff: g.coefficient || 1 }
+      bySubject[g.subjectId].values.push(g.value || 0)
+    }
+
+    for (const [subjId, data] of Object.entries(bySubject)) {
+      const subj = subjectMap[subjId]
+      const subjAvg = (data.values.reduce((a, b) => a + b, 0) / data.values.length).toFixed(2)
+      html += `<tr><td>${subj?.name || subjId}</td><td>${data.values.join(', ')}</td><td>${data.coeff}</td><td><strong>${subjAvg}</strong></td></tr>`
+    }
+
+    html += `</tbody></table>
+      <div class="average">Moyenne générale : <strong>${avg}/20</strong></div>
+      <div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} · École SaaS</div>
+    </div>`
+  }
+
+  html += '</body></html>'
+  return html
+}
+
 export function ClassDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -39,45 +108,29 @@ export function ClassDetailPage() {
 
   const { data: classData, isLoading } = useQuery({
     queryKey: ['class', id],
-    queryFn: async () => {
-      const { data } = await client.get(`/classes/${id}`)
-      return (data.data ?? data) as Class & {
-        subjects?: Subject[]
-        teachers?: Teacher[]
-      }
-    }
+    queryFn: async () => getEntityById<Class & { subjects?: Subject[]; teachers?: Teacher[] }>('Class', id)
   })
 
   const { data: students } = useQuery({
     queryKey: ['class-students', id],
-    queryFn: async () => {
-      const { data } = await client.get('/students', {
-        params: { classId: id }
-      })
-      return (data.data ?? data) as Student[]
-    },
+    queryFn: async () => queryEntities<Student>('Student', { classId: id }),
     enabled: !!id
   })
 
   const { data: allStudents } = useQuery({
     queryKey: ['all-students'],
-    queryFn: async () => {
-      const { data } = await client.get('/students', {
-        params: { limit: 100 }
-      })
-      return (data.data ?? data) as Student[]
-    },
+    queryFn: async () => queryEntities<Student>('Student'),
     enabled: addStudentOpen
   })
 
   const addStudentMutation = useMutation({
     mutationFn: async (studentId: string) => {
-      await client.post(`/classes/${id}/students`, { studentId })
+      await saveEntity('Student', { id: studentId, classId: id })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['class-students', id] })
       queryClient.invalidateQueries({ queryKey: ['class', id] })
-      toast.success('Élève ajouté à la classe')
+      toast.success('Élève ajouté à la classe (mode hors-ligne)')
       setAddStudentOpen(false)
       setSelectedStudentId('')
     },
@@ -88,12 +141,12 @@ export function ClassDetailPage() {
 
   const removeStudentMutation = useMutation({
     mutationFn: async (studentId: string) => {
-      await client.delete(`/classes/${id}/students/${studentId}`)
+      await saveEntity('Student', { id: studentId, classId: null })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['class-students', id] })
       queryClient.invalidateQueries({ queryKey: ['class', id] })
-      toast.success('Élève retiré de la classe')
+      toast.success('Élève retiré de la classe (mode hors-ligne)')
       setRemoveStudentId(null)
     },
     onError: () => toast.error("Erreur lors du retrait de l'élève")
@@ -101,11 +154,15 @@ export function ClassDetailPage() {
 
   const generateBulletinsMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await client.post(`/bulletins/class/${id}`)
-      return data.data ?? data
+      const html = await generateBulletinHtml(id!)
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      window.URL.revokeObjectURL(url)
+      return true
     },
     onSuccess: () => {
-      toast.success('Bulletins générés avec succès')
+      toast.success('Bulletins générés (consultez le nouvel onglet)')
     },
     onError: () => toast.error('Erreur lors de la génération des bulletins')
   })

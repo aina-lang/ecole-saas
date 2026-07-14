@@ -114,40 +114,40 @@ export function SettingsPage() {
   const { data: schoolData } = useQuery({
     queryKey: ['settings-school'],
     queryFn: async () => {
-      const { data } = await client.get('/admin/settings/school')
-      return (data.data ?? data) as SchoolSettings
+      const raw = await window.api.settings.get('school')
+      return JSON.parse(raw) as SchoolSettings
     }
   })
 
   const { data: academicData } = useQuery({
     queryKey: ['settings-academic'],
     queryFn: async () => {
-      const { data } = await client.get('/admin/settings/academic-year')
-      return (data.data ?? data) as AcademicYear
+      const raw = await window.api.settings.get('academic_year')
+      return JSON.parse(raw) as AcademicYear
     }
   })
 
   const { data: syncDevices } = useQuery({
     queryKey: ['settings-sync-devices'],
     queryFn: async () => {
-      const { data } = await client.get('/admin/settings/sync/devices')
-      return (data.data ?? data) as SyncDevice[]
+      const devices = await window.api.sync.getDevices() as SyncDevice[]
+      return devices
     }
   })
 
   const { data: syncInfo } = useQuery({
     queryKey: ['settings-sync-info'],
     queryFn: async () => {
-      const { data } = await client.get('/admin/settings/sync/info')
-      return (data.data ?? data) as { lastSyncAt: string | null; pendingCount: number; online: boolean }
+      const info = await window.api.sync.getStatus() as { lastSyncAt: string | null; pendingCount: number; online: boolean }
+      return info
     }
   })
 
   const { data: securityData } = useQuery({
     queryKey: ['settings-security'],
     queryFn: async () => {
-      const { data } = await client.get('/admin/settings/security')
-      return (data.data ?? data) as SecuritySettings
+      const raw = await window.api.settings.get('security')
+      return JSON.parse(raw) as SecuritySettings
     }
   })
 
@@ -189,7 +189,7 @@ export function SettingsPage() {
   async function handleSaveGeneral(values: GeneralValues) {
     setSavingGeneral(true)
     try {
-      await client.put('/admin/settings/school', values)
+      await window.api.settings.set('school', JSON.stringify(values))
       queryClient.invalidateQueries({ queryKey: ['settings-school'] })
       toast.success('Paramètres généraux enregistrés')
     } catch {
@@ -202,7 +202,7 @@ export function SettingsPage() {
   async function handleSaveAcademic(values: AcademicYearValues) {
     setSavingAcademic(true)
     try {
-      await client.put('/admin/settings/academic-year', values)
+      await window.api.settings.set('academic_year', JSON.stringify(values))
       queryClient.invalidateQueries({ queryKey: ['settings-academic'] })
       toast.success('Année scolaire mise à jour')
     } catch {
@@ -214,7 +214,7 @@ export function SettingsPage() {
 
   async function handleForceSync() {
     try {
-      await client.post('/admin/settings/sync/force')
+      await window.api.sync.forceSync()
       queryClient.invalidateQueries({ queryKey: ['settings-sync-info'] })
       toast.success('Synchronisation lancée')
     } catch {
@@ -224,7 +224,7 @@ export function SettingsPage() {
 
   async function handleToggle2fa(enabled: boolean) {
     try {
-      await client.put('/admin/settings/security', { twoFactorEnabled: enabled })
+      await window.api.settings.set('security', JSON.stringify({ twoFactorEnabled: enabled }))
       queryClient.invalidateQueries({ queryKey: ['settings-security'] })
       toast.success(enabled ? '2FA activée' : '2FA désactivée')
     } catch {

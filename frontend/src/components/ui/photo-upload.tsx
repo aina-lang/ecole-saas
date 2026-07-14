@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { UploadIcon, TrashIcon } from '@radix-ui/react-icons'
 import { toast } from 'sonner'
+import { getPhotoUrl } from '@/api/client'
 
 interface PhotoUploadProps {
   src?: string | null
@@ -21,6 +22,13 @@ export function PhotoUpload({ src, firstName, lastName, onUpload, onDelete, disa
   const [preview, setPreview] = useState<string | null>(src || null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const hasLocalOverride = useRef(false)
+
+  useEffect(() => {
+    if (src && !hasLocalOverride.current) {
+      setPreview(src)
+    }
+  }, [src])
 
   const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join('').toUpperCase()
 
@@ -33,19 +41,29 @@ export function PhotoUpload({ src, firstName, lastName, onUpload, onDelete, disa
       return
     }
 
-    const maxSize = 2 * 1024 * 1024
+    const maxSize = 10 * 1024 * 1024
     if (file.size > maxSize) {
-      toast.error('L\'image ne doit pas dépasser 2 Mo')
+      toast.error("L'image ne doit pas dépasser 10 Mo")
       return
     }
 
     setUploading(true)
     try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      setPreview(dataUrl)
+      hasLocalOverride.current = true
       const result = await onUpload(file)
-      setPreview(result.url)
-      toast.success('Photo enregistrée')
+      if (result?.url) {
+        setPreview(result.url)
+        hasLocalOverride.current = false
+      }
     } catch {
-      toast.error('Erreur lors de l\'enregistrement de la photo')
+      toast.error("Erreur lors de l'enregistrement de la photo")
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -66,9 +84,9 @@ export function PhotoUpload({ src, firstName, lastName, onUpload, onDelete, disa
 
   return (
     <div className="flex items-center gap-4">
-      <Avatar className="h-20 w-20">
-        <AvatarImage src={preview || undefined} alt={firstName} />
-        <AvatarFallback className="text-lg">{initials || '?'}</AvatarFallback>
+      <Avatar className="h-32 w-32">
+        <AvatarImage src={getPhotoUrl(preview)} alt={firstName} />
+        <AvatarFallback className="text-3xl">{initials || '?'}</AvatarFallback>
       </Avatar>
 
       <div className="flex flex-col gap-2">

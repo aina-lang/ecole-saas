@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Pencil1Icon, PlusIcon, CheckCircledIcon, CircleIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,30 +60,17 @@ const feeSchema = z.object({
 
 type FeeValues = z.infer<typeof feeSchema>
 
-function fetchFees(): Promise<ApiResponse<PaginatedResponse<FeeStructure>>> {
-  return client.get('/fees').then((r) => r.data)
-}
-
-function createFee(data: FeeValues) {
-  return client.post('/fees', data).then((r) => r.data)
-}
-
-function updateFee(id: string, data: Partial<FeeValues>) {
-  return client.patch(`/fees/${id}`, data).then((r) => r.data)
-}
-
-function toggleFee(id: string, isActive: boolean) {
-  return client.patch(`/fees/${id}/toggle`, { isActive }).then((r) => r.data)
-}
-
 export function FeeStructurePage() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingFee, setEditingFee] = useState<FeeStructure | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data: fees, isLoading } = useQuery({
     queryKey: ['fees'],
-    queryFn: fetchFees
+    queryFn: async () => {
+      const items = await queryEntities<FeeStructure>('Fee')
+      return items ?? []
+    }
   })
 
   const form = useForm<FeeValues>({
@@ -91,10 +79,17 @@ export function FeeStructurePage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: createFee,
+    mutationFn: async (values: FeeValues) => {
+      await saveEntity('Fee', {
+        id: crypto.randomUUID(),
+        ...values,
+        isActive: true,
+        isMandatory: false,
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fees'] })
-      toast.success('Frais créé avec succès')
+      toast.success('Frais créé avec succès (mode hors-ligne)')
       setDialogOpen(false)
       form.reset()
     },
@@ -102,11 +97,12 @@ export function FeeStructurePage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: (values: { id: string; data: Partial<FeeValues> }) =>
-      updateFee(values.id, values.data),
+    mutationFn: async (values: { id: string; data: Partial<FeeValues> }) => {
+      await saveEntity('Fee', { id: values.id, ...values.data })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fees'] })
-      toast.success('Frais mis à jour')
+      toast.success('Frais mis à jour (mode hors-ligne)')
       setEditingFee(null)
       setDialogOpen(false)
       form.reset()
@@ -115,13 +111,13 @@ export function FeeStructurePage() {
   })
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => toggleFee(id, isActive),
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      await saveEntity('Fee', { id, isActive })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fees'] })
     }
   })
-
-  const fees = data?.data?.data ?? []
 
   function openCreateDialog() {
     setEditingFee(null)

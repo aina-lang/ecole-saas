@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { saveEntity, queryEntities, getEntityById, type EntityType } from '@/lib/db/offline'
 import type { Student } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -80,6 +82,31 @@ interface ParentLink {
 
 type StudentFormValues = z.infer<typeof studentFormSchema>
 
+async function syncToServer(entityType: string, localId: string): Promise<void> {
+  const api = window.api
+  if (!api?.local) return
+
+  const data = await api.local.getById(entityType, localId)
+  if (!data) return
+
+  const endpoints: Record<string, string> = {
+    Student: '/students', User: '/users', Teacher: '/teachers',
+    Subject: '/subjects', Class: '/classes',
+  }
+  const base = endpoints[entityType]
+  if (!base) return
+
+  try {
+    const { data: res } = await client.post(base, data)
+    const serverData = res.data ?? res
+    if (serverData?.id && serverData.id !== localId) {
+      await api.local.save(entityType, { ...data, id: serverData.id })
+    }
+  } catch {
+    // Will be synced by sync engine
+  }
+}
+
 export function StudentFormPage() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -87,27 +114,12 @@ export function StudentFormPage() {
   const isEditing = !!id
   const [activeTab, setActiveTab] = useState('identite')
 
-  const { data: classes } = useQuery({
-    queryKey: ['classes-list'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      const raw = res.data
-      return (Array.isArray(raw) ? raw : raw.data ?? []) as { id: string; name: string }[]
-    }
-  })
+  const { data: classes } = useLocalQuery<any>('Class', undefined, [])
 
-  const { data: parentUsers } = useQuery({
-    queryKey: ['parent-users'],
-    queryFn: async () => {
-      const res = await client.get('/users', {
-        params: { role: 'PARENT', limit: 200 },
-      })
-      const raw = res.data
-      return (Array.isArray(raw) ? raw : raw.data ?? []) as Array<{ id: string; firstName: string; lastName: string }>
-    },
-  })
+  const { data: parentUsers } = useLocalQuery<any>('User', { role: 'PARENT' }, [])
 
   const [parentLinks, setParentLinks] = useState<ParentLink[]>([])
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
   const [parentDialogOpen, setParentDialogOpen] = useState(false)
   const [npLastName, setNpLastName] = useState('')
   const [npFirstName, setNpFirstName] = useState('')
@@ -115,14 +127,25 @@ export function StudentFormPage() {
   const [npPassword, setNpPassword] = useState('')
   const [npPhones, setNpPhones] = useState<string[]>([''])
 
-  const { data: student } = useQuery({
-    queryKey: ['student', id],
-    queryFn: async () => {
-      const { data } = await client.get(`/students/${id}`)
-      return (data.data ?? data) as Student
-    },
-    enabled: isEditing
-  })
+  const [student, setStudent] = useState<Student | null>(null)
+  const [loadingStudent, setLoadingStudent] = useState(false)
+
+  useEffect(() => {
+    if (!isEditing) return
+    setLoadingStudent(true)
+    ;(async () => {
+      let data = await getEntityById<any>('Student', id!)
+      if (!data) {
+        try {
+          const { data: res } = await client.get(`/students/${id}`)
+          data = res.data ?? res
+          if (data) await saveEntity('Student', data)
+        } catch { /* offline */ }
+      }
+      setStudent(data as Student)
+      setLoadingStudent(false)
+    })()
+  }, [id, isEditing])
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
@@ -207,7 +230,9 @@ export function StudentFormPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
+      const localId = crypto.randomUUID()
       const payload: Record<string, unknown> = {
+        id: localId,
         firstName: values.firstName || undefined,
         lastName: values.lastName,
         birthDate: values.birthDate || undefined,
@@ -224,16 +249,31 @@ export function StudentFormPage() {
         allergies: values.allergies || undefined,
         classId: values.classId || undefined,
         enrollmentDate: values.enrollmentDate || undefined,
-        parents: parentLinks,
       }
       Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
-      const { data } = await client.post('/students', payload)
-      return data
+
+      await saveEntity('Student', payload)
+
+      if (pendingPhoto) {
+        const api = window.api
+        if (api?.file) {
+          const buffer = await pendingPhoto.arrayBuffer()
+          await api.file.save({
+            buffer, entityType: 'Student', entityId: localId,
+            fieldName: 'photo_url', originalName: pendingPhoto.name, mimeType: pendingPhoto.type,
+          })
+        }
+        setPendingPhoto(null)
+      }
+
+      return localId
     },
-    onSuccess: () => {
+    onSuccess: (localId) => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
-      toast.success('Élève créé avec succès')
+      toast.success('Élève créé (mode hors-ligne)')
       navigate('/students')
+
+      syncToServer('Student', localId).catch(() => {})
     },
     onError: () => {
       toast.error("Erreur lors de la création de l'élève")
@@ -272,6 +312,7 @@ export function StudentFormPage() {
   const updateMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
       const payload: Record<string, unknown> = {
+        id,
         firstName: values.firstName || undefined,
         lastName: values.lastName,
         birthDate: values.birthDate || undefined,
@@ -288,17 +329,18 @@ export function StudentFormPage() {
         allergies: values.allergies || undefined,
         classId: values.classId || undefined,
         enrollmentDate: values.enrollmentDate || undefined,
-        parents: parentLinks,
       }
       Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
-      const { data } = await client.patch(`/students/${id}`, payload)
-      return data
+
+      await saveEntity('Student', payload)
+      return id
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
-      queryClient.invalidateQueries({ queryKey: ['student', id] })
-      toast.success('Élève mis à jour avec succès')
+      toast.success('Élève mis à jour (mode hors-ligne)')
       navigate('/students')
+
+      if (id) syncToServer('Student', id).catch(() => {})
     },
     onError: () => {
       toast.error('Erreur lors de la mise à jour')
@@ -315,14 +357,34 @@ export function StudentFormPage() {
 
   const photoMutation = useMutation({
     mutationFn: async (file: File) => {
+      const api = window.api
+      if (api?.file && id) {
+        const buffer = await file.arrayBuffer()
+        const result = await api.file.save({
+          buffer,
+          entityType: 'Student',
+          entityId: id,
+          fieldName: 'photo_url',
+          originalName: file.name,
+          mimeType: file.type,
+        })
+        const localUrl = await api.file.getUrl(result.localPath)
+        return { url: localUrl || '' }
+      }
+      if (!id) {
+        setPendingPhoto(file)
+        return { url: '' }
+      }
       const fd = new FormData()
       fd.append('file', file)
       const { data } = await client.post(`/students/${id}/photo`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      return data.data ?? data
+      const student = data.data ?? data
+      return { url: student.photoUrl }
     },
     onSuccess: () => {
+      if (!id) return
       queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: ['student', id] })
     },
@@ -330,10 +392,12 @@ export function StudentFormPage() {
 
   const deletePhotoMutation = useMutation({
     mutationFn: async () => {
+      if (!id) return null
       const { data } = await client.delete(`/students/${id}/photo`)
       return data.data ?? data
     },
     onSuccess: () => {
+      if (!id) return
       queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: ['student', id] })
     },

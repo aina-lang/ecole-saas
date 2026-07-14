@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -64,22 +66,14 @@ export function TeacherPayPage() {
   const [calcDialogOpen, setCalcDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: teachers } = useQuery({
-    queryKey: ['teachers-list'],
-    queryFn: async () => {
-      const res = await client.get('/teachers')
-      const raw = res.data
-      return (Array.isArray(raw) ? raw : raw.data ?? []) as Teacher[]
-    }
-  })
+  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
 
   const { data: payments, isLoading } = useQuery({
     queryKey: ['teacher-payments', selectedTeacher],
     queryFn: async () => {
-      const params: any = {}
-      if (selectedTeacher) params.teacherId = selectedTeacher
-      const { data } = await client.get('/teacher-payments', { params })
-      return data as any[]
+      const filters: any = {}
+      if (selectedTeacher) filters.teacherId = selectedTeacher
+      return queryEntities('TeacherPayment', filters)
     }
   })
 
@@ -90,7 +84,16 @@ export function TeacherPayPage() {
         periodStart,
         periodEnd
       })
-      return data as CalculatedPayment
+      const result = data as CalculatedPayment
+      await saveEntity('TeacherPayment', {
+        id: crypto.randomUUID(),
+        teacherId: result.teacherId,
+        month: new Date(result.periodStart).getMonth() + 1,
+        year: new Date(result.periodStart).getFullYear(),
+        amount: result.totalAmount,
+        status: 'PENDING',
+      })
+      return result
     },
     onSuccess: (data) => {
       setCalcResult(data)
@@ -102,22 +105,18 @@ export function TeacherPayPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!calcResult) return
-      await client.post('/teacher-payments', {
+      await saveEntity('TeacherPayment', {
+        id: crypto.randomUUID(),
         teacherId: calcResult.teacherId,
-        periodLabel: calcResult.periodLabel,
-        periodStart: calcResult.periodStart,
-        periodEnd: calcResult.periodEnd,
-        totalHours: calcResult.totalHours,
-        hourlyRate: calcResult.hourlyRate,
-        baseAmount: calcResult.baseAmount,
-        bonusAmount: calcResult.bonusAmount,
-        deductionAmount: calcResult.deductionAmount,
-        totalAmount: calcResult.totalAmount
+        month: new Date(calcResult.periodStart).getMonth() + 1,
+        year: new Date(calcResult.periodStart).getFullYear(),
+        amount: calcResult.totalAmount,
+        status: 'PENDING',
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-payments'] })
-      toast.success('Paiement enregistré')
+      toast.success('Paiement enregistré (mode hors-ligne)')
       setCalcDialogOpen(false)
     },
     onError: () => toast.error('Erreur lors de l\'enregistrement')
@@ -125,7 +124,7 @@ export function TeacherPayPage() {
 
   const markPaidMutation = useMutation({
     mutationFn: async (id: string) => {
-      await client.post(`/teacher-payments/${id}/mark-paid`)
+      await saveEntity('TeacherPayment', { id, status: 'PAID' })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-payments'] })

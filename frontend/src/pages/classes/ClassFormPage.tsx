@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import { getEntityById, saveEntity } from '@/lib/db/offline'
+import { useLocalQuery } from '@/lib/db/hooks'
 import type { Class, Subject, Teacher } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -54,27 +56,19 @@ export function ClassFormPage() {
   const { data: classData } = useQuery({
     queryKey: ['class', id],
     queryFn: async () => {
-      const { data } = await client.get(`/classes/${id}`)
-      return (data.data ?? data) as Class & { subjectIds?: string[]; teacherIds?: string[] }
+      const data = await getEntityById<Class & { subjectIds?: string[]; teacherIds?: string[] }>('Class', id!)
+      if (data) return data
+      const { data: res } = await client.get(`/classes/${id}`)
+      const result = (res.data ?? res) as any
+      await saveEntity('Class', result)
+      return result
     },
     enabled: isEditing
   })
 
-  const { data: subjects } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const { data } = await client.get('/subjects')
-      return (data.data ?? data) as Subject[]
-    }
-  })
+  const { data: subjects } = useLocalQuery<Subject>('Subject')
 
-  const { data: teachers } = useQuery({
-    queryKey: ['teachers'],
-    queryFn: async () => {
-      const { data } = await client.get('/teachers')
-      return (data.data ?? data) as Teacher[]
-    }
-  })
+  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
 
   const form = useForm<ClassFormValues>({
     resolver: zodResolver(classFormSchema),
@@ -103,8 +97,7 @@ export function ClassFormPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: ClassFormValues) => {
-      const { data } = await client.post('/classes', values)
-      return data
+      await saveEntity('Class', values)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] })
@@ -118,8 +111,7 @@ export function ClassFormPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (values: ClassFormValues) => {
-      const { data } = await client.patch(`/classes/${id}`, values)
-      return data
+      await saveEntity('Class', { ...values, id })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] })

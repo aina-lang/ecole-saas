@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Building2, CalendarDays, GraduationCap, CheckCircle2, ArrowRight, ArrowLeft, ChevronRight } from 'lucide-react'
-import client from '@/api/client'
 
 const steps = [
   { id: 'welcome', title: 'Bienvenue', icon: Building2 },
@@ -51,20 +50,16 @@ export function OnboardingPage() {
   const handleFinish = async () => {
     setLoading(true)
     try {
-      const tenantId = localStorage.getItem('tenantId')
-
-      if (tenantId) {
-        await client.patch(`/tenants/${tenantId}`, { primaryColor: form.primaryColor })
-        await client.post(`/tenants/${tenantId}/academic-years`, { label: form.yearLabel })
-      }
+      await window.api.settings.set('tenant', JSON.stringify({ primaryColor: form.primaryColor }))
+      await window.api.settings.set('academic_year', JSON.stringify({ label: form.yearLabel }))
 
       setTenant({ name: '', logoUrl: '', primaryColor: form.primaryColor })
 
       completeOnboarding()
       toast.success('Établissement configuré avec succès')
       navigate('/dashboard')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erreur lors de la configuration')
+    } catch {
+      toast.error('Erreur lors de la configuration')
     } finally {
       setLoading(false)
     }

@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -59,21 +61,11 @@ export function TeacherContractPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: teachers } = useQuery({
-    queryKey: ['teachers-list'],
-    queryFn: async () => {
-      const res = await client.get('/teachers')
-      const raw = res.data
-      return (Array.isArray(raw) ? raw : raw.data ?? []) as Teacher[]
-    }
-  })
+  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
 
   const { data: contracts, isLoading } = useQuery({
     queryKey: ['teacher-contracts'],
-    queryFn: async () => {
-      const { data } = await client.get('/teacher-contracts')
-      return data as any[]
-    }
+    queryFn: () => queryEntities('TeacherContract')
   })
 
   const form = useForm<ContractFormValues>({
@@ -102,7 +94,16 @@ export function TeacherContractPage() {
       if (values.fixedAmount) payload.fixedAmount = Number(values.fixedAmount)
       if (values.endDate) payload.endDate = values.endDate
 
-      await client.post('/teacher-contracts', payload)
+      await saveEntity('TeacherContract', {
+        id: crypto.randomUUID(),
+        teacherId: values.teacherId,
+        contractType: values.contractType,
+        startDate: values.startDate,
+        endDate: values.endDate || null,
+        salary: Number(values.hourlyRate || values.monthlySalary || values.fixedAmount || 0),
+        hoursPerWeek: values.contractType === 'HOURLY' ? Number(values.hourlyRate) : 0,
+        status: values.isActive !== false ? 'ACTIVE' : 'INACTIVE',
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-contracts'] })

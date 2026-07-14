@@ -1,13 +1,12 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import client from '@/api/client'
+import { getEntityById, queryEntities } from '@/lib/db/offline'
 import type { Student, Grade, Attendance, Payment } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-
+import { StudentPhoto } from '@/components/ui/student-photo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
@@ -41,35 +40,29 @@ export function StudentDetailPage() {
 
   const { data: student, isLoading } = useQuery({
     queryKey: ['student', id],
-    queryFn: async () => {
-      const { data } = await client.get(`/students/${id}`)
-      return (data.data ?? data) as Student
-    }
+    queryFn: async () => getEntityById<Student>('Student', id)
   })
 
   const { data: grades } = useQuery({
     queryKey: ['student-grades', id],
     queryFn: async () => {
-      const { data } = await client.get(`/students/${id}/grades`)
-      return (data.data ?? data) as Grade[]
+      const items = await queryEntities<Grade>('Grade', { studentId: id })
+      return items ?? []
     },
     enabled: !!student
   })
 
   const { data: attendance } = useQuery({
     queryKey: ['student-attendance', id],
-    queryFn: async () => {
-      const { data } = await client.get(`/students/${id}/attendance`)
-      return (data.data ?? data) as Attendance[]
-    },
+    queryFn: async () => queryEntities<Attendance>('Attendance', { studentId: id }),
     enabled: !!student
   })
 
   const { data: payments } = useQuery({
     queryKey: ['student-payments', id],
     queryFn: async () => {
-      const { data } = await client.get(`/students/${id}/payments`)
-      return (data.data ?? data) as Payment[]
+      const items = await queryEntities<Payment>('Payment', { studentId: id })
+      return items ?? []
     },
     enabled: !!student
   })
@@ -112,10 +105,14 @@ export function StudentDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-6">
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={student.photoUrl || undefined} alt={student.firstName} />
-              <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
-            </Avatar>
+            <StudentPhoto
+              src={student.photoUrl}
+              alt={student.firstName}
+              initials={initials}
+              className="h-32 w-32"
+              entityId={student.id}
+              fallbackClassName="text-3xl"
+            />
             <div className="flex-1 space-y-1">
               <div className="flex items-center gap-3">
                 <h3 className="text-2xl font-bold">

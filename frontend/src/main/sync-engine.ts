@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { readFileSync } from 'fs'
 import {
   getDatabase,
   getPendingEntries,
@@ -15,6 +16,13 @@ import {
   saveLocalGrades,
   saveLocalAttendance,
   getLocalStudents,
+  getPendingFileUploads,
+  markFileSynced,
+  markFileError,
+  getFileUploadByEntity,
+  saveFileLocally,
+  saveEntity,
+  softDeleteEntity,
 } from './database'
 
 let syncInterval: ReturnType<typeof setInterval> | null = null
@@ -116,6 +124,105 @@ async function makeApiRequest(
   })
 }
 
+function uploadFileToServer(fileEntry: any, serverId: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      const filePath = fileEntry.local_path
+      const fileBuffer = readFileSync(filePath)
+      const boundary = `----FormBoundary${Date.now()}`
+      const entityType = fileEntry.entity_type
+      const fieldName = fileEntry.field_name || 'file'
+
+      let endpoint = ''
+      if (entityType === 'Student') endpoint = `/students/${serverId}/photo`
+      else if (entityType === 'User') endpoint = `/users/${serverId}/photo`
+      else reject(new Error(`Unsupported entity type: ${entityType}`))
+
+      const header = `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${fileEntry.original_name || 'upload'}"\r\nContent-Type: ${fileEntry.mime_type || 'application/octet-stream'}\r\n\r\n`
+      const footer = `\r\n--${boundary}--\r\n`
+      const body = Buffer.concat([
+        Buffer.from(header, 'utf-8'),
+        fileBuffer,
+        Buffer.from(footer, 'utf-8'),
+      ])
+
+      const request = net.request({
+        method: 'POST',
+        url: `${API_BASE}${endpoint}`,
+        timeout: 60000,
+      })
+
+      request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`)
+      request.setHeader('Content-Length', body.length.toString())
+
+      let responseData = ''
+      request.on('response', (response) => {
+        response.on('data', (chunk) => { responseData += chunk.toString() })
+        response.on('end', () => {
+          try {
+            const parsed = JSON.parse(responseData)
+            const result = parsed.data ?? parsed
+            const remoteUrl = result.photoUrl ?? result.url ?? result.photo_url
+            if (remoteUrl) resolve(remoteUrl)
+            else reject(new Error('No URL in response'))
+          } catch {
+            reject(new Error('Failed to parse upload response'))
+          }
+        })
+      })
+      request.on('error', (err) => reject(err))
+      request.write(body)
+      request.end()
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
+async function processFileUploads(): Promise<{ synced: number; errors: number }> {
+  const pending = getPendingFileUploads()
+  let synced = 0, errors = 0
+
+  for (const fileEntry of pending) {
+    try {
+      const mappingStmt = getDatabase().exec(
+        'SELECT server_id FROM id_mappings WHERE local_id = ? AND entity_type = ?',
+        [fileEntry.entity_id, fileEntry.entity_type],
+      )
+      let serverId = fileEntry.entity_id
+      if (mappingStmt.length > 0 && mappingStmt[0].values.length > 0) {
+        serverId = mappingStmt[0].values[0][0] as string
+      }
+
+      const remoteUrl = await uploadFileToServer(fileEntry, serverId)
+      markFileSynced(fileEntry.id, remoteUrl)
+
+      addToOutbox(fileEntry.entity_type, serverId, 'UPDATE', {
+        id: serverId,
+        [fileEntry.field_name === 'photo_url' ? 'photoUrl' : fileEntry.field_name]: remoteUrl,
+      }, 1)
+
+      try {
+        const db = getDatabase()
+        if (fileEntry.entity_type === 'Student') {
+          const existing = getLocalStudents()
+          const student = existing.find((s: any) => s.id === fileEntry.entity_id)
+          if (student) {
+            saveLocalStudents([{ ...student, photoUrl: remoteUrl }])
+          }
+        }
+      } catch { /* ignore local update errors */ }
+
+      synced++
+    } catch (err: any) {
+      console.error(`File sync failed for ${fileEntry.id}:`, err.message)
+      markFileError(fileEntry.id)
+      errors++
+    }
+  }
+  return { synced, errors }
+}
+
 export async function performSync(): Promise<{
   synced: number
   conflicts: number
@@ -132,6 +239,8 @@ export async function performSync(): Promise<{
   let synced = 0
   let conflicts = 0
   let errors = 0
+  let fileSynced = 0
+  let fileErrors = 0
 
   try {
     const db = await getDatabase()
@@ -201,47 +310,63 @@ export async function performSync(): Promise<{
         // No changes to sync
       }
     }
+
+    const fileResult = await processFileUploads()
+    fileSynced = fileResult.synced
+    fileErrors = fileResult.errors
   } catch (err: any) {
     console.error('Sync error:', err.message)
   } finally {
     isSyncing = false
-    notifyProgress({ synced, conflicts, errors })
+    notifyProgress({ synced, conflicts, errors, fileSynced, fileErrors })
   }
 
-  return { synced, conflicts, errors }
+  return { synced: synced + fileSynced, conflicts, errors: errors + fileErrors }
+}
+
+async function cacheRemoteFile(url: string, entityType: string, entityId: string, fieldName: string): Promise<string | null> {
+  try {
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const request = net.request({ method: 'GET', url, timeout: 30000 })
+      const chunks: Buffer[] = []
+      request.on('response', (response) => {
+        response.on('data', (chunk: Buffer) => chunks.push(chunk))
+        response.on('end', () => resolve(Buffer.concat(chunks)))
+      })
+      request.on('error', reject)
+      request.end()
+    })
+    const mimeType = 'image/jpeg'
+    const ext = 'jpg'
+    const originalName = `${fieldName}.${ext}`
+    const result = saveFileLocally(buffer, entityType, entityId, fieldName, originalName, mimeType)
+    markFileSynced(result.id, url)
+    return result.localPath
+  } catch {
+    return null
+  }
 }
 
 function applyServerChanges(changes: any[]) {
   const db = getDatabase()
 
   for (const change of changes) {
-    switch (change.entityType) {
-      case 'Student':
-        if (change.operation === 'DELETE') {
-          db.prepare("UPDATE students_local SET deleted_at = datetime('now'), synced = 1 WHERE id = ?").run(change.entityId)
-        } else {
-          saveLocalStudents([change.payload])
-        }
-        break
-      case 'Grade':
-        if (change.operation === 'DELETE') {
-          db.prepare("UPDATE grades_local SET deleted_at = datetime('now'), synced = 1 WHERE id = ?").run(change.entityId)
-        } else {
-          saveLocalGrades([change.payload])
-        }
-        break
-      case 'Attendance':
-        if (change.operation === 'DELETE') {
-          db.prepare("UPDATE attendance_local SET deleted_at = datetime('now'), synced = 1 WHERE id = ?").run(change.entityId)
-        } else {
-          saveLocalAttendance([change.payload])
-        }
-        break
+    const { entityType, operation, entityId, payload } = change
+
+    if (operation === 'DELETE') {
+      softDeleteEntity(entityType, entityId)
+      continue
+    }
+
+    const saved = saveEntity(entityType, payload)
+    if (saved && payload?.photoUrl) {
+      cacheRemoteFile(payload.photoUrl, entityType, entityId, 'photo_url')
+        .catch(() => {})
     }
   }
 }
 
-function notifyProgress(stats: { synced: number; conflicts: number; errors: number }) {
+function notifyProgress(stats: { synced: number; conflicts: number; errors: number; fileSynced?: number; fileErrors?: number }) {
   const { BrowserWindow } = require('electron')
   const windows = BrowserWindow.getAllWindows()
   for (const win of windows) {

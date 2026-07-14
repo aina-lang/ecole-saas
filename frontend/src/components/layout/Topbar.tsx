@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/stores/ui-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { getPhotoUrl } from '@/api/client'
 import { useSyncStore } from '@/stores/sync-store'
 import { getInitials } from '@/lib/utils'
 import { HamburgerMenuIcon } from '@radix-ui/react-icons'
@@ -55,7 +56,7 @@ export function Topbar({ title }: TopbarProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.photoUrl || undefined} alt={user?.firstName} />
+                <AvatarImage src={getPhotoUrl(user?.photoUrl)} alt={user?.firstName} />
                 <AvatarFallback className="text-xs">
                   {user ? getInitials(user.firstName, user.lastName) : 'U'}
                 </AvatarFallback>

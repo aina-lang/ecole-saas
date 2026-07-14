@@ -15,6 +15,7 @@ import {
 } from '@radix-ui/react-icons'
 import { Send } from 'lucide-react'
 import client from '@/api/client'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Message, ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,19 +43,23 @@ const priorityConfig: Record<
   urgent: { label: 'Urgent', variant: 'destructive' }
 }
 
-function fetchMessages(
-  folder: Folder,
-  search: string
-): Promise<ApiResponse<PaginatedResponse<Message>>> {
-  return client.get('/messages', { params: { folder, search } }).then((r) => r.data)
+function fetchMessages(folder: Folder, search: string): Promise<any[]> {
+  return queryEntities('Message', { ...(search ? { search } : {}) }).then((items) => {
+    let filtered = items ?? []
+    if (folder === 'archived') filtered = filtered.filter((m) => m.isArchived)
+    else if (folder === 'sent') filtered = filtered.filter((m) => m.senderId === 'me')
+    else filtered = filtered.filter((m) => !m.isArchived)
+    if (search) filtered = filtered.filter((m) => (m.subject || '').toLowerCase().includes(search.toLowerCase()))
+    return filtered
+  })
 }
 
 function archiveMessage(id: string) {
-  return client.patch(`/messages/${id}/archive`).then((r) => r.data)
+  return saveEntity('Message', { id, isArchived: true })
 }
 
 function deleteMessage(id: string) {
-  return client.delete(`/messages/${id}`).then((r) => r.data)
+  return saveEntity('Message', { id, deletedAt: new Date().toISOString() })
 }
 
 export function InboxPage() {
@@ -87,7 +92,7 @@ export function InboxPage() {
     }
   })
 
-  const messages = data?.data?.data ?? []
+  const messages = data ?? []
 
   function handleFolderChange(folder: Folder) {
     setSearchParams({ folder })

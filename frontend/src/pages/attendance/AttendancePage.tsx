@@ -4,7 +4,8 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { CalendarIcon, Check, X, Ban, Users } from 'lucide-react'
 
-import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { queryEntities } from '@/lib/db/offline'
 import type { Student } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -65,20 +66,13 @@ export function AttendancePage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
 
-  const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      return res.data.data ?? res.data
-    }
-  })
+  const { data: classes } = useLocalQuery<ClassOption>('Class')
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
     queryFn: async () => {
       if (!classId) return []
-      const res = await client.get('/students', { params: { classId } })
-      return res.data.data ?? res.data
+      return queryEntities<Student>('Student', { classId })
     },
     enabled: !!classId
   })
@@ -87,10 +81,7 @@ export function AttendancePage() {
     queryKey: ['attendance', classId, format(date, 'yyyy-MM-dd')],
     queryFn: async () => {
       if (!classId) return []
-      const res = await client.get('/attendance', {
-        params: { classId, date: format(date, 'yyyy-MM-dd') }
-      })
-      return res.data.data ?? res.data
+      return queryEntities('Attendance', { classId, date: format(date, 'yyyy-MM-dd') })
     },
     enabled: !!classId
   })

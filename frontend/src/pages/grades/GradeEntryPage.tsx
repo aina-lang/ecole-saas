@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Save, ArrowLeft } from 'lucide-react'
 
-import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { saveEntity } from '@/lib/db/offline'
 import type { Student, Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -52,21 +53,9 @@ export function GradeEntryPage() {
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
 
-  const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      return res.data.data ?? res.data
-    }
-  })
+  const { data: classes } = useLocalQuery<ClassOption>('Class')
 
-  const { data: subjects } = useQuery<SubjectOption[]>({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const res = await client.get('/subjects')
-      return (res.data.data ?? res.data) as SubjectOption[]
-    }
-  })
+  const { data: subjects } = useLocalQuery<SubjectOption>('Subject')
 
   const selectedSubject = subjects?.find((s) => s.id === subjectId)
 
@@ -80,8 +69,7 @@ export function GradeEntryPage() {
     queryKey: ['students', classId],
     queryFn: async () => {
       if (!classId) return []
-      const res = await client.get('/students', { params: { classId } })
-      return res.data.data ?? res.data
+      return queryEntities<Student>('Student', { classId })
     },
     enabled: !!classId
   })
@@ -189,7 +177,9 @@ export function GradeEntryPage() {
       }))
 
     try {
-      await client.post(`/grades/class/${classId}/bulk`, gradeEntries)
+      for (const entry of gradeEntries) {
+        await saveEntity('Grade', entry)
+      }
       toast.success(`${gradeEntries.length} note(s) enregistrée(s) avec succès`)
       queryClient.invalidateQueries({ queryKey: ['grades'] })
       setEntries((prev) => prev.map((e) => ({ ...e, value: '', comment: '' })))

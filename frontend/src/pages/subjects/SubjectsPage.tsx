@@ -4,7 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { saveEntity, deleteEntity } from '@/lib/db/offline'
 import { LEVELS } from '@/lib/levels'
 
 import {
@@ -30,8 +31,11 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
-  TrashIcon
+  TrashIcon,PlusIcon,
+  Pencil2Icon,
+  ReloadIcon
 } from '@radix-ui/react-icons'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 
 interface Subject {
   id: string
@@ -58,23 +62,9 @@ export function SubjectsPage() {
   const [editing, setEditing] = useState<Subject | null>(null)
   const [open, setOpen] = useState(false)
 
-  const { data: subjects, isLoading } = useQuery<Subject[]>({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const res = await client.get('/subjects')
-      const items = res.data.data ?? res.data
-      return Array.isArray(items) ? items : []
-    }
-  })
+  const { data: subjects, loading: isLoading } = useLocalQuery<Subject>('Subject')
 
-  const { data: classes } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ['classes-opt'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      const items = res.data.data ?? res.data
-      return (Array.isArray(items) ? items : []).map((c: any) => ({ id: c.id, name: c.name }))
-    }
-  })
+  const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
 
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectSchema),
@@ -101,7 +91,7 @@ export function SubjectsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: SubjectFormValues) => {
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: values.name,
         code: values.code || undefined,
         level: values.level && values.level !== '__none__' ? values.level : undefined,
@@ -109,10 +99,9 @@ export function SubjectsPage() {
         classId: values.classId && values.classId !== '__none__' ? values.classId : undefined
       }
       if (editing) {
-        await client.patch(`/subjects/${editing.id}`, payload)
-      } else {
-        await client.post('/subjects', payload)
+        payload.id = editing.id
       }
+      await saveEntity('Subject', payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] })
@@ -126,7 +115,7 @@ export function SubjectsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await client.delete(`/subjects/${id}`)
+      await deleteEntity('Subject', id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] })

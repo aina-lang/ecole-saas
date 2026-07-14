@@ -3,12 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import client from '@/api/client'
-import { useSyncStore } from '@/stores/sync-store'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import type { SyncEntry } from '@/types'
 
 import {
   Card,
@@ -86,7 +83,6 @@ type MergeValues = z.infer<typeof mergeSchema>
 
 export function SyncPage() {
   const queryClient = useQueryClient()
-  const store = useSyncStore()
   const [syncFilter, setSyncFilter] = useState<string>('all')
   const [expandedConflict, setExpandedConflict] = useState<string | null>(null)
   const [mergeConflictId, setMergeConflictId] = useState<string | null>(null)
@@ -99,12 +95,7 @@ export function SyncPage() {
   const { data: status } = useQuery({
     queryKey: ['sync-status'],
     queryFn: async () => {
-      const { data } = await client.get('/sync/status')
-      const s = (data.data ?? data) as SyncStatus
-      store.setOnline(s.isOnline)
-      store.setSyncing(s.isSyncing)
-      if (s.lastSyncAt) store.setLastSync(s.lastSyncAt)
-      store.setConflicts(s.conflictCount)
+      const s = await window.api.sync.getStatus() as SyncStatus
       return s
     },
     refetchInterval: 5000
@@ -113,8 +104,8 @@ export function SyncPage() {
   const { data: devices } = useQuery({
     queryKey: ['sync-devices'],
     queryFn: async () => {
-      const { data } = await client.get('/sync/devices')
-      return (data.data ?? data) as SyncDevice[]
+      const devices = await window.api.sync.getDevices() as SyncDevice[]
+      return devices
     },
     refetchInterval: 10000
   })
@@ -122,10 +113,11 @@ export function SyncPage() {
   const { data: conflicts } = useQuery({
     queryKey: ['sync-conflicts'],
     queryFn: async () => {
-      const params: Record<string, string> = {}
-      if (syncFilter !== 'all') params.entityType = syncFilter
-      const { data } = await client.get('/sync/conflicts', { params })
-      return (data.data ?? data) as SyncConflict[]
+      const allConflicts = await window.api.sync.getConflicts() as SyncConflict[]
+      if (syncFilter !== 'all') {
+        return allConflicts.filter(c => c.entityType === syncFilter)
+      }
+      return allConflicts
     },
     refetchInterval: 5000
   })
@@ -133,34 +125,30 @@ export function SyncPage() {
   const { data: pendingEntries } = useQuery({
     queryKey: ['sync-pending-entries'],
     queryFn: async () => {
-      const { data } = await client.get('/sync/pending')
-      return (data.data ?? data) as SyncEntry[]
+      const entries = await window.api.sync.getPendingEntries()
+      return entries
     },
     refetchInterval: 5000
   })
 
   const forceSyncMutation = useMutation({
     mutationFn: async () => {
-      store.setSyncing(true)
-      await client.post('/sync/force')
+      await window.api.sync.forceSync()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       queryClient.invalidateQueries({ queryKey: ['sync-conflicts'] })
       queryClient.invalidateQueries({ queryKey: ['sync-pending-entries'] })
-      store.setSyncing(false)
-      store.setLastSync(new Date().toISOString())
       toast.success('Synchronisation terminée avec succès')
     },
     onError: () => {
-      store.setSyncing(false)
       toast.error('Erreur lors de la synchronisation')
     }
   })
 
   const keepServerMutation = useMutation({
     mutationFn: async (conflictId: string) => {
-      await client.post(`/sync/conflicts/${conflictId}/resolve`, { resolution: 'server' })
+      await window.api.sync.resolveConflict(conflictId, 'server')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-conflicts'] })
@@ -174,7 +162,7 @@ export function SyncPage() {
 
   const keepClientMutation = useMutation({
     mutationFn: async (conflictId: string) => {
-      await client.post(`/sync/conflicts/${conflictId}/resolve`, { resolution: 'client' })
+      await window.api.sync.resolveConflict(conflictId, 'client')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-conflicts'] })
@@ -189,10 +177,7 @@ export function SyncPage() {
   const mergeMutation = useMutation({
     mutationFn: async ({ conflictId, mergedValues }: { conflictId: string; mergedValues: string }) => {
       const payload = JSON.parse(mergedValues)
-      await client.post(`/sync/conflicts/${conflictId}/resolve`, {
-        resolution: 'merge',
-        mergedValues: payload
-      })
+      await window.api.sync.resolveConflict(conflictId, 'merge', payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-conflicts'] })

@@ -1,7 +1,9 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
+const API_BASE = 'http://localhost:3000'
+
 const client = axios.create({
-  baseURL: 'http://localhost:3000/api/v1',
+  baseURL: `${API_BASE}/api/v1`,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -130,3 +132,9 @@ client.interceptors.response.use(
 )
 
 export default client
+
+export function getPhotoUrl(path?: string | null): string | undefined {
+  if (!path) return undefined
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('local-asset://') || path.startsWith('data:')) return path
+  return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
+}

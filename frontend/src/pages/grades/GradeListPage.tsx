@@ -6,7 +6,8 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { ArrowUpDown, Edit, Trash2, Plus, Search } from 'lucide-react'
 
-import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { deleteEntity, queryEntities } from '@/lib/db/offline'
 import type { Grade, PaginatedResponse, Subject } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatSubjectLabel } from '@/lib/subject'
@@ -86,21 +87,9 @@ export function GradeListPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const limit = 10
 
-  const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      return res.data.data ?? res.data
-    }
-  })
+  const { data: classes } = useLocalQuery<ClassOption>('Class')
 
-  const { data: subjects } = useQuery<SubjectOption[]>({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const res = await client.get('/subjects')
-      return (res.data.data ?? res.data) as SubjectOption[]
-    }
-  })
+  const { data: subjects } = useLocalQuery<SubjectOption>('Subject')
 
   const { data: gradesResponse, isLoading } = useQuery<PaginatedResponse<GradeWithDetails>>({
     queryKey: ['grades', classId, subjectId, semester, page, sortBy, sortOrder],
@@ -114,14 +103,14 @@ export function GradeListPage() {
       if (classId) params.classId = classId
       if (subjectId) params.subjectId = subjectId
       if (semester) params.semester = semester
-      const res = await client.get('/grades', { params })
-      return res.data.data ?? res.data
+      const result = await queryEntities<GradeWithDetails>('Grade', params)
+      return { data: result, total: result.length } as PaginatedResponse<GradeWithDetails>
     }
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await client.delete(`/grades/${id}`)
+      await deleteEntity('Grade', id)
     },
     onSuccess: () => {
       toast.success('Note supprimée avec succès')

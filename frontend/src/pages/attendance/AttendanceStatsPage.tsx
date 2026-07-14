@@ -4,6 +4,8 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { CalendarIcon, Users, TrendingUp, Award, ChevronDown, ChevronRight } from 'lucide-react'
 
+import { useLocalQuery } from '@/lib/db/hooks'
+import { queryEntities } from '@/lib/db/offline'
 import client from '@/api/client'
 import { cn } from '@/lib/utils'
 
@@ -66,20 +68,14 @@ export function AttendanceStatsPage() {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null)
 
-  const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      return res.data.data ?? res.data
-    }
-  })
+  const { data: classes } = useLocalQuery<ClassOption>('Class')
 
   const { data: students } = useQuery<StudentOption[]>({
     queryKey: ['students', classId],
     queryFn: async () => {
       if (!classId) return []
-      const res = await client.get('/students', { params: { classId } })
-      return res.data.data ?? res.data
+      const items = await queryEntities<any>('Student', { classId })
+      return (items ?? []).map((s) => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))
     },
     enabled: !!classId
   })

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import client from '@/api/client'
+import { saveEntity, queryEntities } from '@/lib/db/offline'
 import type { User, PaginatedResponse } from '@/types'
 
 import {
@@ -28,6 +29,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { getInitials } from '@/lib/utils'
+import { getPhotoUrl } from '@/api/client'
 import {
   Pagination,
   PaginationContent,
@@ -101,14 +103,14 @@ export function UserManagementPage() {
       const params: Record<string, string | number> = { page, limit }
       if (search) params.search = search
       if (roleFilter !== 'all') params.role = roleFilter
-      const { data } = await client.get('/users', { params })
-      return data as PaginatedResponse<UserWithMeta>
+      const result = await queryEntities<UserWithMeta>('User', params)
+      return { data: result, total: result.length } as PaginatedResponse<UserWithMeta>
     }
   })
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      await client.patch(`/users/${id}`, { isActive: !isActive })
+      await saveEntity('User', { id, isActive: !isActive })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -215,8 +217,8 @@ export function UserManagementPage() {
                 usersData.data.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={user.photoUrl || undefined} alt={user.firstName} />
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={getPhotoUrl(user.photoUrl)} alt={user.firstName} />
                         <AvatarFallback>{getInitials(user.firstName, user.lastName)}</AvatarFallback>
                       </Avatar>
                     </TableCell>

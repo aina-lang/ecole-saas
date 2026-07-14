@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import client from '@/api/client'
-import type { PaginatedResponse } from '@/types'
 
 import {
   Table,
@@ -95,14 +93,14 @@ export function AuditLogPage() {
   const { data: logsData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['audit-logs', search, actionFilter, entityFilter, dateFrom, dateTo, page],
     queryFn: async () => {
-      const params: Record<string, string | number> = { page, limit }
-      if (search) params.search = search
-      if (actionFilter !== 'all') params.action = actionFilter
-      if (entityFilter !== 'all') params.entityType = entityFilter
-      if (dateFrom) params.dateFrom = dateFrom
-      if (dateTo) params.dateTo = dateTo
-      const { data } = await client.get('/admin/audit-logs', { params })
-      return data as PaginatedResponse<AuditLog>
+      const filters: Record<string, unknown> = { limit, offset: (page - 1) * limit }
+      if (search) filters.search = search
+      if (actionFilter !== 'all') filters.action = actionFilter
+      if (entityFilter !== 'all') filters.entityType = entityFilter
+      if (dateFrom) filters.dateFrom = dateFrom
+      if (dateTo) filters.dateTo = dateTo
+      const data = await window.api.audit.query(filters) as AuditLog[]
+      return { data, total: data.length, page, limit }
     }
   })
 

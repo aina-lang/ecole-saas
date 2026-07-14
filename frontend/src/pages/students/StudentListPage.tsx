@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { deleteEntity, queryEntities } from '@/lib/db/offline'
 import type { Student, PaginatedResponse } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { StudentPhoto } from '@/components/ui/student-photo'
 
 import {
   Table,
@@ -62,13 +63,7 @@ export function StudentListPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const limit = 10
 
-  const { data: classes } = useQuery({
-    queryKey: ['classes-list'],
-    queryFn: async () => {
-      const { data } = await client.get('/classes')
-      return (data.data ?? data) as { id: string; name: string }[]
-    }
-  })
+  const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
 
   const { data: studentsData, isLoading } = useQuery({
     queryKey: ['students', search, classFilter, statusFilter, page],
@@ -80,14 +75,14 @@ export function StudentListPage() {
       if (search) params.search = search
       if (classFilter !== 'all') params.classId = classFilter
       if (statusFilter !== 'all') params.status = statusFilter
-      const { data } = await client.get('/students', { params })
-      return data as PaginatedResponse<Student>
+      const result = await queryEntities<Student>('Student', params)
+      return { data: result, total: result.length } as PaginatedResponse<Student>
     }
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await client.delete(`/students/${id}`)
+      await deleteEntity('Student', id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
@@ -219,10 +214,13 @@ export function StudentListPage() {
                       onClick={() => navigate(`/students/${student.id}`)}
                     >
                       <TableCell>
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={student.photoUrl || undefined} alt={student.firstName} />
-                          <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
-                        </Avatar>
+                        <StudentPhoto
+                          src={student.photoUrl}
+                          alt={student.firstName}
+                          initials={getInitials(student.firstName, student.lastName)}
+                          className="h-12 w-12"
+                          entityId={student.id}
+                        />
                       </TableCell>
                       <TableCell className="font-medium">{student.registrationNumber}</TableCell>
                       <TableCell>{student.lastName}</TableCell>

@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { saveEntity } from '@/lib/db/offline'
 import type { Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -93,24 +95,11 @@ export function UserFormPage() {
   const [phoneInputs, setPhoneInputs] = useState<string[]>([''])
   const [teacherClassIds, setTeacherClassIds] = useState<string[]>([])
   const [teacherSubjectIds, setTeacherSubjectIds] = useState<string[]>([])
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
 
-  const { data: classes } = useQuery<Option[]>({
-    queryKey: ['classes-opt'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      const items = (res.data.data ?? res.data) as Array<{ id: string; name: string }>
-      return items.map((c) => ({ id: c.id, name: c.name }))
-    }
-  })
+  const { data: classes } = useLocalQuery<Option>('Class')
 
-  const { data: subjects } = useQuery<Option[]>({
-    queryKey: ['subjects-opt'],
-    queryFn: async () => {
-      const res = await client.get('/subjects')
-      const items = (res.data.data ?? res.data) as Array<Subject>
-      return items.map((s) => ({ id: s.id, name: formatSubjectLabel(s) }))
-    }
-  })
+  const { data: subjects } = useLocalQuery<Option>('Subject')
 
   const { data: user } = useQuery({
     queryKey: ['user', id],
@@ -148,12 +137,31 @@ export function UserFormPage() {
 
   const photoMutation = useMutation({
     mutationFn: async (file: File) => {
+      const api = window.api
+      if (api?.file && id) {
+        const buffer = await file.arrayBuffer()
+        const result = await api.file.save({
+          buffer,
+          entityType: 'User',
+          entityId: id,
+          fieldName: 'photo_url',
+          originalName: file.name,
+          mimeType: file.type,
+        })
+        const localUrl = await api.file.getUrl(result.localPath)
+        return { url: localUrl || '' }
+      }
+      if (!id) {
+        setPendingPhoto(file)
+        return { url: '' }
+      }
       const fd = new FormData()
       fd.append('file', file)
       const { data } = await client.post(`/users/${id}/photo`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      return data.data ?? data
+      const user = data.data ?? data
+      return { url: user.photoUrl }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -163,10 +171,12 @@ export function UserFormPage() {
 
   const deletePhotoMutation = useMutation({
     mutationFn: async () => {
+      if (!id) return null
       const { data } = await client.delete(`/users/${id}/photo`)
       return data.data ?? data
     },
     onSuccess: () => {
+      if (!id) return
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['user', id] })
     },
@@ -220,8 +230,10 @@ export function UserFormPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: UserFormValues) => {
+      const localId = crypto.randomUUID()
       const phones = syncPhoneValue(phoneInputs)
       const payload: Record<string, unknown> = {
+        id: localId,
         lastName: values.lastName,
         phones
       }
@@ -229,18 +241,46 @@ export function UserFormPage() {
       if (values.email) payload.email = values.email
       if (values.password) payload.password = values.password
       if (values.role === 'TEACHER') {
-        await client.post('/teachers', {
+        await saveEntity('Teacher', {
           ...payload,
           specialty: values.specialty || undefined,
           classIds: teacherClassIds,
           subjectIds: teacherSubjectIds
         })
       } else {
-        await client.post('/users', {
+        await saveEntity('User', {
           ...payload,
           role: values.role
         })
       }
+      if (pendingPhoto) {
+        const api = window.api
+        if (api?.file) {
+          try {
+            const buffer = await pendingPhoto.arrayBuffer()
+            await api.file.save({
+              buffer,
+              entityType: 'User',
+              entityId: localId,
+              fieldName: 'photo_url',
+              originalName: pendingPhoto.name,
+              mimeType: pendingPhoto.type,
+            })
+          } catch { /* ok */ }
+        } else {
+          try {
+            const fd = new FormData()
+            fd.append('file', pendingPhoto)
+            await client.post(`/users/${localId}/photo`, fd, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            })
+          } catch {
+            toast.warning("La photo sera synchronisée plus tard")
+          }
+        }
+        setPendingPhoto(null)
+      }
+      return localId
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -257,6 +297,7 @@ export function UserFormPage() {
     mutationFn: async (values: UserFormValues) => {
       const phones = syncPhoneValue(phoneInputs)
       const payload: Record<string, unknown> = {
+        id,
         lastName: values.lastName,
         phones
       }
@@ -264,14 +305,15 @@ export function UserFormPage() {
       if (values.email) payload.email = values.email
       if (values.password) payload.password = values.password
       if (values.role === 'TEACHER') {
-        await client.patch(`/teachers/${user.teacher.id}`, {
+        await saveEntity('Teacher', {
           ...payload,
+          id: user.teacher.id,
           specialty: values.specialty || undefined,
           classIds: teacherClassIds,
           subjectIds: teacherSubjectIds
         })
       } else {
-        await client.patch(`/users/${id}`, {
+        await saveEntity('User', {
           ...payload,
           role: values.role
         })
@@ -452,13 +494,6 @@ export function UserFormPage() {
                 </CardDescription>
               </CardHeader>
             <CardContent className="space-y-4">
-              <PhotoUpload
-                src={user?.photoUrl}
-                firstName={user?.firstName}
-                lastName={user?.lastName}
-                onUpload={(file) => photoMutation.mutateAsync(file)}
-                onDelete={() => deletePhotoMutation.mutateAsync()}
-              />
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}

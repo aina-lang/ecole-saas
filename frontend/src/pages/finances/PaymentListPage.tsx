@@ -9,7 +9,8 @@ import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { PlusIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
-import type { Payment, ApiResponse, PaginatedResponse, Student } from '@/types'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
+import type { Payment, Student } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -59,27 +60,47 @@ type RecordPaymentValues = z.infer<typeof recordPaymentSchema>
 
 function fetchPayments(
   params: Record<string, string>
-): Promise<ApiResponse<PaginatedResponse<Payment & { student?: Student }>>> {
-  return client.get('/payments', { params }).then((r) => r.data)
-}
-
-function fetchStudents(): Promise<ApiResponse<PaginatedResponse<Student>>> {
-  return client.get('/students', { params: { limit: 200 } }).then((r) => r.data)
+): Promise<Payment[]> {
+  return queryEntities<Payment>('Payment', params)
 }
 
 function recordPaymentFn(paymentId: string, data: RecordPaymentValues) {
-  return client.post(`/payments/${paymentId}/record`, data).then((r) => r.data)
+  return saveEntity('Payment', {
+    id: crypto.randomUUID(),
+    feeId: paymentId,
+    amount: data.amount,
+    paymentMethod: data.method,
+    transactionId: data.reference || null,
+    paymentDate: new Date().toISOString(),
+  })
 }
 
-function exportCsv(params: Record<string, string>) {
-  return client.get('/payments/export', { params, responseType: 'blob' }).then((r) => {
-    const url = window.URL.createObjectURL(new Blob([r.data]))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `paiements-${format(new Date(), 'yyyy-MM-dd')}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
-  })
+async function exportCsv(params: Record<string, string>) {
+  const payments = await queryEntities<any>('Payment', params)
+  const students = (await queryEntities<any>('Student')).reduce((map, s) => {
+    map[s.id] = `${s.firstName || ''} ${s.lastName || ''}`.trim()
+    return map
+  }, {} as Record<string, string>)
+
+  const header = 'Date;Élève;Montant;Méthode;Référence;Statut'
+  const rows = (payments ?? []).map((p) =>
+    [
+      p.paymentDate ? format(new Date(p.paymentDate), 'dd/MM/yyyy') : '',
+      students[p.studentId] || p.studentId || '',
+      p.amount || 0,
+      p.paymentMethod || '',
+      p.transactionId || '',
+      p.status || 'pending',
+    ].join(';'),
+  )
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `paiements-${format(new Date(), 'yyyy-MM-dd')}.csv`
+  a.click()
+  window.URL.revokeObjectURL(url)
 }
 
 export function PaymentListPage() {
@@ -95,7 +116,10 @@ export function PaymentListPage() {
 
   const { data: studentsData } = useQuery({
     queryKey: ['students-list'],
-    queryFn: fetchStudents
+    queryFn: async () => {
+      const data = await queryEntities<Student>('Student', { limit: 200 })
+      return { data: { data } } as any
+    }
   })
 
   const form = useForm<RecordPaymentValues>({
@@ -116,7 +140,7 @@ export function PaymentListPage() {
     }
   })
 
-  const payments = data?.data?.data ?? []
+  const payments = data ?? []
   const students = studentsData?.data?.data ?? []
 
   function getStudentName(studentId: string) {

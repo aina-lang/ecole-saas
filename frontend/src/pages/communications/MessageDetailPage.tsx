@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ArrowLeftIcon } from '@radix-ui/react-icons'
 import { Download, Printer, Send } from 'lucide-react'
 import client from '@/api/client'
+import { queryEntities, saveEntity, getEntityById } from '@/lib/db/offline'
 import type { Message, ApiResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,12 +23,12 @@ const priorityConfig: Record<
   urgent: { label: 'Urgent', variant: 'destructive' }
 }
 
-function fetchMessage(id: string): Promise<ApiResponse<Message>> {
-  return client.get(`/messages/${id}`).then((r) => r.data)
+function fetchMessage(id: string): Promise<Message | null> {
+  return getEntityById<Message>('Message', id)
 }
 
 function markAsRead(id: string) {
-  return client.patch(`/messages/${id}/read`).then((r) => r.data)
+  return saveEntity('Message', { id, isRead: true })
 }
 
 export function MessageDetailPage() {
@@ -35,7 +36,7 @@ export function MessageDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const { data: message, isLoading } = useQuery({
     queryKey: ['message', id],
     queryFn: () => fetchMessage(id!),
     enabled: !!id
@@ -44,10 +45,8 @@ export function MessageDetailPage() {
   useQuery({
     queryKey: ['message-read', id],
     queryFn: () => markAsRead(id!),
-    enabled: !!id && (data?.data?.status === 'sent' || data?.data?.status === 'draft')
+    enabled: !!id && message !== null
   })
-
-  const message = data?.data
 
   if (isLoading) {
     return (

@@ -4,6 +4,8 @@ import { toast } from 'sonner'
 import { format, isPast, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -39,32 +41,30 @@ export function TeacherAttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const queryClient = useQueryClient()
 
-  const { data: teachers } = useQuery({
-    queryKey: ['teachers-list'],
-    queryFn: async () => {
-      const res = await client.get('/teachers')
-      const raw = res.data
-      return (Array.isArray(raw) ? raw : raw.data ?? []) as Teacher[]
-    }
-  })
+  const { data: teachers } = useLocalQuery<Teacher>('Teacher')
 
   const { data: attendances, isLoading } = useQuery({
     queryKey: ['teacher-attendance', date],
-    queryFn: async () => {
-      const { data } = await client.get('/teacher-attendance', { params: { date } })
-      return data as any[]
-    }
+    queryFn: () => queryEntities('TeacherAttendance', { date })
   })
 
   const attendanceMap = new Map((attendances ?? []).map((a: any) => [a.teacherId, a]))
 
   const bulkMutation = useMutation({
     mutationFn: async (records: { teacherId: string; status: string; justification?: string }[]) => {
-      await client.post('/teacher-attendance/bulk', { date, records })
+      for (const r of records) {
+        await saveEntity('TeacherAttendance', {
+          id: crypto.randomUUID(),
+          teacherId: r.teacherId,
+          date,
+          status: r.status,
+          justification: r.justification || null,
+        })
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] })
-      toast.success('Présences enregistrées')
+      toast.success('Présences enregistrées (mode hors-ligne)')
     },
     onError: () => toast.error("Erreur lors de l'enregistrement")
   })

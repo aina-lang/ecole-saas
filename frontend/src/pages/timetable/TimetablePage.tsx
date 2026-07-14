@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -69,42 +71,20 @@ export function TimetablePage() {
   const [selectedDay, setSelectedDay] = useState<number>(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  const { data: classes } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ['classes-opt'],
-    queryFn: async () => {
-      const res = await client.get('/classes')
-      const items = res.data.data ?? res.data
-      return (Array.isArray(items) ? items : []).map((c: any) => ({ id: c.id, name: c.name }))
-    }
-  })
+  const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
 
   const { data: slots, isLoading } = useQuery<TimetableSlot[]>({
     queryKey: ['timetable', classId],
     enabled: !!classId,
     queryFn: async () => {
-      const res = await client.get('/timetable', { params: { classId } })
-      const items = res.data.data ?? res.data
-      return Array.isArray(items) ? items : []
+      const items = await queryEntities<any>('Timetable', { classId })
+      return items ?? []
     }
   })
 
-  const { data: subjects } = useQuery<Array<Subject>>({
-    queryKey: ['subjects-opt'],
-    queryFn: async () => {
-      const res = await client.get('/subjects')
-      const items = res.data.data ?? res.data
-      return (Array.isArray(items) ? items : []) as Subject[]
-    }
-  })
+  const { data: subjects } = useLocalQuery<Subject>('Subject')
 
-  const { data: teachers } = useQuery<Array<{ id: string; user: { firstName: string; lastName: string } }>>({
-    queryKey: ['teachers-opt'],
-    queryFn: async () => {
-      const res = await client.get('/teachers')
-      const items = res.data.data ?? res.data
-      return Array.isArray(items) ? items : []
-    }
-  })
+  const { data: teachers } = useLocalQuery<{ id: string; user: { firstName: string; lastName: string } }>('Teacher')
 
   const form = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema),
@@ -133,19 +113,20 @@ export function TimetablePage() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: SlotFormValues) => {
-      await client.post('/timetable', {
+      await saveEntity('Timetable', {
+        id: crypto.randomUUID(),
         classId,
         dayOfWeek: values.dayOfWeek,
         subjectId: values.subjectId,
-        teacherId: values.teacherId && values.teacherId !== '__none__' ? values.teacherId : undefined,
+        teacherId: values.teacherId && values.teacherId !== '__none__' ? values.teacherId : null,
         startTime: values.startTime,
         endTime: values.endTime,
-        room: values.room || undefined
+        room: values.room || null,
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
-      toast.success('Créneau ajouté')
+      toast.success('Créneau ajouté (mode hors-ligne)')
       setOpen(false)
     },
     onError: () => toast.error('Erreur lors de l\'ajout du créneau')
@@ -153,11 +134,11 @@ export function TimetablePage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await client.delete(`/timetable/${id}`)
+      await saveEntity('Timetable', { id, deletedAt: new Date().toISOString() })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
-      toast.success('Créneau supprimé')
+      toast.success('Créneau supprimé (mode hors-ligne)')
       setDeleteId(null)
     },
     onError: () => toast.error('Erreur lors de la suppression')

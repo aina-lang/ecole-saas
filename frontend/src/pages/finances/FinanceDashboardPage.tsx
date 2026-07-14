@@ -24,8 +24,8 @@ import {
   ReaderIcon,
   CalendarIcon
 } from '@radix-ui/react-icons'
-import client from '@/api/client'
-import type { ApiResponse, Payment, Student } from '@/types'
+import { queryEntities } from '@/lib/db/offline'
+import type { Payment, Student } from '@/types'
 
 interface FinanceSummary {
   totalCollected: number
@@ -41,18 +41,63 @@ interface DashboardData {
   overduePayments: (Payment & { student?: Student })[]
 }
 
-function fetchDashboard(): Promise<ApiResponse<DashboardData>> {
-  return client.get('/finances/dashboard').then((r) => r.data)
+async function fetchDashboard(): Promise<DashboardData> {
+  const [payments, students, fees] = await Promise.all([
+    queryEntities<Payment>('Payment'),
+    queryEntities<Student>('Student'),
+    queryEntities('Fee')
+  ])
+
+  const totalCollected = payments
+    .filter(p => p.status === 'paid')
+    .reduce((sum, p) => sum + (p.paidAmount || 0), 0)
+  const totalPending = payments
+    .filter(p => p.status === 'pending')
+    .reduce((sum, p) => sum + (p.amount || 0), 0)
+  const totalOverdue = payments
+    .filter(p => p.status === 'overdue')
+    .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+  const monthLabels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+  const monthlyCollectionMap: Record<string, number> = {}
+  payments.filter(p => p.status === 'paid').forEach(p => {
+    const d = new Date(p.dueDate)
+    const key = monthLabels[d.getMonth()]
+    monthlyCollectionMap[key] = (monthlyCollectionMap[key] || 0) + (p.paidAmount || 0)
+  })
+  const monthlyCollection = Object.entries(monthlyCollectionMap).map(([month, amount]) => ({ month, amount }))
+
+  const sortedPayments = [...payments].sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || ''))
+  const recentPayments = sortedPayments.slice(0, 10).map(p => ({
+    ...p,
+    student: students.find(s => s.id === p.studentId)
+  }))
+  const overduePayments = payments
+    .filter(p => p.status === 'overdue')
+    .map(p => ({
+      ...p,
+      student: students.find(s => s.id === p.studentId)
+    }))
+
+  return {
+    summary: {
+      totalCollected,
+      totalPending,
+      totalOverdue,
+      studentCount: students.length,
+      monthlyCollection
+    },
+    recentPayments,
+    overduePayments
+  }
 }
 
 export function FinanceDashboardPage() {
   const navigate = useNavigate()
-  const { data, isLoading } = useQuery({
+  const { data: dashboard, isLoading } = useQuery({
     queryKey: ['finance-dashboard'],
     queryFn: fetchDashboard
   })
-
-  const dashboard = data?.data
 
   if (isLoading) {
     return (

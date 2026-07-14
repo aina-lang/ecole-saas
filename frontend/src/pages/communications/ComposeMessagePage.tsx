@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { Cross2Icon } from '@radix-ui/react-icons'
 import { Send } from 'lucide-react'
 import client from '@/api/client'
+import { queryEntities, saveEntity } from '@/lib/db/offline'
 import type { User, ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,22 +43,24 @@ const composeSchema = z.object({
 
 type ComposeValues = z.infer<typeof composeSchema>
 
-function searchUsers(query: string): Promise<ApiResponse<PaginatedResponse<User>>> {
-  return client.get('/users/search', { params: { q: query } }).then((r) => r.data)
+function searchUsers(query: string): Promise<User[]> {
+  return queryEntities('User').then((users) => {
+    const q = query.toLowerCase()
+    return (users ?? []).filter(
+      (u) => (u.firstName || '').toLowerCase().includes(q) || (u.lastName || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)
+    )
+  })
 }
 
 function sendMessage(data: ComposeValues & { attachments: File[] }) {
-  const formData = new FormData()
-  formData.append('subject', data.subject)
-  formData.append('body', data.body)
-  formData.append('priority', data.priority)
-  data.recipients.forEach((r) => formData.append('recipients[]', r))
-  data.attachments.forEach((f) => formData.append('attachments', f))
-  return client
-    .post('/messages', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-    .then((r) => r.data)
+  return saveEntity('Message', {
+    id: crypto.randomUUID(),
+    subject: data.subject,
+    body: data.body,
+    recipients: data.recipients,
+    isRead: false,
+    isArchived: false,
+  })
 }
 
 export function ComposeMessagePage() {
@@ -94,7 +97,7 @@ export function ComposeMessagePage() {
   })
 
   const recipients = form.watch('recipients')
-  const users = usersData?.data?.data ?? []
+  const users = usersData ?? []
 
   const addRecipient = useCallback(
     (userId: string) => {

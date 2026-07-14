@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import client from '@/api/client'
+import { useLocalQuery } from '@/lib/db/hooks'
 import type { Class } from '@/types'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,13 +10,7 @@ import { PlusIcon, PersonIcon, ReaderIcon } from '@radix-ui/react-icons'
 export function ClassListPage() {
   const navigate = useNavigate()
 
-  const { data: classes, isLoading } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const { data } = await client.get('/classes')
-      return (data.data ?? data) as Class[]
-    }
-  })
+  const { data: classes, loading: isLoading } = useLocalQuery<Class>('Class')
 
   return (
     <div className="space-y-6">
