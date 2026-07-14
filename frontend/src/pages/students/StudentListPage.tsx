@@ -8,40 +8,13 @@ import type { Student, PaginatedResponse } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { StudentPhoto } from '@/components/ui/student-photo'
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from '@/components/ui/alert-dialog'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious
-} from '@/components/ui/pagination'
-import { PlusIcon, MagnifyingGlassIcon, Pencil2Icon, TrashIcon } from '@radix-ui/react-icons'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
+import { PlusIcon, Pencil2Icon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
 
 const statusLabels: Record<
   string,
@@ -179,150 +152,125 @@ export function StudentListPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Photo</TableHead>
-                <TableHead>Matricule</TableHead>
-                <TableHead>Nom</TableHead>
-                <TableHead>Prénom</TableHead>
-                <TableHead>Classe</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
-              ) : !studentsData?.data.length ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                    Aucun élève trouvé
-                  </TableCell>
-                </TableRow>
-              ) : (
-                studentsData.data.map((student) => {
-                  const status = statusLabels[student.status] || statusLabels.active
-                  return (
-                    <TableRow
-                      key={student.id}
-                      className="cursor-pointer"
-                      onClick={() => navigate(`/students/${student.id}`)}
-                    >
-                      <TableCell>
-                        <StudentPhoto
-                          src={student.photoUrl}
-                          alt={student.firstName}
-                          initials={getInitials(student.firstName, student.lastName)}
-                          className="h-12 w-12"
-                          entityId={student.id}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{student.registrationNumber}</TableCell>
-                      <TableCell>{student.lastName}</TableCell>
-                      <TableCell>{student.firstName}</TableCell>
-                      <TableCell>
-                        {classes?.find((c) => c.id === student.classId)?.name || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={status.variant}>{status.label}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div
-                          className="flex justify-end gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/students/${student.id}/edit`)}
-                          >
-                            <Pencil2Icon className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog
-                            open={deleteId === student.id}
-                            onOpenChange={(open) => !open && setDeleteId(null)}
-                          >
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setDeleteId(student.id)}
-                              >
-                                <TrashIcon className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Supprimer l'élève</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Êtes-vous sûr de vouloir supprimer {student.firstName}{' '}
-                                  {student.lastName} ? Cette action est irréversible.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => setDeleteId(null)}>
-                                  Annuler
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteMutation.mutate(student.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Supprimer
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
+          <DataTable
+            columns={[
+              {
+                key: 'photo',
+                label: 'Photo',
+                render: (student) => (
+                  <StudentPhoto
+                    src={(student as any).photoUrl}
+                    alt={(student as any).firstName}
+                    initials={getInitials((student as any).firstName, (student as any).lastName)}
+                    className="h-12 w-12"
+                    entityId={(student as any).id}
+                  />
+                ),
+              },
+              {
+                key: 'registrationNumber',
+                label: 'Matricule',
+                sortable: true,
+                className: 'font-medium',
+              },
+              {
+                key: 'lastName',
+                label: 'Nom',
+                sortable: true,
+              },
+              {
+                key: 'firstName',
+                label: 'Prénom',
+                sortable: true,
+              },
+              {
+                key: 'class',
+                label: 'Classe',
+                render: (student) => {
+                  const s = student as any
+                  return classes?.find((c) => c.id === s.classId)?.name || '-'
+                },
+              },
+              {
+                key: 'status',
+                label: 'Statut',
+                render: (student) => {
+                  const s = student as any
+                  const status = statusLabels[s.status] || statusLabels.active
+                  return <Badge variant={status.variant}>{status.label}</Badge>
+                },
+              },
+            ]}
+            data={studentsData?.data ?? []}
+            total={studentsData?.total ?? 0}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            onSortChange={(key, direction) => {
+              // Sorting is handled server-side via query key change
+            }}
+            filters={{
+              search,
+              classId: classFilter === 'all' ? '' : classFilter,
+              status: statusFilter === 'all' ? '' : statusFilter,
+            }}
+            onFilterChange={(key, value) => {
+              if (key === 'search') setSearch(value)
+              else if (key === 'classId') setClassFilter(value || 'all')
+              else if (key === 'status') setStatusFilter(value || 'all')
+              setPage(1)
+            }}
+            onRowClick={(student) => navigate(`/students/${(student as any).id}`)}
+            onBulkDelete={(ids) => {
+              // Bulk delete implementation
+              Promise.all(ids.map(id => deleteEntity('Student', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['students'] })
+                  toast.success(`${ids.length} élève(s) supprimé(s)`)
                 })
-              )}
-            </TableBody>
-          </Table>
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
+            getRowId={(student) => (student as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucun élève trouvé"
+            bulkDeleteLabel="élève(s)"
+            renderRowActions={(student) => {
+              const s = student as any
+              return (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/students/${s.id}/edit`)
+                    }}
+                  >
+                    <Pencil2Icon className="h-4 w-4" />
+                  </Button>
+                  <ConfirmDialog
+                    open={deleteId === s.id}
+                    onOpenChange={(open) => !open && setDeleteId(null)}
+                    onConfirm={() => deleteMutation.mutate(s.id)}
+                    title="Supprimer l'élève"
+                    description={`Êtes-vous sûr de vouloir supprimer ${s.firstName} ${s.lastName} ? Cette action est irréversible.`}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteId(s.id)
+                    }}
+                  >
+                    <TrashIcon className="h-4 w-4 text-destructive" />
+                  </Button>
+                </>
+              )
+            }}
+          />
         </CardContent>
       </Card>
-
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-              />
-            </PaginationItem>
-            {getPageNumbers().map((p, i) =>
-              p === 'ellipsis' ? (
-                <PaginationItem key={`ellipsis-${i}`}>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              ) : (
-                <PaginationItem key={p}>
-                  <PaginationLink
-                    isActive={page === p}
-                    onClick={() => setPage(p)}
-                    className="cursor-pointer"
-                  >
-                    {p}
-                  </PaginationLink>
-                </PaginationItem>
-              )
-            )}
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
     </div>
   )
 }

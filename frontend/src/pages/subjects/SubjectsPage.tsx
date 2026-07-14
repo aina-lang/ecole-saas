@@ -8,14 +8,6 @@ import { useLocalQuery } from '@/lib/db/hooks'
 import { saveEntity, deleteEntity } from '@/lib/db/offline'
 import { LEVELS } from '@/lib/levels'
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,11 +22,8 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import {
-  TrashIcon,PlusIcon,
-  Pencil2Icon,
-  ReloadIcon
-} from '@radix-ui/react-icons'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
+import { TrashIcon, PlusIcon, Pencil2Icon } from '@radix-ui/react-icons'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 
 interface Subject {
@@ -253,71 +242,69 @@ export function SubjectsPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Niveau</TableHead>
-                <TableHead>Coefficient</TableHead>
-                <TableHead>Classe</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
-              ) : !subjects?.length ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    Aucune matière
-                  </TableCell>
-                </TableRow>
-              ) : (
-                subjects.map((subject) => (
-                  <TableRow key={subject.id}>
-                    <TableCell className="font-medium">{subject.name}</TableCell>
-                    <TableCell>{subject.code || '-'}</TableCell>
-                    <TableCell>{subject.level || '-'}</TableCell>
-                    <TableCell>{subject.coefficient}</TableCell>
-                    <TableCell>{subject.class?.name || 'Générale'}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(subject)}>
-                          <Pencil2Icon className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(subject)}
-                        >
-                          <Pencil2Icon className="h-4 w-4" />
-                        </Button>
-                        <ConfirmDialog
-                          open={deleteId === subject.id}
-                          onOpenChange={(open) => !open && setDeleteId(null)}
-                          onConfirm={() => deleteMutation.mutate(subject.id)}
-                          title="Supprimer la matière"
-                          description={`Êtes-vous sûr de vouloir supprimer la matière "${subject.name}" ? Cette action est irréversible.`}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteId(subject.id)}
-                        >
-                          <TrashIcon className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            columns={[
+              {
+                key: 'name',
+                label: 'Nom',
+                sortable: true,
+                className: 'font-medium',
+              },
+              {
+                key: 'code',
+                label: 'Code',
+                render: (subject) => (subject as any).code || '-',
+              },
+              {
+                key: 'level',
+                label: 'Niveau',
+                render: (subject) => (subject as any).level || '-',
+              },
+              {
+                key: 'coefficient',
+                label: 'Coefficient',
+                sortable: true,
+              },
+              {
+                key: 'class',
+                label: 'Classe',
+                render: (subject) => (subject as any).class?.name || 'Générale',
+              },
+            ]}
+            data={subjects ?? []}
+            total={(subjects ?? []).length}
+            page={1}
+            limit={100}
+            onPageChange={() => {}}
+            getRowId={(subject) => (subject as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucune matière"
+            bulkDeleteLabel="matière(s)"
+            renderRowActions={(subject) => {
+              const s = subject as any
+              return (
+                <>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
+                    <Pencil2Icon className="h-4 w-4" />
+                  </Button>
+                  <ConfirmDialog
+                    open={deleteId === s.id}
+                    onOpenChange={(open) => !open && setDeleteId(null)}
+                    onConfirm={() => deleteMutation.mutate(s.id)}
+                    title="Supprimer la matière"
+                    description={`Êtes-vous sûr de vouloir supprimer la matière "${s.name}" ? Cette action est irréversible.`}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteId(s.id)}
+                  >
+                    <TrashIcon className="h-4 w-4 text-destructive" />
+                  </Button>
+                </>
+              )
+            }}
+          />
         </CardContent>
       </Card>
     </div>

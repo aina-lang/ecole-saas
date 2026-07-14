@@ -139,6 +139,7 @@ function initializeSchema() {
       version INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
       synced INTEGER DEFAULT 0
     );
 
@@ -255,6 +256,7 @@ function initializeSchema() {
       version INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
       synced INTEGER DEFAULT 0
     );
 
@@ -272,6 +274,7 @@ function initializeSchema() {
       version INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
       synced INTEGER DEFAULT 0
     );
 
@@ -589,8 +592,8 @@ const LOCAL_TABLES: Record<string, { table: string; columns: string[]; placehold
   },
   Class: {
     table: 'classes_local',
-    columns: ['id', 'tenant_id', 'name', 'level', 'room', 'capacity'],
-    placeholders: (d) => [d.id, d.tenantId || null, d.name, d.level || null, d.room || null, d.capacity || 30],
+    columns: ['id', 'tenant_id', 'name', 'level', 'room', 'capacity', 'deleted_at'],
+    placeholders: (d) => [d.id, d.tenantId || null, d.name, d.level || null, d.room || null, d.capacity || 30, d.deletedAt || null],
     conflicts: 'id',
   },
   User: {
@@ -631,14 +634,14 @@ const LOCAL_TABLES: Record<string, { table: string; columns: string[]; placehold
   },
   TeacherAttendance: {
     table: 'teacher_attendance_local',
-    columns: ['id', 'tenant_id', 'teacher_id', 'date', 'status', 'justification'],
-    placeholders: (d) => [d.id, d.tenantId || null, d.teacherId, d.date, d.status || 'PRESENT', d.justification || null],
+    columns: ['id', 'tenant_id', 'teacher_id', 'date', 'status', 'justification', 'deleted_at'],
+    placeholders: (d) => [d.id, d.tenantId || null, d.teacherId, d.date, d.status || 'PRESENT', d.justification || null, d.deletedAt || null],
     conflicts: 'id',
   },
   TeacherPayment: {
     table: 'teacher_payments_local',
-    columns: ['id', 'tenant_id', 'teacher_id', 'amount', 'payment_date', 'payment_method', 'month', 'year', 'status', 'notes'],
-    placeholders: (d) => [d.id, d.tenantId || null, d.teacherId, d.amount || 0, d.paymentDate || null, d.paymentMethod || null, d.month || null, d.year || null, d.status || 'PENDING', d.notes || null],
+    columns: ['id', 'tenant_id', 'teacher_id', 'amount', 'payment_date', 'payment_method', 'month', 'year', 'status', 'notes', 'deleted_at'],
+    placeholders: (d) => [d.id, d.tenantId || null, d.teacherId, d.amount || 0, d.paymentDate || null, d.paymentMethod || null, d.month || null, d.year || null, d.status || 'PENDING', d.notes || null, d.deletedAt || null],
     conflicts: 'id',
   },
   TeacherContract: {
@@ -697,18 +700,45 @@ export function queryEntities(entityType: string, filters?: Record<string, any>)
 
   let sql = `SELECT * FROM ${config.table} WHERE deleted_at IS NULL`
   const params: any[] = []
+  let limit: number | null = null
+  let offset: number | null = null
 
   if (filters) {
     for (const [key, value] of Object.entries(filters)) {
-      if (value !== undefined && value !== null) {
-        const col = key.replace(/([A-Z])/g, '_$1').toLowerCase()
-        sql += ` AND ${col} = ?`
-        params.push(value)
+      if (value === undefined || value === null) continue
+      if (key === 'limit') {
+        limit = value
+        continue
       }
+      if (key === 'offset') {
+        offset = value
+        continue
+      }
+      if (key === 'page' || key === 'pageSize') {
+        continue
+      }
+      if (key === 'search') {
+        sql += ` AND (first_name LIKE ? OR last_name LIKE ?)`
+        const s = `%${value}%`
+        params.push(s, s)
+        continue
+      }
+      const col = key.replace(/([A-Z])/g, '_$1').toLowerCase()
+      sql += ` AND ${col} = ?`
+      params.push(value)
     }
   }
 
   sql += ' ORDER BY created_at DESC'
+  if (limit !== null) {
+    sql += ' LIMIT ?'
+    params.push(limit)
+  }
+  if (offset !== null) {
+    sql += ' OFFSET ?'
+    params.push(offset)
+  }
+
   const stmt = db.exec(sql, params)
   return parseResults(stmt).map(snakeToCamel)
 }

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ArrowUpDown, Edit, Trash2, Plus, Search } from 'lucide-react'
+import { Edit, Trash2, Plus } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { deleteEntity, queryEntities } from '@/lib/db/offline'
@@ -15,26 +15,10 @@ import { formatSubjectLabel } from '@/lib/subject'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious
-} from '@/components/ui/pagination'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -269,138 +253,157 @@ export function GradeListPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortHeader column="student">Élève</SortHeader>
-                <SortHeader column="subject">Matière</SortHeader>
-                <SortHeader column="value">Note</SortHeader>
-                <TableHead>/ Max</TableHead>
-                <SortHeader column="coefficient">Coefficient</SortHeader>
-                <SortHeader column="evaluationType">Type</SortHeader>
-                <SortHeader column="createdAt">Date</SortHeader>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
-              ) : grades.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                    Aucune note trouvée.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                grades.map((grade) => (
-                  <TableRow key={grade.id}>
-                    <TableCell className="font-medium">
-                      {grade.student
-                        ? `${grade.student.lastName} ${grade.student.firstName}`
-                        : grade.studentId}
-                    </TableCell>
-                    <TableCell>{grade.subject ? formatSubjectLabel(grade.subject) : grade.subjectId}</TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          'font-semibold',
-                          grade.value >= grade.maxValue * 0.8
-                            ? 'text-green-600'
-                            : grade.value >= grade.maxValue * 0.5
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                        )}
-                      >
-                        {grade.value}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{grade.maxValue}</TableCell>
-                    <TableCell>{grade.coefficient}</TableCell>
-                    <TableCell>
-                      <Badge variant={evaluationTypeVariants[grade.evaluationType] ?? 'outline'}>
-                        {evaluationTypeLabels[grade.evaluationType] ?? grade.evaluationType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {grade.createdAt
-                        ? format(new Date(grade.createdAt), 'dd MMM yyyy', { locale: fr })
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link to={`/grades/entry?edit=${grade.id}`}>
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <AlertDialog
-                          open={deleteId === grade.id}
-                          onOpenChange={(open) => {
-                            if (!open) setDeleteId(null)
-                          }}
-                        >
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() => setDeleteId(grade.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Êtes-vous sûr de vouloir supprimer cette note ? Cette action est
-                                irréversible.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteMutation.mutate(grade.id)}
-                                className="bg-destructive text-destructive-foreground"
-                              >
-                                Supprimer
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            columns={[
+              {
+                key: 'student',
+                label: 'Élève',
+                sortable: true,
+                render: (grade) => {
+                  const g = grade as GradeWithDetails
+                  return g.student ? `${g.student.lastName} ${g.student.firstName}` : g.studentId
+                },
+              },
+              {
+                key: 'subject',
+                label: 'Matière',
+                sortable: true,
+                render: (grade) => {
+                  const g = grade as GradeWithDetails
+                  return g.subject ? formatSubjectLabel(g.subject) : g.subjectId
+                },
+              },
+              {
+                key: 'value',
+                label: 'Note',
+                sortable: true,
+                render: (grade) => {
+                  const g = grade as GradeWithDetails
+                  return (
+                    <span
+                      className={cn(
+                        'font-semibold',
+                        g.value >= g.maxValue * 0.8
+                          ? 'text-green-600'
+                          : g.value >= g.maxValue * 0.5
+                            ? 'text-yellow-600'
+                            : 'text-red-600'
+                      )}
+                    >
+                      {g.value}
+                    </span>
+                  )
+                },
+              },
+              {
+                key: 'maxValue',
+                label: '/ Max',
+                render: (grade) => (grade as GradeWithDetails).maxValue,
+              },
+              {
+                key: 'coefficient',
+                label: 'Coefficient',
+                sortable: true,
+                render: (grade) => (grade as GradeWithDetails).coefficient,
+              },
+              {
+                key: 'evaluationType',
+                label: 'Type',
+                sortable: true,
+                render: (grade) => {
+                  const g = grade as GradeWithDetails
+                  return (
+                    <Badge variant={evaluationTypeVariants[g.evaluationType] ?? 'outline'}>
+                      {evaluationTypeLabels[g.evaluationType] ?? g.evaluationType}
+                    </Badge>
+                  )
+                },
+              },
+              {
+                key: 'createdAt',
+                label: 'Date',
+                sortable: true,
+                render: (grade) => {
+                  const g = grade as GradeWithDetails
+                  return g.createdAt
+                    ? format(new Date(g.createdAt), 'dd MMM yyyy', { locale: fr })
+                    : '-'
+                },
+              },
+            ]}
+            data={grades}
+            total={total}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            onSortChange={(key, direction) => {
+              setSortBy(key)
+              setSortOrder(direction)
+            }}
+            sortKey={sortBy}
+            sortDirection={sortOrder}
+            filters={{
+              classId,
+              subjectId,
+              semester,
+            }}
+            onFilterChange={(key, value) => {
+              if (key === 'classId') setClassId(value)
+              else if (key === 'subjectId') setSubjectId(value)
+              else if (key === 'semester') setSemester(value)
+              setPage(1)
+            }}
+            onRowClick={(grade) => {
+              const g = grade as GradeWithDetails
+              if (g.id) window.location.href = `/grades/entry?edit=${g.id}`
+            }}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map(id => deleteEntity('Grade', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['grades'] })
+                  toast.success(`${ids.length} note(s) supprimée(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
+            getRowId={(grade) => (grade as GradeWithDetails).id}
+            isLoading={isLoading}
+            emptyMessage="Aucune note trouvée."
+            bulkDeleteLabel="note(s)"
+            renderRowActions={(grade) => {
+              const g = grade as GradeWithDetails
+              return (
+                <>
+                  <Button variant="ghost" size="icon" asChild>
+                    <Link to={`/grades/entry?edit=${g.id}`}>
+                      <Edit className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <ConfirmDialog
+                    open={deleteId === g.id}
+                    onOpenChange={(open) => {
+                      if (!open) setDeleteId(null)
+                    }}
+                    onConfirm={() => deleteMutation.mutate(g.id)}
+                    title="Confirmer la suppression"
+                    description="Êtes-vous sûr de vouloir supprimer cette note ? Cette action est irréversible."
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteId(g.id)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )
+            }}
+          />
         </CardContent>
       </Card>
-
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className={page <= 1 ? 'pointer-events-none opacity-50' : ''}
-              />
-            </PaginationItem>
-            {renderPageButtons()}
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className={page >= totalPages ? 'pointer-events-none opacity-50' : ''}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
     </div>
   )
 }

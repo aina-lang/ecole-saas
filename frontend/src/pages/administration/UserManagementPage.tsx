@@ -8,37 +8,16 @@ import client from '@/api/client'
 import { saveEntity, queryEntities } from '@/lib/db/offline'
 import type { User, PaginatedResponse } from '@/types'
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import { getInitials } from '@/lib/utils'
 import { getPhotoUrl } from '@/api/client'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious
-} from '@/components/ui/pagination'
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -186,123 +165,122 @@ export function UserManagementPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Photo</TableHead>
-                <TableHead>Nom</TableHead>
-                <TableHead>Prénom</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Téléphone</TableHead>
-                <TableHead>Rôle</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Dernière connexion</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
-              ) : !usersData?.data.length ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    Aucun utilisateur trouvé
-                  </TableCell>
-                </TableRow>
-              ) : (
-                usersData.data.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={getPhotoUrl(user.photoUrl)} alt={user.firstName} />
-                        <AvatarFallback>{getInitials(user.firstName, user.lastName)}</AvatarFallback>
-                      </Avatar>
-                    </TableCell>
-                    <TableCell className="font-medium">{user.lastName}</TableCell>
-                    <TableCell>{user.firstName}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {user.phones?.map((p) => p.value).join(', ') || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={roleColors[user.role] || ''} variant="secondary">
-                        {user.role === 'ADMIN' && 'Admin'}
-                        {user.role === 'TEACHER' && 'Enseignant'}
-                        {user.role === 'SECRETARY' && 'Secrétaire'}
-                        {user.role === 'PARENT' && 'Parent'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
-                        <span className="text-sm">{user.isActive ? 'Actif' : 'Inactif'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {user.lastLoginAt
-                        ? format(new Date(user.lastLoginAt), 'dd/MM/yyyy HH:mm', { locale: fr })
-                        : 'Jamais'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => navigate(`/administration/users/${user.id}/edit`)}>
-                          <Pencil2Icon className="h-4 w-4" />
-                        </Button>
-                        <Switch
-                          checked={user.isActive}
-                          onCheckedChange={() =>
-                            toggleActiveMutation.mutate({ id: user.id, isActive: user.isActive })
-                          }
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            columns={[
+              {
+                key: 'photo',
+                label: 'Photo',
+                render: (user) => (
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={getPhotoUrl((user as any).photoUrl)} alt={(user as any).firstName} />
+                    <AvatarFallback>{getInitials((user as any).firstName, (user as any).lastName)}</AvatarFallback>
+                  </Avatar>
+                ),
+              },
+              {
+                key: 'lastName',
+                label: 'Nom',
+                sortable: true,
+                className: 'font-medium',
+              },
+              {
+                key: 'firstName',
+                label: 'Prénom',
+                sortable: true,
+              },
+              {
+                key: 'email',
+                label: 'Email',
+                sortable: true,
+              },
+              {
+                key: 'phones',
+                label: 'Téléphone',
+                render: (user) => (user as any).phones?.map((p: any) => p.value).join(', ') || '-',
+              },
+              {
+                key: 'role',
+                label: 'Rôle',
+                render: (user) => {
+                  const u = user as any
+                  return (
+                    <Badge className={roleColors[u.role] || ''} variant="secondary">
+                      {u.role === 'ADMIN' && 'Admin'}
+                      {u.role === 'TEACHER' && 'Enseignant'}
+                      {u.role === 'SECRETARY' && 'Secrétaire'}
+                      {u.role === 'PARENT' && 'Parent'}
+                    </Badge>
+                  )
+                },
+              },
+              {
+                key: 'isActive',
+                label: 'Statut',
+                render: (user) => {
+                  const u = user as any
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${u.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-sm">{u.isActive ? 'Actif' : 'Inactif'}</span>
+                    </div>
+                  )
+                },
+              },
+              {
+                key: 'lastLoginAt',
+                label: 'Dernière connexion',
+                render: (user) => {
+                  const u = user as any
+                  return u.lastLoginAt
+                    ? format(new Date(u.lastLoginAt), 'dd/MM/yyyy HH:mm', { locale: fr })
+                    : 'Jamais'
+                },
+              },
+            ]}
+            data={usersData?.data ?? []}
+            total={usersData?.total ?? 0}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            filters={{
+              search,
+              role: roleFilter === 'all' ? '' : roleFilter,
+            }}
+            onFilterChange={(key, value) => {
+              if (key === 'search') setSearch(value)
+              else if (key === 'role') setRoleFilter(value || 'all')
+              setPage(1)
+            }}
+            onRowClick={(user) => setSelectedUser(user as UserWithMeta)}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map(id => saveEntity('User', { id, isActive: false })))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+                  toast.success(`${ids.length} utilisateur(s) désactivé(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
+            getRowId={(user) => (user as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucun utilisateur trouvé"
+            bulkDeleteLabel="utilisateur(s)"
+            renderRowActions={(user) => {
+              const u = user as any
+              return (
+                <>
+                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); navigate(`/administration/users/${u.id}/edit`) }}>
+                    <Pencil2Icon className="h-4 w-4" />
+                  </Button>
+                  <Switch
+                    checked={u.isActive}
+                    onCheckedChange={() => toggleActiveMutation.mutate({ id: u.id, isActive: u.isActive })}
+                  />
+                </>
+              )
+            }}
+          />
         </CardContent>
       </Card>
-
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-              />
-            </PaginationItem>
-            {getPageNumbers().map((p, i) =>
-              p === 'ellipsis' ? (
-                <PaginationItem key={`ellipsis-${i}`}>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              ) : (
-                <PaginationItem key={p}>
-                  <PaginationLink
-                    isActive={page === p}
-                    onClick={() => setPage(p)}
-                    className="cursor-pointer"
-                  >
-                    {p}
-                  </PaginationLink>
-                </PaginationItem>
-              )
-            )}
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
 
       {selectedUser && (
         <Card>
