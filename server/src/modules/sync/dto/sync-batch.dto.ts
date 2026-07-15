@@ -1,79 +1,9 @@
-import { IsString, IsEnum, IsObject, IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsEnum, IsOptional, IsObject } from 'class-validator';
 
 export enum SyncOperation {
   CREATE = 'CREATE',
   UPDATE = 'UPDATE',
   DELETE = 'DELETE',
-}
-
-export class SyncEntryDto {
-  @IsString()
-  localId: string;
-
-  @IsString()
-  entityType: string;
-
-  @IsString()
-  entityId: string;
-
-  @IsEnum(SyncOperation)
-  operation: SyncOperation;
-
-  @IsObject()
-  payload: Record<string, any>;
-
-  @IsNumber()
-  version: number;
-
-  @IsString()
-  deviceId: string;
-
-  @IsOptional()
-  @IsString()
-  clientTimestamp?: string;
-}
-
-export class SyncBatchDto {
-  @IsString()
-  deviceId: string;
-
-  @IsString()
-  deviceName: string;
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SyncEntryDto)
-  entries: SyncEntryDto[];
-
-  @IsOptional()
-  @IsString()
-  lastSyncTimestamp?: string;
-}
-
-export class SyncResultDto {
-  results: SyncResultEntry[];
-  changes: SyncChange[];
-  serverTimestamp: string;
-}
-
-export class SyncResultEntry {
-  localId: string;
-  serverId: string | null;
-  serverVersion: number | null;
-  status: 'SYNCED' | 'CONFLICT' | 'ERROR';
-  errorMessage?: string;
-  conflictData?: any;
-}
-
-export class SyncChange {
-  entityType: string;
-  entityId: string;
-  operation: SyncOperation;
-  payload: Record<string, any>;
-  serverVersion: number;
-  deviceId: string;
-  updatedAt: string;
 }
 
 export class ResolveConflictDto {

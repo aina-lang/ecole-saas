@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label'
 interface ClassOption {
   id: string
   name: string
+  level: string
 }
 
 interface SubjectOption extends Subject {}
@@ -57,6 +58,11 @@ export function GradeEntryPage() {
 
   const { data: subjects } = useLocalQuery<SubjectOption>('Subject')
 
+  const selectedClass = classes?.find((c) => c.id === classId)
+  const filteredSubjects = (subjects ?? []).filter(
+    (s) => !selectedClass?.level || !s.level || s.level === selectedClass.level
+  )
+
   const { periods, loading: loadingPeriods } = usePeriods()
 
   const selectedSubject = subjects?.find((s) => s.id === subjectId)
@@ -72,6 +78,10 @@ export function GradeEntryPage() {
       setPeriodId(periods[0].value)
     }
   }, [periods, periodId])
+
+  useEffect(() => {
+    setSubjectId('')
+  }, [classId])
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
@@ -176,12 +186,14 @@ export function GradeEntryPage() {
       .map((e) => ({
         studentId: e.studentId,
         subjectId,
+        classId: classId || undefined,
         value: parseFloat(e.value),
         maxValue: parseFloat(maxValue),
         coefficient: parseFloat(coefficient),
-        evaluationType: evaluationType.toUpperCase(),
+        evaluationType: evaluationType,
         periodId: periodId || undefined,
-        comment: e.comment || undefined
+        comment: e.comment || undefined,
+        createdAt: new Date().toISOString()
       }))
 
     try {
@@ -240,7 +252,7 @@ export function GradeEntryPage() {
                 onValueChange={setSubjectId}
                 placeholder="Sélectionner"
                 searchPlaceholder="Rechercher une matière..."
-                options={(subjects ?? []).map((s) => ({ value: s.id, label: formatSubjectLabel(s) }))}
+                options={(filteredSubjects).map((s) => ({ value: s.id, label: formatSubjectLabel(s) }))}
               />
             </div>
             <div className="space-y-1.5">

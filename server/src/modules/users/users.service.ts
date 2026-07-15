@@ -196,7 +196,7 @@ export class UsersService {
     const ext = path.extname(file.originalname) || '.jpg';
     const fileName = `${userId}-${randomUUID()}${ext}`;
     const filePath = path.join(storageBase, fileName);
-    fs.writeFileSync(filePath, file.buffer);
+    fs.writeFileSync(filePath, new Uint8Array(file.buffer));
 
     const photoUrl = `/storage/tenant_${tenantId}/avatars/${fileName}`;
     await this.prisma.user.update({

@@ -15,4 +15,9 @@ export default () => ({
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   },
+  couchdb: {
+    url: process.env.COUCHDB_URL || 'http://localhost:5984',
+    user: process.env.COUCHDB_USER || '',
+    pass: process.env.COUCHDB_PASS || '',
+  },
 });

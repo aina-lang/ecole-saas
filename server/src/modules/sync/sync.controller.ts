@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SyncService } from './sync.service';
-import { SyncBatchDto, ResolveConflictDto } from './dto/sync-batch.dto';
+import { ResolveConflictDto } from './dto/sync-batch.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -11,15 +11,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class SyncController {
   constructor(private syncService: SyncService) {}
 
-  @Post('batch')
-  processBatch(
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser() user: any,
-    @Body() dto: SyncBatchDto,
-  ) {
-    return this.syncService.processBatch(tenantId, user?.id, dto);
-  }
-
   @Post('device')
   registerDevice(
     @CurrentUser('tenantId') tenantId: string,
@@ -28,20 +19,6 @@ export class SyncController {
     @Body('deviceName') deviceName: string,
   ) {
     return this.syncService.registerDevice(tenantId, deviceId, deviceName, user?.id);
-  }
-
-  @Post('poll')
-  pollChanges(
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser() user: any,
-    @Body() body: { deviceId: string; lastSyncTimestamp?: string },
-  ) {
-    return this.syncService.pollChanges(tenantId, body.deviceId, body.lastSyncTimestamp);
-  }
-
-  @Get('snapshot')
-  getSnapshot(@CurrentUser('tenantId') tenantId: string) {
-    return this.syncService.getSnapshot(tenantId);
   }
 
   @Post('conflicts/:id/resolve')

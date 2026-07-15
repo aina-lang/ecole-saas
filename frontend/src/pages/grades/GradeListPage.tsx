@@ -7,7 +7,7 @@ import { fr } from 'date-fns/locale'
 import { Edit, Trash2, Plus, RotateCw } from 'lucide-react'
 
 import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
-import { deleteEntity, queryEntities } from '@/lib/db/pouchdb-compat'
+import { deleteEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
 import type { Grade, PaginatedResponse, Subject } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatSubjectLabel } from '@/lib/subject'
@@ -101,8 +101,11 @@ export function GradeListPage() {
       if (classId) params.classId = classId
       if (subjectId) params.subjectId = subjectId
       if (periodId) params.periodId = periodId
-      const result = await queryEntities<GradeWithDetails>('Grade', params)
-      return { data: result, total: result.length } as PaginatedResponse<GradeWithDetails>
+      const [result, total] = await Promise.all([
+        queryEntities<GradeWithDetails>('Grade', params),
+        countEntities('Grade', params)
+      ])
+      return { data: result, total } as PaginatedResponse<GradeWithDetails>
     }
   })
 

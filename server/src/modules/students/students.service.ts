@@ -25,7 +25,7 @@ export class StudentsService {
     const ext = path.extname(file.originalname) || '.bin';
     const fileName = `${prefix || randomUUID()}${ext}`;
     const filePath = path.join(dir, fileName);
-    fs.writeFileSync(filePath, file.buffer);
+    fs.writeFileSync(filePath, new Uint8Array(file.buffer));
     return `/storage/tenant_${tenantId}/${category}/${fileName}`;
   }
 

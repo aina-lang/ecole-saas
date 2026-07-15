@@ -29,7 +29,7 @@ export class UploadService {
     const fileName = `${uuid}-${file.originalname}`;
     const filePath = path.join(categoryDir, fileName);
 
-    fs.writeFileSync(filePath, file.buffer);
+    fs.writeFileSync(filePath, new Uint8Array(file.buffer));
 
     const document = await this.prisma.document.create({
       data: {

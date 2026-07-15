@@ -20,7 +20,7 @@ export class BulletinsService {
     const dir = this.getStoragePath(tenantId, category);
     fs.mkdirSync(dir, { recursive: true });
     const filePath = path.join(dir, fileName);
-    fs.writeFileSync(filePath, buffer);
+    fs.writeFileSync(filePath, new Uint8Array(buffer));
     return `/storage/tenant_${tenantId}/${category}/${fileName}`;
   }
 
@@ -118,7 +118,7 @@ export class BulletinsService {
     doc.on('data', (chunk) => chunks.push(chunk));
     
     return new Promise((resolve, reject) => {
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => resolve(Buffer.concat(chunks as any)));
       doc.on('error', reject);
 
       const schoolName = settings?.schoolName || 'École';

@@ -6,7 +6,6 @@ import {
   createDatabase,
   type EntityType,
 } from './pouchdb'
-import { enqueueOperation } from './sync-engine'
 
 export async function queryEntities<T = any>(entityType: EntityType, filters?: Record<string, any>): Promise<T[]> {
   let results = await getAllDocuments(entityType)
@@ -31,7 +30,7 @@ export async function queryEntities<T = any>(entityType: EntityType, filters?: R
       if (key === 'page' || key === 'pageSize') continue
 
       if (key === 'sortBy' || key === 'sort_by' || key === 'sort') {
-        const sortKey = key
+        const sortKey = (filters as any).sortBy || (filters as any).sort_by || (filters as any).sort
         const dir = (filters as any).sortDirection === 'asc' ? 1 : -1
         results = [...results].sort((a: any, b: any) => {
           const aVal = a[sortKey]
@@ -43,7 +42,7 @@ export async function queryEntities<T = any>(entityType: EntityType, filters?: R
         continue
       }
 
-      if (key === 'sortDirection' || key === 'sort_order' || key === 'direction' || key === 'order') continue
+      if (key === 'sortDirection' || key === 'sortOrder' || key === 'sort_order' || key === 'direction' || key === 'order') continue
 
       if (key === 'search') {
         const term = String(value).toLowerCase()
@@ -86,7 +85,6 @@ export async function saveEntity(entityType: EntityType, data: any): Promise<any
   db.close()
   const doc = { ...data, _id: id }
   if (existingRev) doc._rev = existingRev
-  const isUpdate = !!existingRev
   let response: any
   try {
     response = await putDocument(entityType, doc)
@@ -95,20 +93,10 @@ export async function saveEntity(entityType: EntityType, data: any): Promise<any
     throw err
   }
 
-  await enqueueOperation(
-    entityType,
-    data.id || id,
-    isUpdate ? 'UPDATE' : 'CREATE',
-    data,
-  )
-
   return { ...doc, _rev: response.rev }
 }
 
 export async function deleteEntity(entityType: EntityType, id: string): Promise<boolean> {
   await deleteDocument(entityType, id)
-
-  await enqueueOperation(entityType, id, 'DELETE', {})
-
   return true
 }

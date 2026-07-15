@@ -242,7 +242,16 @@ export function ClassDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Liste des élèves</CardTitle>
-              <Dialog open={addStudentOpen} onOpenChange={setAddStudentOpen}>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate(`/students/new?classId=${id}`)}
+                >
+                  <PlusIcon className="mr-2 h-4 w-4" />
+                  Nouvel élève
+                </Button>
+                <Dialog open={addStudentOpen} onOpenChange={setAddStudentOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm">
                     <PlusIcon className="mr-2 h-4 w-4" />
@@ -274,6 +283,7 @@ export function ClassDetailPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>

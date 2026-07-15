@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -88,6 +88,8 @@ type StudentFormValues = z.infer<typeof studentFormSchema>
 export function StudentFormPage() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const preselectedClassId = searchParams.get('classId')
   const queryClient = useQueryClient()
   const isEditing = !!id
   const [activeTab, setActiveTab] = useState('identite')
@@ -180,7 +182,7 @@ export function StudentFormPage() {
       bloodType: '',
       medicalNotes: '',
       allergies: '',
-      classId: '',
+      classId: preselectedClassId || '',
       enrollmentDate: ''
     }
   })

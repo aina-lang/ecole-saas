@@ -77,6 +77,20 @@ export function ClassListPage() {
                     <span>Enseignants</span>
                   </div>
                 </div>
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/students/new?classId=${cls.id}`)
+                    }}
+                  >
+                    <PlusIcon className="mr-2 h-4 w-4" />
+                    Ajouter un élève
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
