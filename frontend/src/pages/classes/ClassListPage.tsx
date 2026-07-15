@@ -13,6 +13,8 @@ export function ClassListPage() {
 
   const { data: classes, loading: isLoading, refetch } = useLocalQuery<Class>('Class')
 
+  console.log('CLASS_LIST classes', classes)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

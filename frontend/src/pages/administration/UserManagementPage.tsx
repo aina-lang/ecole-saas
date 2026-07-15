@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import client from '@/api/client'
-import { saveEntity, queryEntities, countEntities } from '@/lib/db/offline'
+import { saveEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
 import type { User, PaginatedResponse } from '@/types'
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'

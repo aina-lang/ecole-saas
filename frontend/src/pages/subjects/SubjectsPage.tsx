@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, deleteEntity } from '@/lib/db/offline'
+import { saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
 import { LEVELS } from '@/lib/levels'
 
 import { Card, CardContent } from '@/components/ui/card'

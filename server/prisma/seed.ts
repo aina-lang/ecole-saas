@@ -24,7 +24,6 @@ const PASSWORD_HASH_ROUNDS = 12
 const TENANTS = [
   {
     name: 'Lycée Victor Hugo',
-    subdomain: 'lycee-victor-hugo',
     plan: 'STARTER' as const,
     status: 'ACTIVE' as const,
     maxStudents: 500,
@@ -47,7 +46,6 @@ const TENANTS = [
   },
   {
     name: 'Collège Jean Jaurès',
-    subdomain: 'college-jean-jaures',
     plan: 'PROFESSIONAL' as const,
     status: 'ACTIVE' as const,
     maxStudents: 800,
@@ -70,7 +68,6 @@ const TENANTS = [
   },
   {
     name: 'École Primaire Les Mimosas',
-    subdomain: 'ecole-les-mimosas',
     plan: 'FREE' as const,
     status: 'TRIAL' as const,
     trialEndsAt: new Date('2026-09-30'),
@@ -232,11 +229,14 @@ const DAYS = [1, 2, 3, 4, 5]
 
 async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: number, allTenantResults: any[]) {
   console.log(`\n🏢 Seeding tenant: ${tenantConfig.name}`)
+  const tenantSlug = tenantConfig.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
 
   const tenant = await prisma.tenant.create({
     data: {
       name: tenantConfig.name,
-      subdomain: tenantConfig.subdomain,
       plan: tenantConfig.plan,
       status: tenantConfig.status,
       maxStudents: tenantConfig.maxStudents,
@@ -256,7 +256,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
   const adminUser = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: `admin@${tenantConfig.subdomain}.fr`,
+      email: `admin@${tenantSlug}.fr`,
       passwordHash: adminPasswordHash,
       firstName: tenantConfig.settings.directorName.split(' ').slice(1).join(' ') || 'Admin',
       lastName: tenantConfig.settings.directorName.split(' ')[0] || 'Admin',
@@ -289,7 +289,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
   const secretaryUser = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: `secretariat@${tenantConfig.subdomain}.fr`,
+      email: `secretariat@${tenantSlug}.fr`,
       passwordHash: secretaryPasswordHash,
       firstName: 'Claire',
       lastName: 'Moreau',
@@ -306,7 +306,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
     const user = await prisma.user.create({
       data: {
         tenantId: tenant.id,
-        email: `teacher${i + 1}@${tenantConfig.subdomain}.fr`,
+        email: `teacher${i + 1}@${tenantSlug}.fr`,
         passwordHash: teacherPasswordHash,
         firstName: t.firstName,
         lastName: t.lastName,
@@ -329,7 +329,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
     const user = await prisma.user.create({
       data: {
         tenantId: tenant.id,
-        email: `parent${i + 1}@${tenantConfig.subdomain}.fr`,
+        email: `parent${i + 1}@${tenantSlug}.fr`,
         passwordHash: parentPasswordHash,
         firstName: p.firstName,
         lastName: p.lastName,
@@ -487,7 +487,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
         status: 'ACTIVE',
         classId: cls.id,
         enrollmentDate: new Date('2025-09-01'),
-        registrationNumber: `${tenantConfig.subdomain.toUpperCase().slice(0, 3)}-${new Date().getFullYear()}-${String(i + 1).padStart(5, '0')}`,
+        registrationNumber: `${tenantSlug.toUpperCase().slice(0, 3)}-${new Date().getFullYear()}-${String(i + 1).padStart(5, '0')}`,
         parents: {
           create: [
             { parentId: parent.id, relation: 'MÈRE', isPrimary: true },
@@ -603,7 +603,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
           status: randomFrom<TeacherPaymentStatus>(['PAID', 'PAID', 'PENDING']),
           paidAt: Math.random() > 0.3 ? new Date(2025, 8 + month, 28) : null,
           paymentMethod: 'virement_bancaire',
-          reference: `SAL-${tenantConfig.subdomain.toUpperCase().slice(0, 3)}-${teacher.id.slice(0, 8).toUpperCase()}-${month + 1}`,
+          reference: `SAL-${tenantSlug.toUpperCase().slice(0, 3)}-${teacher.id.slice(0, 8).toUpperCase()}-${month + 1}`,
         },
       })
     }
@@ -689,7 +689,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
           paidAt: paidAmount >= fee.amount ? new Date() : null,
           status: paidAmount >= fee.amount ? 'PAID' : paidAmount > 0 ? 'OVERDUE' : 'PENDING',
           paymentMethod: paidAmount > 0 ? randomFrom(['bank_transfer', 'check', 'cash', 'card']) : undefined,
-          reference: `PAY-${tenantConfig.subdomain.toUpperCase().slice(0, 3)}-${randomUUID().slice(0, 8).toUpperCase()}`,
+          reference: `PAY-${tenantSlug.toUpperCase().slice(0, 3)}-${randomUUID().slice(0, 8).toUpperCase()}`,
           receiptNumber: paidAmount >= fee.amount ? `REC-${String(randomInt(1000, 9999))}` : undefined,
           notes: Math.random() > 0.7 ? 'Paiement effectué en ligne' : undefined,
         },
@@ -838,7 +838,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
   console.log(`   TimetableSlots: ${timetableSlotsCount} | AuditLogs: 20 | SyncDevices: ${createdDevices.length}`)
 
   return {
-    tenant: { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain },
+    tenant: { id: tenant.id, name: tenant.name, slug: tenantSlug },
     users: allUsers,
     classes,
     subjects,
@@ -894,15 +894,15 @@ async function seed() {
   console.log('='.repeat(60))
 
   console.log('\n🔐 Default credentials (all tenants):')
-  console.log('  Admin:      admin@{subdomain}.fr / Admin123!')
+  console.log('  Admin:      admin@{slug}.fr / Admin123!')
   console.log('  SuperAdmin: superadmin@ecole-saas.com / Admin123!')
-  console.log('  Teacher:    teacher{1-10}@{subdomain}.fr / Teacher123!')
-  console.log('  Secretary:  secretariat@{subdomain}.fr / Secretary123!')
-  console.log('  Parent:     parent{1-12}@{subdomain}.fr / Parent123!')
+  console.log('  Teacher:    teacher{1-10}@{slug}.fr / Teacher123!')
+  console.log('  Secretary:  secretariat@{slug}.fr / Secretary123!')
+  console.log('  Parent:     parent{1-12}@{slug}.fr / Parent123!')
 
   console.log('\n📋 Tenant summary:')
   for (const r of results) {
-    console.log(`  • ${r.tenant.name} (${r.tenant.subdomain})`)
+    console.log(`  • ${r.tenant.name} (${r.tenant.slug})`)
   }
 
   await prisma.$disconnect()

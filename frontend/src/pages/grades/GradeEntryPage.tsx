@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Save, ArrowLeft } from 'lucide-react'
 
 import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
-import { saveEntity } from '@/lib/db/offline'
+import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Student, Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
+
 
 interface ClassOption {
   id: string
@@ -47,7 +47,7 @@ export function GradeEntryPage() {
   const [evaluationType, setEvaluationType] = useState<string>('')
   const [maxValue, setMaxValue] = useState<string>('20')
   const [coefficient, setCoefficient] = useState<string>('1')
-  const [semester, setSemester] = useState<string>('1')
+  const [periodId, setPeriodId] = useState<string>('')
   const [entries, setEntries] = useState<StudentGradeEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
 
@@ -57,6 +57,8 @@ export function GradeEntryPage() {
 
   const { data: subjects } = useLocalQuery<SubjectOption>('Subject')
 
+  const { periods, loading: loadingPeriods } = usePeriods()
+
   const selectedSubject = subjects?.find((s) => s.id === subjectId)
 
   useEffect(() => {
@@ -64,6 +66,12 @@ export function GradeEntryPage() {
       setCoefficient(String(selectedSubject.coefficient))
     }
   }, [selectedSubject])
+
+  useEffect(() => {
+    if (periods.length > 0 && !periodId) {
+      setPeriodId(periods[0].value)
+    }
+  }, [periods, periodId])
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
@@ -172,7 +180,7 @@ export function GradeEntryPage() {
         maxValue: parseFloat(maxValue),
         coefficient: parseFloat(coefficient),
         evaluationType: evaluationType.toUpperCase(),
-        semester: parseInt(semester),
+        periodId: periodId || undefined,
         comment: e.comment || undefined
       }))
 
@@ -270,15 +278,13 @@ export function GradeEntryPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Semestre</Label>
+              <Label>Période</Label>
               <Combobox
-                value={semester}
-                onValueChange={setSemester}
+                value={periodId}
+                onValueChange={setPeriodId}
                 placeholder="Sélectionner"
-                options={[
-                  { value: '1', label: 'Semestre 1' },
-                  { value: '2', label: 'Semestre 2' }
-                ]}
+                disabled={loadingPeriods}
+                options={periods.map((p) => ({ value: p.value, label: p.label }))}
               />
             </div>
           </div>

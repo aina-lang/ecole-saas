@@ -6,24 +6,9 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { ReloadIcon, CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { PasswordInput } from '@/components/ui/password-input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DatePicker } from '@/components/ui/date-picker'
 import {
   Form,
   FormControl,
@@ -33,33 +18,22 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  ReloadIcon,
-  CheckCircledIcon,
-  CrossCircledIcon
-} from '@radix-ui/react-icons'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/ui/password-input'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 interface SchoolSettings {
   schoolName: string
-  subdomain: string
   logoUrl: string | null
   primaryColor: string
 }
@@ -102,7 +76,6 @@ const periodSystemLabels: Record<PeriodSystem, string> = {
 
 const generalSchema = z.object({
   schoolName: z.string().min(1, 'Le nom est requis'),
-  subdomain: z.string().min(1, 'Le sous-domaine est requis').regex(/^[a-z0-9-]+$/, 'Caractères autorisés : a-z, 0-9, -'),
   primaryColor: z.string().min(1, 'La couleur est requise')
 })
 
@@ -127,12 +100,13 @@ const securitySchema = z.object({
 
 type SecurityValues = z.infer<typeof securitySchema>
 
-export function SettingsPage() {
+export const SettingsPage = () => {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('general')
   const [savingGeneral, setSavingGeneral] = useState(false)
   const [savingAcademic, setSavingAcademic] = useState(false)
   const [savingSecurity, setSavingSecurity] = useState(false)
+  const [savingPayment, setSavingPayment] = useState(false)
 
   const handleRefresh = () => {
     queryClient.invalidateQueries()
@@ -141,7 +115,7 @@ export function SettingsPage() {
   const { data: schoolData, isLoading: loadingSchool } = useQuery({
     queryKey: ['settings-school'],
     queryFn: async () => {
-      const raw = await window.api.settings.get('school')
+      const raw = await (window as any).api?.settings?.get?.('school')
       return JSON.parse(raw) as SchoolSettings
     }
   })
@@ -149,7 +123,7 @@ export function SettingsPage() {
   const { data: academicData, isLoading: loadingAcademic } = useQuery({
     queryKey: ['settings-academic'],
     queryFn: async () => {
-      const raw = await window.api.settings.get('academic_year')
+      const raw = await (window as any).api?.settings?.get?.('academic_year')
       return JSON.parse(raw) as AcademicYear
     }
   })
@@ -157,7 +131,7 @@ export function SettingsPage() {
   const { data: syncDevices, isLoading: loadingDevices } = useQuery({
     queryKey: ['settings-sync-devices'],
     queryFn: async () => {
-      const devices = await window.api.sync.getDevices() as SyncDevice[]
+      const devices = await (window as any).api?.sync?.getDevices?.() as SyncDevice[]
       return devices
     }
   })
@@ -165,7 +139,7 @@ export function SettingsPage() {
   const { data: syncInfo, isLoading: loadingSyncInfo } = useQuery({
     queryKey: ['settings-sync-info'],
     queryFn: async () => {
-      const info = await window.api.sync.getStatus() as { lastSyncAt: string | null; pendingCount: number; online: boolean }
+      const info = await (window as any).api?.sync?.getStatus?.() as { lastSyncAt: string | null; pendingCount: number; online: boolean }
       return info
     }
   })
@@ -173,7 +147,7 @@ export function SettingsPage() {
   const { data: securityData, isLoading: loadingSecurity } = useQuery({
     queryKey: ['settings-security'],
     queryFn: async () => {
-      const raw = await window.api.settings.get('security')
+      const raw = await (window as any).api?.settings?.get?.('security')
       return JSON.parse(raw) as SecuritySettings
     }
   })
@@ -181,7 +155,7 @@ export function SettingsPage() {
   const { data: periodSystem, isLoading: loadingPeriodSystem } = useQuery({
     queryKey: ['settings-period-system'],
     queryFn: async () => {
-      const raw = await window.api.settings.get('period_system')
+      const raw = await (window as any).api?.settings?.get?.('period_system')
       return (raw || 'TRIMESTER') as PeriodSystem
     }
   })
@@ -189,7 +163,7 @@ export function SettingsPage() {
   const { data: paymentConfig, isLoading: loadingPayment } = useQuery({
     queryKey: ['settings-payment'],
     queryFn: async () => {
-      const raw = await window.api.settings.get('payment_config')
+      const raw = await (window as any).api?.settings?.get?.('payment_config')
       return JSON.parse(raw || '{}') as PaymentConfig
     }
   })
@@ -198,7 +172,7 @@ export function SettingsPage() {
 
   const generalForm = useForm<GeneralValues>({
     resolver: zodResolver(generalSchema),
-    defaultValues: { schoolName: '', subdomain: '', primaryColor: '#2563eb' }
+    defaultValues: { schoolName: '', primaryColor: '#2563eb' }
   })
 
   const academicForm = useForm<AcademicYearValues>({
@@ -215,7 +189,6 @@ export function SettingsPage() {
     if (schoolData) {
       generalForm.reset({
         schoolName: schoolData.schoolName,
-        subdomain: schoolData.subdomain,
         primaryColor: schoolData.primaryColor
       })
     }
@@ -234,7 +207,7 @@ export function SettingsPage() {
   async function handleSaveGeneral(values: GeneralValues) {
     setSavingGeneral(true)
     try {
-      await window.api.settings.set('school', JSON.stringify(values))
+      await (window as any).api?.settings?.set?.('school', JSON.stringify(values))
       queryClient.invalidateQueries({ queryKey: ['settings-school'] })
       toast.success('Paramètres généraux enregistrés')
     } catch {
@@ -244,12 +217,10 @@ export function SettingsPage() {
     }
   }
 
-  const [savingPayment, setSavingPayment] = useState(false)
-
   async function handleSaveAcademic(values: AcademicYearValues) {
     setSavingAcademic(true)
     try {
-      await window.api.settings.set('academic_year', JSON.stringify(values))
+      await (window as any).api?.settings?.set?.('academic_year', JSON.stringify(values))
       queryClient.invalidateQueries({ queryKey: ['settings-academic'] })
       toast.success('Année scolaire mise à jour')
     } catch {
@@ -260,7 +231,7 @@ export function SettingsPage() {
   }
 
   async function handleSavePeriodSystem(system: PeriodSystem) {
-    await window.api.settings.set('period_system', system)
+    await (window as any).api?.settings?.set?.('period_system', system)
     queryClient.invalidateQueries({ queryKey: ['settings-period-system'] })
     toast.success('Système de périodes mis à jour')
   }
@@ -268,9 +239,9 @@ export function SettingsPage() {
   async function handleSavePaymentConfig(values: PaymentConfig) {
     setSavingPayment(true)
     try {
-      await window.api.settings.set('payment_config', JSON.stringify(values))
+      await (window as any).api?.settings?.set?.('payment_config', JSON.stringify(values))
       queryClient.invalidateQueries({ queryKey: ['settings-payment'] })
-      toast.success('Configuration de paiement enregistrée')
+      toast.success('Configuration des paiements enregistrée')
     } catch {
       toast.error('Erreur lors de l\'enregistrement')
     } finally {
@@ -280,7 +251,7 @@ export function SettingsPage() {
 
   async function handleForceSync() {
     try {
-      await window.api.sync.forceSync()
+      await (window as any).api?.sync?.forceSync?.()
       queryClient.invalidateQueries({ queryKey: ['settings-sync-info'] })
       toast.success('Synchronisation lancée')
     } catch {
@@ -290,7 +261,7 @@ export function SettingsPage() {
 
   async function handleToggle2fa(enabled: boolean) {
     try {
-      await window.api.settings.set('security', JSON.stringify({ twoFactorEnabled: enabled }))
+      await (window as any).api?.settings?.set?.('security', JSON.stringify({ twoFactorEnabled: enabled }))
       queryClient.invalidateQueries({ queryKey: ['settings-security'] })
       toast.success(enabled ? '2FA activée' : '2FA désactivée')
     } catch {
@@ -358,23 +329,6 @@ export function SettingsPage() {
                         <FormControl>
                           <Input placeholder="Ex: École Internationale de Paris" {...field} />
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={generalForm.control}
-                    name="subdomain"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sous-domaine</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-1">
-                            <Input placeholder="mon-ecole" className="font-mono" {...field} />
-                            <span className="text-muted-foreground text-sm">.ecole-saas.com</span>
-                          </div>
-                        </FormControl>
-                        <FormDescription>Identifiant unique pour votre établissement</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -517,23 +471,23 @@ export function SettingsPage() {
                 </div>
                 {academicData?.periods?.length ? (
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Période</TableHead>
-                        <TableHead>Début</TableHead>
-                        <TableHead>Fin</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {academicData.periods.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell className="font-medium">{p.name}</TableCell>
-                          <TableCell>{format(new Date(p.startDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                          <TableCell>{format(new Date(p.endDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Période</TableHead>
+                          <TableHead>Début</TableHead>
+                          <TableHead>Fin</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {academicData.periods.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="font-medium">{p.name}</TableCell>
+                            <TableCell>{format(new Date(p.startDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                            <TableCell>{format(new Date(p.endDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                 ) : (
                   <p className="text-sm text-muted-foreground">Aucune période définie</p>
                 )}
@@ -548,23 +502,23 @@ export function SettingsPage() {
                 </div>
                 {academicData?.holidays?.length ? (
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Congé</TableHead>
-                        <TableHead>Début</TableHead>
-                        <TableHead>Fin</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {academicData.holidays.map((h) => (
-                        <TableRow key={h.id}>
-                          <TableCell className="font-medium">{h.name}</TableCell>
-                          <TableCell>{format(new Date(h.startDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                          <TableCell>{format(new Date(h.endDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Congé</TableHead>
+                          <TableHead>Début</TableHead>
+                          <TableHead>Fin</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {academicData.holidays.map((h) => (
+                          <TableRow key={h.id}>
+                            <TableCell className="font-medium">{h.name}</TableCell>
+                            <TableCell>{format(new Date(h.startDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                            <TableCell>{format(new Date(h.endDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                 ) : (
                   <p className="text-sm text-muted-foreground">Aucun congé défini</p>
                 )}
@@ -589,7 +543,7 @@ export function SettingsPage() {
             <CardContent>
               <form id="payment-form" onSubmit={(e) => { e.preventDefault(); handleSavePaymentConfig({ monthlyTuition: Number((e.target as any).monthlyTuition.value) || 0, annualFee: Number((e.target as any).annualFee.value) || 0, dueDay: Number((e.target as any).dueDay.value) || 15 }) }} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="monthlyTuition">Écolage mensuel (XAF)</Label>
+                  <Label htmlFor="monthlyTuition">Écolage mensuel (Ar)</Label>
                   <Input
                     id="monthlyTuition"
                     name="monthlyTuition"
@@ -602,7 +556,7 @@ export function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Montant mensuel par élève</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="annualFee">Frais scolaires annuels (XAF)</Label>
+                  <Label htmlFor="annualFee">Frais scolaires annuels (Ar)</Label>
                   <Input
                     id="annualFee"
                     name="annualFee"
@@ -670,35 +624,35 @@ export function SettingsPage() {
                 </div>
                 {syncDevices?.length ? (
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Appareil</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Dernière synchronisation</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {syncDevices.map((device) => (
-                        <TableRow key={device.id}>
-                          <TableCell className="font-medium">{device.deviceName}</TableCell>
-                          <TableCell className="text-muted-foreground">{device.deviceType}</TableCell>
-                          <TableCell>
-                            {device.isOnline ? (
-                              <span className="flex items-center gap-1 text-green-600"><CheckCircledIcon className="h-4 w-4" /> En ligne</span>
-                            ) : (
-                              <span className="flex items-center gap-1 text-red-600"><CrossCircledIcon className="h-4 w-4" /> Hors ligne</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {device.lastSyncAt
-                              ? format(new Date(device.lastSyncAt), 'dd/MM/yyyy HH:mm', { locale: fr })
-                              : 'Jamais'}
-                          </TableCell>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Appareil</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead>Dernière synchronisation</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {syncDevices.map((device) => (
+                          <TableRow key={device.id}>
+                            <TableCell className="font-medium">{device.deviceName}</TableCell>
+                            <TableCell className="text-muted-foreground">{device.deviceType}</TableCell>
+                            <TableCell>
+                              {device.isOnline ? (
+                                <span className="flex items-center gap-1 text-green-600"><CheckCircledIcon className="h-4 w-4" /> En ligne</span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-red-600"><CrossCircledIcon className="h-4 w-4" /> Hors ligne</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {device.lastSyncAt
+                                ? format(new Date(device.lastSyncAt), 'dd/MM/yyyy HH:mm', { locale: fr })
+                                : 'Jamais'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                 ) : (
                   <p className="text-sm text-muted-foreground">Aucun appareil connecté</p>
                 )}

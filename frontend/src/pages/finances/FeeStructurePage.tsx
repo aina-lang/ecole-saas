@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Pencil1Icon, PlusIcon, CheckCircledIcon, CircleIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
-import { queryEntities, saveEntity } from '@/lib/db/offline'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -187,7 +187,7 @@ export function FeeStructurePage() {
                 fees.map((fee) => (
                   <TableRow key={fee.id}>
                     <TableCell className="font-medium">{fee.label}</TableCell>
-                    <TableCell>{fee.amount.toLocaleString('fr-FR')} XAF</TableCell>
+                    <TableCell>{fee.amount.toLocaleString('fr-FR')} Ar</TableCell>
                     <TableCell>Le {fee.dueDay} de chaque mois</TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {fee.description || '-'}
@@ -243,7 +243,7 @@ export function FeeStructurePage() {
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Montant (XAF)</FormLabel>
+                    <FormLabel>Montant (Ar)</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} />
                     </FormControl>

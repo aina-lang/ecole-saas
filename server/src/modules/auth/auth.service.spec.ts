@@ -57,7 +57,6 @@ describe('AuthService', () => {
   describe('registerTenant', () => {
     const dto = {
       schoolName: 'École Test',
-      subdomain: 'ecole-test',
       adminEmail: 'admin@test.com',
       adminFirstName: 'Jean',
       adminLastName: 'Dupont',
@@ -65,10 +64,9 @@ describe('AuthService', () => {
     };
 
     it('devrait créer un établissement avec succès', async () => {
-      mockPrisma.tenant.findUnique.mockResolvedValue(null);
       mockPrisma.user.findFirst.mockResolvedValue(null);
 
-      const mockTenant = { id: 'tenant-1', name: dto.schoolName, subdomain: dto.subdomain };
+      const mockTenant = { id: 'tenant-1', name: dto.schoolName };
       const mockUser = { id: 'user-1', email: dto.adminEmail };
 
       mockPrisma.$transaction.mockImplementation(async (cb: Function) => {
@@ -85,18 +83,11 @@ describe('AuthService', () => {
       const result = await service.registerTenant(dto);
 
       expect(result).toEqual({ tenantId: 'tenant-1', message: 'Établissement créé avec succès' });
-      expect(mockPrisma.tenant.findUnique).toHaveBeenCalledWith({ where: { subdomain: dto.subdomain } });
       expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({ where: { email: dto.adminEmail } });
       expect(bcrypt.hash).toHaveBeenCalledWith(dto.adminPassword, 12);
     });
 
-    it('devrait lever ConflictException si le sous-domaine existe déjà', async () => {
-      mockPrisma.tenant.findUnique.mockResolvedValue({ id: 'existing' });
-      await expect(service.registerTenant(dto)).rejects.toThrow(ConflictException);
-    });
-
     it('devrait lever ConflictException si l\'email existe déjà', async () => {
-      mockPrisma.tenant.findUnique.mockResolvedValue(null);
       mockPrisma.user.findFirst.mockResolvedValue({ id: 'existing-user' });
       await expect(service.registerTenant(dto)).rejects.toThrow(ConflictException);
     });

@@ -5,7 +5,7 @@ import { fr } from 'date-fns/locale'
 import { CalendarIcon, Check, X, Ban, Users, RotateCw } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities } from '@/lib/db/offline'
+import { queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Student } from '@/types'
 import { cn } from '@/lib/utils'
 

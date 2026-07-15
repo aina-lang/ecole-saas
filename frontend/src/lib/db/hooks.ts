@@ -1,44 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import client, { extractErrorMessage } from '@/api/client'
-import { queryEntities, saveEntity, deleteEntity, getEntityById, type EntityType, staticData, loadStaticData } from './offline'
+import client from '../../api/client'
+import {
+  queryEntities,
+  saveEntity,
+  deleteEntity,
+} from './pouchdb-compat'
+import { offlineSave, offlineDelete } from './offline-queue'
+import type { EntityType } from './pouchdb'
 
-interface QueryResult<T> {
+export interface QueryResult<T> {
   data: T[] | null
   loading: boolean
   error: string | null
   refetch: () => Promise<void>
 }
 
-interface MutationResult<T> {
+export interface MutationResult<T> {
   data: T | null
   loading: boolean
   error: string | null
   mutate: (data: any) => Promise<T | null>
   reset: () => void
-}
-
-export function useSyncInvalidation() {
-  const queryClient = useQueryClient()
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.api?.sync) return
-
-    const unsubscribeProgress = window.api.sync.onProgress((stats: any) => {
-      queryClient.invalidateQueries()
-    })
-
-    const unsubscribeStatus = window.api.sync.onStatusChanged((status: any) => {
-      if (status.isOnline) {
-        queryClient.invalidateQueries()
-      }
-    })
-
-    return () => {
-      unsubscribeProgress?.()
-      unsubscribeStatus?.()
-    }
-  }, [queryClient])
 }
 
 export function useLocalQuery<T = any>(
@@ -61,7 +44,7 @@ export function useLocalQuery<T = any>(
       }
     } catch (err: any) {
       if (mountedRef.current) {
-        setError(extractErrorMessage(err))
+        setError(err.message)
       }
     } finally {
       if (mountedRef.current) {
@@ -73,7 +56,9 @@ export function useLocalQuery<T = any>(
   useEffect(() => {
     mountedRef.current = true
     fetch()
-    return () => { mountedRef.current = false }
+    return () => {
+      mountedRef.current = false
+    }
   }, [fetch, ...deps])
 
   return { data, loading, error, refetch: fetch }
@@ -85,27 +70,30 @@ export function useLocalMutation<T = any>(entityType: EntityType): MutationResul
   const [error, setError] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
-  const mutate = useCallback(async (payload: any): Promise<T | null> => {
-    try {
-      setLoading(true)
-      setError(null)
-      const result = await saveEntity(entityType, payload)
-      if (mountedRef.current) {
-        setData(result as T)
+  const mutate = useCallback(
+    async (payload: any): Promise<T | null> => {
+      try {
+        setLoading(true)
+        setError(null)
+        const result = await offlineSave(entityType, payload)
+        if (mountedRef.current) {
+          setData(result as T)
+        }
+        return result as T
+      } catch (err: any) {
+        const msg = err.message
+        if (mountedRef.current) {
+          setError(msg)
+        }
+        return null
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
+        }
       }
-      return result as T
-    } catch (err: any) {
-      const msg = extractErrorMessage(err)
-      if (mountedRef.current) {
-        setError(msg)
-      }
-      return null
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false)
-      }
-    }
-  }, [entityType])
+    },
+    [entityType],
+  )
 
   const reset = useCallback(() => {
     setData(null)
@@ -114,7 +102,9 @@ export function useLocalMutation<T = any>(entityType: EntityType): MutationResul
 
   useEffect(() => {
     mountedRef.current = true
-    return () => { mountedRef.current = false }
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   return { data, loading, error, mutate, reset }
@@ -124,19 +114,22 @@ export function useLocalDelete(entityType: EntityType) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const remove = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      setLoading(true)
-      setError(null)
-      const ok = await deleteEntity(entityType, id)
-      return ok
-    } catch (err: any) {
-      setError(extractErrorMessage(err))
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }, [entityType])
+  const remove = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        setLoading(true)
+        setError(null)
+        const ok = await offlineDelete(entityType, id)
+        return ok
+      } catch (err: any) {
+        setError(err.message)
+        return false
+      } finally {
+        setLoading(false)
+      }
+    },
+    [entityType],
+  )
 
   return { remove, loading, error }
 }
@@ -149,9 +142,9 @@ export function usePeriods() {
     let cancelled = false
     async function load() {
       try {
-        const rawSystem = await window.api.settings.get('period_system')
+        const rawSystem = await window.api?.settings?.get?.('period_system')
         const system = rawSystem || 'TRIMESTER'
-        const rawAcademic = await window.api.settings.get('academic_year')
+        const rawAcademic = await window.api?.settings?.get?.('academic_year')
         const academic = rawAcademic ? JSON.parse(rawAcademic) : null
 
         if (cancelled) return
@@ -184,23 +177,62 @@ export function usePeriods() {
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return { periods, loading }
 }
 
 export function useStaticData() {
-  const [loading, setLoading] = useState(!staticData.loaded)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!staticData.loaded) {
-      setLoading(true)
-      loadStaticData().finally(() => setLoading(false))
+    let cancelled = false
+    async function load() {
+      try {
+        await Promise.all([
+          queryEntities('Class'),
+          queryEntities('Subject'),
+          queryEntities('Teacher'),
+        ])
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
     }
   }, [])
 
-  return { ...staticData, loading }
+  return { loading }
+}
+
+export function useSyncInvalidation() {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.api?.sync) return
+
+    const unsubscribeProgress = window.api.sync.onProgress((_stats: any) => {
+      queryClient.invalidateQueries()
+    })
+
+    const unsubscribeStatus = window.api.sync.onStatusChanged((status: any) => {
+      if (status.isOnline) {
+        queryClient.invalidateQueries()
+      }
+    })
+
+    return () => {
+      unsubscribeProgress?.()
+      unsubscribeStatus?.()
+    }
+  }, [queryClient])
 }
 
 export async function saveRemoteDirect(entityType: string, data: any): Promise<any> {

@@ -11,14 +11,9 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
@@ -99,7 +94,7 @@ export function AuditLogPage() {
       if (entityFilter !== 'all') filters.entityType = entityFilter
       if (dateFrom) filters.dateFrom = dateFrom
       if (dateTo) filters.dateTo = dateTo
-      const data = await window.api.audit.query(filters) as AuditLog[]
+      const data = await (window as any).api?.audit?.query(filters) as AuditLog[]
       return { data, total: data.length, page, limit }
     }
   })

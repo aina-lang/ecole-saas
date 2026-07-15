@@ -24,7 +24,7 @@ import {
   ReaderIcon,
   CalendarIcon
 } from '@radix-ui/react-icons'
-import { queryEntities } from '@/lib/db/offline'
+import { queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Payment, Student } from '@/types'
 
 interface FinanceSummary {
@@ -135,7 +135,7 @@ export function FinanceDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {summary.totalCollected.toLocaleString('fr-FR')} XAF
+              {summary.totalCollected.toLocaleString('fr-FR')} Ar
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Total des paiements reçus</p>
           </CardContent>
@@ -148,7 +148,7 @@ export function FinanceDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-500">
-              {summary.totalPending.toLocaleString('fr-FR')} XAF
+              {summary.totalPending.toLocaleString('fr-FR')} Ar
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Paiements en attente</p>
           </CardContent>
@@ -161,7 +161,7 @@ export function FinanceDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {summary.totalOverdue.toLocaleString('fr-FR')} XAF
+              {summary.totalOverdue.toLocaleString('fr-FR')} Ar
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Paiements en retard</p>
           </CardContent>
@@ -201,7 +201,7 @@ export function FinanceDashboardPage() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium">{item.month}</span>
                         <span className="text-muted-foreground">
-                          {item.amount.toLocaleString('fr-FR')} XAF
+                          {item.amount.toLocaleString('fr-FR')} Ar
                         </span>
                       </div>
                       <Progress value={percentage} className="h-2" />
@@ -240,7 +240,7 @@ export function FinanceDashboardPage() {
                       <TableCell className="font-medium">
                         {p.student ? `${p.student.firstName} ${p.student.lastName}` : p.studentId}
                       </TableCell>
-                      <TableCell>{p.paidAmount.toLocaleString('fr-FR')} XAF</TableCell>
+                      <TableCell>{p.paidAmount.toLocaleString('fr-FR')} Ar</TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(p.dueDate), 'dd/MM/yyyy', { locale: fr })}
                       </TableCell>
@@ -270,7 +270,7 @@ export function FinanceDashboardPage() {
                   {p.student ? `${p.student.firstName} ${p.student.lastName}` : p.studentId}
                 </AlertTitle>
                 <AlertDescription>
-                  {p.amount.toLocaleString('fr-FR')} XAF - Échu le{' '}
+                  {p.amount.toLocaleString('fr-FR')} Ar - Échu le{' '}
                   {format(new Date(p.dueDate), 'dd/MM/yyyy', { locale: fr })}
                 </AlertDescription>
               </Alert>

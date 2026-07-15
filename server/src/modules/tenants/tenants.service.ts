@@ -11,7 +11,6 @@ export class TenantsService {
       select: {
         id: true,
         name: true,
-        subdomain: true,
         plan: true,
         status: true,
         createdAt: true,

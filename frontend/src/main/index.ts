@@ -3,17 +3,9 @@ import { join, extname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { readFileSync, existsSync } from 'fs'
-import {
-  getDatabase, closeDatabase, getPendingCount, getConflictCount, getDeviceId,
-  addToOutbox, getLocalStudents, saveLocalStudents, saveLocalGrades,
-  saveLocalAttendance, getConflicts, saveFileLocally, getFileUploadCount,
-  getFileUploadByEntity, saveEntity, queryEntities, countEntities, getEntityById,
-  softDeleteEntity, markEntitySynced, getLocalTableConfig,
-  getSetting, setSetting, getAllSettings,
-  saveAuditLog, getAuditLogs,
-  getPendingEntries, getLastSyncTimestamp, setLastSyncTimestamp,
-} from './database'
-import { startSyncScheduler, stopSyncScheduler, performSync, getOnlineStatus, checkAndUpdateConnectivity, setAuthToken, getAuthToken } from './sync-engine'
+import { getSetting, setSetting, getAllSettings } from './settings'
+import { saveFileLocally, getFileUploadCount, getFileUploadByEntity } from './files'
+import { setAuthToken, getAuthToken } from './auth'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -77,97 +69,6 @@ function registerLocalProtocol() {
 }
 
 function setupIPC() {
-  ipcMain.handle('db:get-students', async (_event, filters) => {
-    return getLocalStudents(filters)
-  })
-
-  ipcMain.handle('db:save-students', async (_event, students) => {
-    saveLocalStudents(students)
-    for (const s of students) {
-      addToOutbox('Student', s.id || s.localId, 'CREATE', s)
-    }
-    return { success: true }
-  })
-
-  ipcMain.handle('db:save-grades', async (_event, grades) => {
-    saveLocalGrades(grades)
-    for (const g of grades) {
-      addToOutbox('Grade', g.id || g.localId, 'CREATE', g)
-    }
-    return { success: true }
-  })
-
-  ipcMain.handle('db:save-attendance', async (_event, records) => {
-    saveLocalAttendance(records)
-    for (const r of records) {
-      addToOutbox('Attendance', r.id || r.localId, 'CREATE', r)
-    }
-    return { success: true }
-  })
-
-  ipcMain.handle('sync:status', async () => {
-    return {
-      isOnline: getOnlineStatus(),
-      pendingCount: getPendingCount(),
-      conflictCount: getConflictCount(),
-      deviceId: getDeviceId(),
-    }
-  })
-
-  ipcMain.handle('sync:force', async () => {
-    return performSync()
-  })
-
-  ipcMain.handle('sync:conflicts', async () => {
-    return getConflicts()
-  })
-
-  ipcMain.handle('sync:add-to-outbox', async (_event, entry) => {
-    return addToOutbox(entry.entityType, entry.entityId, entry.operation, entry.payload, entry.version)
-  })
-
-  ipcMain.handle('db:add-to-outbox', async (_event, entry) => {
-    addToOutbox(entry.entityType, entry.entityId, entry.operation, entry.payload, entry.version || 1)
-    return { success: true }
-  })
-
-  ipcMain.handle('local:save', async (_event, entityType, data) => {
-    const ok = saveEntity(entityType, data)
-    if (ok) {
-      addToOutbox(entityType, data.id, data.id ? 'UPDATE' : 'CREATE', data)
-    }
-    return { success: ok }
-  })
-
-  ipcMain.handle('local:query', async (_event, entityType, filters) => {
-    return queryEntities(entityType, filters)
-  })
-
-  ipcMain.handle('local:count', async (_event, entityType, filters) => {
-    return countEntities(entityType, filters)
-  })
-
-  ipcMain.handle('local:get-by-id', async (_event, entityType, id) => {
-    return getEntityById(entityType, id)
-  })
-
-  ipcMain.handle('local:delete', async (_event, entityType, id) => {
-    const ok = softDeleteEntity(entityType, id)
-    if (ok) {
-      addToOutbox(entityType, id, 'DELETE', { id })
-    }
-    return { success: ok }
-  })
-
-  ipcMain.handle('local:mark-synced', async (_event, entityType, id) => {
-    markEntitySynced(entityType, id)
-    return { success: true }
-  })
-
-  ipcMain.handle('local:get-config', async (_event, entityType) => {
-    return getLocalTableConfig(entityType)
-  })
-
   ipcMain.handle('local:get-setting', async (_event, key) => {
     return getSetting(key)
   })
@@ -181,111 +82,27 @@ function setupIPC() {
     return getAllSettings()
   })
 
-  ipcMain.handle('local:save-audit-log', async (_event, entry) => {
-    saveAuditLog(entry)
-    return { success: true }
+  ipcMain.handle('sync:status', async () => {
+    return {
+      isOnline: navigator.onLine,
+      pendingCount: 0,
+      conflictCount: 0,
+      deviceId: 'desktop',
+    }
   })
 
-  ipcMain.handle('local:get-audit-logs', async (_event, filters) => {
-    return getAuditLogs(filters)
+  ipcMain.handle('sync:force', async () => {
+    return { synced: 0, conflicts: 0, errors: 0 }
   })
 
-  ipcMain.handle('sync:get-pending-entries', async () => {
-    return getPendingEntries()
+  ipcMain.handle('db:sync', async (_event, entityType, remoteUrl) => {
+    // Sync is handled in the renderer process with PouchDB
+    return { ok: true, entityType, remoteUrl }
   })
 
-  ipcMain.handle('sync:get-devices', async () => {
-    const deviceId = getDeviceId()
-    return [{ id: deviceId, deviceName: 'Electron Desktop', deviceType: 'desktop', lastSyncAt: getLastSyncTimestamp(), isOnline: getOnlineStatus() }]
-  })
-
-  ipcMain.handle('sync:resolve-conflict', async (_event, conflictId, resolution, mergedValues) => {
-    const token = getAuthToken()
-    const url = `http://localhost:3000/api/v1/sync/conflicts/${conflictId}/resolve`
-    return new Promise((resolve, reject) => {
-      const request = net.request({ method: 'POST', url, timeout: 30000 })
-      request.setHeader('Content-Type', 'application/json')
-      if (token) request.setHeader('Authorization', `Bearer ${token}`)
-      const body = { resolution, mergedPayload: mergedValues }
-      request.write(JSON.stringify(body))
-      request.on('response', (response) => {
-        let data = ''
-        response.on('data', (chunk) => { data += chunk.toString() })
-        response.on('end', () => {
-          if (response.statusCode >= 400) {
-            reject(new Error(data || `HTTP ${response.statusCode}`))
-          } else {
-            resolve(JSON.parse(data))
-          }
-        })
-      })
-      request.on('error', reject)
-      request.end()
-    })
-  })
-
-  ipcMain.handle('sync:hydrate', async () => {
-    const token = getAuthToken()
-    if (!token) {
-      return { success: false, message: 'No auth token' }
-    }
-
-    const url = 'http://localhost:3000/api/v1/sync/snapshot'
-    const snapshot = await new Promise<any>((resolve, reject) => {
-      const request = net.request({ method: 'GET', url, timeout: 30000 })
-      request.setHeader('Content-Type', 'application/json')
-      request.setHeader('Authorization', `Bearer ${token}`)
-      request.on('response', (response) => {
-        let data = ''
-        response.on('data', (chunk) => { data += chunk.toString() })
-        response.on('end', () => {
-          if (response.statusCode >= 400) {
-            reject(new Error(data || `HTTP ${response.statusCode}`))
-          } else {
-            resolve(JSON.parse(data))
-          }
-        })
-      })
-      request.on('error', reject)
-      request.end()
-    })
-
-    const counts: Record<string, number> = {}
-
-    if (snapshot.students?.length) {
-      saveLocalStudents(snapshot.students)
-      counts.students = snapshot.students.length
-    }
-    if (snapshot.grades?.length) {
-      saveLocalGrades(snapshot.grades)
-      counts.grades = snapshot.grades.length
-    }
-    if (snapshot.attendance?.length) {
-      saveLocalAttendance(snapshot.attendance)
-      counts.attendance = snapshot.attendance.length
-    }
-    if (snapshot.classes?.length) {
-      for (const c of snapshot.classes) {
-        saveEntity('Class', c)
-      }
-      counts.classes = snapshot.classes.length
-    }
-    if (snapshot.subjects?.length) {
-      for (const s of snapshot.subjects) {
-        saveEntity('Subject', s)
-      }
-      counts.subjects = snapshot.subjects.length
-    }
-    if (snapshot.teachers?.length) {
-      for (const t of snapshot.teachers) {
-        saveEntity('Teacher', t)
-      }
-      counts.teachers = snapshot.teachers.length
-    }
-
-    setLastSyncTimestamp(snapshot.serverTimestamp || new Date().toISOString())
-
-    return { success: true, counts }
+  ipcMain.handle('sync:get-couchdb-config', async () => {
+    const url = getSetting('couchdb_url') || 'http://localhost:5984'
+    return { url }
   })
 
   ipcMain.handle('auth:set-token', async (_event, token) => {
@@ -341,7 +158,6 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  await getDatabase()
   setupIPC()
   registerLocalProtocol()
 
@@ -362,7 +178,6 @@ app.whenReady().then(async () => {
   })
 
   createWindow()
-  startSyncScheduler(30000)
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -370,8 +185,6 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  stopSyncScheduler()
-  closeDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }

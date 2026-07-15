@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity } from '@/lib/db/offline'
+import { saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 

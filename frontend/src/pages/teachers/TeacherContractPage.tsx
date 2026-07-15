@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, saveEntity } from '@/lib/db/offline'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -112,9 +112,9 @@ export function TeacherContractPage() {
   })
 
   function getContractInfo(contract: any) {
-    if (contract.contractType === 'HOURLY') return `${contract.hourlyRate} XAF/h`
-    if (contract.contractType === 'MONTHLY') return `${contract.monthlySalary} XAF/mois`
-    return `${contract.fixedAmount} XAF`
+    if (contract.contractType === 'HOURLY') return `${contract.hourlyRate} Ar/h`
+    if (contract.contractType === 'MONTHLY') return `${contract.monthlySalary} Ar/mois`
+    return `${contract.fixedAmount} Ar`
   }
 
   return (
@@ -244,7 +244,7 @@ export function TeacherContractPage() {
                   name="hourlyRate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Taux horaire (XAF)</FormLabel>
+                      <FormLabel>Taux horaire (Ar)</FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>
@@ -259,7 +259,7 @@ export function TeacherContractPage() {
                   name="monthlySalary"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Salaire mensuel (XAF)</FormLabel>
+                      <FormLabel>Salaire mensuel (Ar)</FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>
@@ -274,7 +274,7 @@ export function TeacherContractPage() {
                   name="fixedAmount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Montant forfaitaire (XAF)</FormLabel>
+                      <FormLabel>Montant forfaitaire (Ar)</FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>

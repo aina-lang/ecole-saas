@@ -15,6 +15,10 @@ export default defineConfig({
         '@': resolve('src')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    optimizeDeps: {
+      exclude: ['pouchdb', 'pouchdb-adapter-idb'],
+      include: ['spark-md5', 'uuid', 'vuvuzela', 'events']
+    }
   }
 })

@@ -6,18 +6,16 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Edit, Trash2, Plus, RotateCw } from 'lucide-react'
 
-import { useLocalQuery } from '@/lib/db/hooks'
-import { deleteEntity, queryEntities } from '@/lib/db/offline'
+import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
+import { deleteEntity, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Grade, PaginatedResponse, Subject } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import {
   AlertDialog,
@@ -30,10 +28,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog'
+import { ArrowUpDown } from 'lucide-react'
+import { TableHead } from '@/components/ui/table'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from '@/components/ui/pagination'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { TrashIcon } from '@radix-ui/react-icons'
 
 interface GradeWithDetails extends Grade {
   student?: { id: string; firstName: string; lastName: string }
   subject?: { id: string; name: string; code: string | null; level: string | null; class?: { id: string; name: string } | null }
+  period?: { id: string; label: string }
   createdAt?: string
 }
 
@@ -64,7 +76,7 @@ export function GradeListPage() {
 
   const [classId, setClassId] = useState<string>('')
   const [subjectId, setSubjectId] = useState<string>('')
-  const [semester, setSemester] = useState<string>('')
+  const [periodId, setPeriodId] = useState<string>('')
   const [page, setPage] = useState(1)
   const [sortBy, setSortBy] = useState<string>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -75,8 +87,10 @@ export function GradeListPage() {
 
   const { data: subjects } = useLocalQuery<SubjectOption>('Subject')
 
+  const { periods, loading: loadingPeriods } = usePeriods()
+
   const { data: gradesResponse, isLoading } = useQuery<PaginatedResponse<GradeWithDetails>>({
-    queryKey: ['grades', classId, subjectId, semester, page, sortBy, sortOrder],
+    queryKey: ['grades', classId, subjectId, periodId, page, sortBy, sortOrder],
     queryFn: async () => {
       const params: Record<string, string | number> = {
         page,
@@ -86,7 +100,7 @@ export function GradeListPage() {
       }
       if (classId) params.classId = classId
       if (subjectId) params.subjectId = subjectId
-      if (semester) params.semester = semester
+      if (periodId) params.periodId = periodId
       const result = await queryEntities<GradeWithDetails>('Grade', params)
       return { data: result, total: result.length } as PaginatedResponse<GradeWithDetails>
     }
@@ -116,69 +130,6 @@ export function GradeListPage() {
       setSortBy(column)
       setSortOrder('asc')
     }
-  }
-
-  function SortHeader({ column, children }: { column: string; children: React.ReactNode }) {
-    return (
-      <TableHead className="cursor-pointer select-none" onClick={() => toggleSort(column)}>
-        <div className="flex items-center gap-1">
-          {children}
-          <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-        </div>
-      </TableHead>
-    )
-  }
-
-  function renderPageButtons() {
-    const buttons: React.ReactNode[] = []
-    const maxVisible = 5
-    let start = Math.max(1, page - Math.floor(maxVisible / 2))
-    const end = Math.min(totalPages, start + maxVisible - 1)
-    if (end - start + 1 < maxVisible) {
-      start = Math.max(1, end - maxVisible + 1)
-    }
-
-    if (start > 1) {
-      buttons.push(
-        <PaginationItem key="1">
-          <PaginationLink onClick={() => setPage(1)}>1</PaginationLink>
-        </PaginationItem>
-      )
-      if (start > 2) {
-        buttons.push(
-          <PaginationItem key="ellipsis-start">
-            <PaginationEllipsis />
-          </PaginationItem>
-        )
-      }
-    }
-
-    for (let i = start; i <= end; i++) {
-      buttons.push(
-        <PaginationItem key={i}>
-          <PaginationLink isActive={i === page} onClick={() => setPage(i)}>
-            {i}
-          </PaginationLink>
-        </PaginationItem>
-      )
-    }
-
-    if (end < totalPages) {
-      if (end < totalPages - 1) {
-        buttons.push(
-          <PaginationItem key="ellipsis-end">
-            <PaginationEllipsis />
-          </PaginationItem>
-        )
-      }
-      buttons.push(
-        <PaginationItem key={totalPages}>
-          <PaginationLink onClick={() => setPage(totalPages)}>{totalPages}</PaginationLink>
-        </PaginationItem>
-      )
-    }
-
-    return buttons
   }
 
   return (
@@ -244,16 +195,16 @@ export function GradeListPage() {
             </div>
             <div className="w-40">
               <Combobox
-                value={semester}
+                value={periodId}
                 onValueChange={(v) => {
-                  setSemester(v)
+                  setPeriodId(v)
                   setPage(1)
                 }}
-                placeholder="Semestre"
+                placeholder="Période"
+                disabled={loadingPeriods}
                 options={[
-                  { value: 'all', label: 'Tous' },
-                  { value: '1', label: 'Semestre 1' },
-                  { value: '2', label: 'Semestre 2' },
+                  { value: 'all', label: 'Toutes' },
+                  ...periods.map((p) => ({ value: p.value, label: p.label })),
                 ]}
               />
             </div>
@@ -330,6 +281,15 @@ export function GradeListPage() {
                 },
               },
               {
+                key: 'period',
+                label: 'Période',
+                sortable: true,
+                render: (grade) => {
+                  const g = grade as GradeWithDetails
+                  return g.period?.label ?? '-'
+                },
+              },
+              {
                 key: 'createdAt',
                 label: 'Date',
                 sortable: true,
@@ -355,12 +315,12 @@ export function GradeListPage() {
             filters={{
               classId,
               subjectId,
-              semester,
+              periodId,
             }}
             onFilterChange={(key, value) => {
               if (key === 'classId') setClassId(value)
               else if (key === 'subjectId') setSubjectId(value)
-              else if (key === 'semester') setSemester(value)
+              else if (key === 'periodId') setPeriodId(value)
               setPage(1)
             }}
             onRowClick={(grade) => {

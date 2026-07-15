@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getEntityById, queryEntities } from '@/lib/db/offline'
+import { getEntityById, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Student, Grade, Attendance, Payment } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { StudentPhoto } from '@/components/ui/student-photo'
@@ -40,7 +40,21 @@ export function StudentDetailPage() {
 
   const { data: student, isLoading } = useQuery({
     queryKey: ['student', id],
-    queryFn: async () => getEntityById<Student>('Student', id)
+    queryFn: async () => {
+      const doc = await getEntityById<Student>('Student', id)
+      console.log('STUDENT_DETAIL doc', doc)
+      return doc
+    }
+  })
+
+  const { data: classes } = useQuery({
+    queryKey: ['classes'],
+    queryFn: async () => {
+      const docs = await queryEntities<any>('Class')
+      console.log('CLASSES docs', docs)
+      return docs
+    },
+    enabled: !!student
   })
 
   const { data: grades } = useQuery({
@@ -217,7 +231,7 @@ export function StudentDetailPage() {
               <CardContent className="space-y-2 text-sm">
                 <div>
                   <span className="text-muted-foreground">Classe:</span>
-                  <p className="font-medium">{student.class?.name ?? student.classId}</p>
+                  <p className="font-medium">{student.class?.name ?? classes?.find((c: any) => c.id === student.classId)?.name ?? student.classId}</p>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Statut:</span>

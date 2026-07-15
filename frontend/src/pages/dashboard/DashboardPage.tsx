@@ -41,7 +41,7 @@ const stats = [
 const recentActivity = [
   { action: 'Nouvel élève inscrit', detail: 'Marie Dupont - 6ème A', time: 'Il y a 5 min' },
   { action: 'Note ajoutée', detail: 'Mathématiques - M. Martin', time: 'Il y a 12 min' },
-  { action: 'Présence validée', detail: 'Classe de CM2 - 28/30 présents', time: 'Il y a 1h' },
+  { action: 'Présence validée', detail: 'Classe de T5 (7ème/CM2) - 28/30 présents', time: 'Il y a 1h' },
   { action: 'Paiement reçu', detail: 'Frais de scolarité - Jean Camara', time: 'Il y a 2h' },
   { action: 'Communication envoyée', detail: 'Aux parents des 5ème B', time: 'Il y a 3h' }
 ]

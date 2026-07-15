@@ -6,8 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
-import { getEntityById, saveEntity } from '@/lib/db/offline'
+import { getEntityById, saveEntity } from '@/lib/db/pouchdb-compat'
 import { useLocalQuery } from '@/lib/db/hooks'
+import { LEVELS } from '@/lib/levels'
 import type { Class, Subject, Teacher } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -202,20 +203,7 @@ export function ClassFormPage() {
                     <FormLabel>Niveau *</FormLabel>
                     <FormControl>
                       <Combobox
-                        options={[
-                          { value: '6ème', label: '6ème' },
-                          { value: '5ème', label: '5ème' },
-                          { value: '4ème', label: '4ème' },
-                          { value: '3ème', label: '3ème' },
-                          { value: '2nde', label: '2nde' },
-                          { value: '1ère', label: '1ère' },
-                          { value: 'Tle', label: 'Terminale' },
-                          { value: 'CP', label: 'CP' },
-                          { value: 'CE1', label: 'CE1' },
-                          { value: 'CE2', label: 'CE2' },
-                          { value: 'CM1', label: 'CM1' },
-                          { value: 'CM2', label: 'CM2' }
-                        ]}
+                        options={LEVELS.map((lvl) => ({ value: lvl, label: lvl }))}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner un niveau"

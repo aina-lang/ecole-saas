@@ -20,10 +20,6 @@ import { useAuthStore } from '@/stores/auth-store'
 const registerSchema = z
   .object({
     schoolName: z.string().min(1, "Le nom de l'école est requis"),
-    subdomain: z
-      .string()
-      .min(1, 'Le sous-domaine est requis')
-      .regex(/^[a-z0-9-]+$/, 'Lettres minuscules, chiffres et tirets uniquement'),
     adminFirstName: z.string().min(1, 'Le prénom est requis'),
     adminLastName: z.string().min(1, 'Le nom est requis'),
     adminEmail: z.string().email('Adresse email invalide'),
@@ -47,7 +43,6 @@ export function RegisterPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       schoolName: '',
-      subdomain: '',
       adminFirstName: '',
       adminLastName: '',
       adminEmail: '',
@@ -78,8 +73,7 @@ export function RegisterPage() {
           ) : (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
+                <FormField
                     control={form.control}
                     name="schoolName"
                     render={({ field }) => (
@@ -92,21 +86,6 @@ export function RegisterPage() {
                       </FormItem>
                     )}
                   />
-
-                  <FormField
-                    control={form.control}
-                    name="subdomain"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sous-domaine</FormLabel>
-                        <FormControl>
-                          <Input placeholder="lycee-victor-hugo" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField

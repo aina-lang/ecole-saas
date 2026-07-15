@@ -40,11 +40,11 @@ export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
-    const update = () => window.api?.window?.isMaximized().then(setIsMaximized)
+    const update = () => (window as any).electron?.window?.isMaximized().then(setIsMaximized)
     update()
   }, [])
 
-  const isElectron = typeof window !== 'undefined' && !!window.api?.window
+  const isElectron = typeof window !== 'undefined' && !!(window as any).electron?.window
 
   if (!isElectron) return null
 
@@ -68,7 +68,7 @@ export function TitleBar() {
         <button
           type="button"
           className={controlButton}
-          onClick={() => window.api.window.minimize()}
+          onClick={() => (window as any).electron.window.minimize()}
           aria-label="Minimiser"
         >
           <MinimizeIcon />
@@ -77,8 +77,8 @@ export function TitleBar() {
           type="button"
           className={controlButton}
           onClick={() => {
-            window.api.window.toggleMaximize()
-            window.api.window.isMaximized().then(setIsMaximized)
+            (window as any).electron.window.toggleMaximize()
+            ;(window as any).electron.window.isMaximized().then(setIsMaximized)
           }}
           aria-label="Agrandir"
         >
@@ -87,7 +87,7 @@ export function TitleBar() {
         <button
           type="button"
           className="flex h-14 w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
-          onClick={() => window.api.window.close()}
+          onClick={() => (window as any).electron.window.close()}
           aria-label="Fermer"
         >
           <CloseIcon />

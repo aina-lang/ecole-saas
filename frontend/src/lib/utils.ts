@@ -7,11 +7,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: string | Date, dateFormat: string = 'dd/MM/yyyy'): string {
-  return format(new Date(date), dateFormat, { locale: fr })
+export function formatDate(date: string | Date | undefined | null, dateFormat: string = 'dd/MM/yyyy'): string {
+  if (!date) return '-'
+  const parsed = new Date(date)
+  if (isNaN(parsed.getTime())) return '-'
+  return format(parsed, dateFormat, { locale: fr })
 }
 
-export function formatCurrency(amount: number, currency: string = 'XAF'): string {
+export function formatCurrency(amount: number, currency: string = 'Ar'): string {
   return (
     new Intl.NumberFormat('fr-FR', {
       style: 'decimal',

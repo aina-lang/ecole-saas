@@ -21,14 +21,7 @@ export class AuthService {
   ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
-    const existingTenant = await this.prisma.tenant.findUnique({
-      where: { subdomain: dto.subdomain },
-    });
-    if (existingTenant) {
-      throw new ConflictException('Ce sous-domaine est déjà pris');
-    }
-
-      const existingUser = await this.prisma.user.findFirst({
+    const existingUser = await this.prisma.user.findFirst({
       where: { email: dto.adminEmail.toLowerCase() },
     });
     if (existingUser) {
@@ -41,7 +34,6 @@ export class AuthService {
       const tenant = await tx.tenant.create({
         data: {
           name: dto.schoolName,
-          subdomain: dto.subdomain,
           plan: 'STARTER',
           status: 'ACTIVE',
           maxStudents: 200,

@@ -17,9 +17,9 @@ export function StudentPhoto({ src, alt, initials, className, entityId, fallback
   const [photoSrc, setPhotoSrc] = useState<string | undefined>(src || undefined)
 
   useEffect(() => {
-    const api = window.api
+    const api = (window as any).api
     if (api?.file && entityId) {
-      api.file.getEntityPhoto('Student', entityId).then((localUrl) => {
+      api.file.getEntityPhoto('Student', entityId).then((localUrl: string) => {
         if (localUrl) setPhotoSrc(localUrl)
         else setPhotoSrc(src || undefined)
       })

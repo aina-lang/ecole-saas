@@ -1,6 +1,22 @@
 import { create } from 'zustand'
 import client, { UNAUTHORIZED_EVENT } from '../api/client'
 
+declare global {
+  interface Window {
+    api?: {
+      auth?: {
+        setToken: (token: string) => Promise<{ success: boolean }>
+        getToken: () => Promise<string | null>
+      }
+      sync?: {
+        hydrate: () => Promise<{ success: boolean; counts?: Record<string, number> }>
+        onStatusChanged: (callback: (status: any) => void) => () => void
+        onProgress: (callback: (progress: any) => void) => () => void
+      }
+    }
+  }
+}
+
 interface User {
   id: string
   email: string
@@ -14,7 +30,6 @@ interface User {
 
 interface RegisterPayload {
   schoolName: string
-  subdomain: string
   adminEmail: string
   adminFirstName: string
   adminLastName: string

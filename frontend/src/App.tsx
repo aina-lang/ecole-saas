@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { AppRouter } from '@/router'
 import { useSyncInvalidation } from '@/lib/db/hooks'
 import { useEffect } from 'react'
+import { initSyncEngine, destroySyncEngine } from '@/lib/db/sync-manager'
 import '@/global.css'
 
 const queryClient = new QueryClient({
@@ -20,8 +21,10 @@ function AppInner() {
   useSyncInvalidation()
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
-      window.api.sync.hydrate().catch(() => {})
+    initSyncEngine()
+
+    return () => {
+      destroySyncEngine()
     }
   }, [])
 

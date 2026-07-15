@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { Download, RotateCw } from 'lucide-react'
 import { PlusIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
-import { queryEntities, saveEntity } from '@/lib/db/offline'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Payment, Student } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -271,8 +271,8 @@ export function PaymentListPage() {
                       {getStudentName(payment.studentId)}
                     </TableCell>
                     <TableCell>{/* TODO: fee structure label */}Frais généraux</TableCell>
-                    <TableCell>{payment.amount.toLocaleString('fr-FR')} XAF</TableCell>
-                    <TableCell>{payment.paidAmount.toLocaleString('fr-FR')} XAF</TableCell>
+                    <TableCell>{payment.amount.toLocaleString('fr-FR')} Ar</TableCell>
+                    <TableCell>{payment.paidAmount.toLocaleString('fr-FR')} Ar</TableCell>
                     <TableCell>
                       {format(new Date(payment.dueDate), 'dd/MM/yyyy', { locale: fr })}
                     </TableCell>
@@ -329,8 +329,9 @@ export function PaymentListPage() {
                                       <Combobox
                                         options={[
                                           { value: 'cash', label: 'Espèces' },
-                                          { value: 'mobile', label: 'Mobile Money' },
-                                          { value: 'card', label: 'Carte bancaire' },
+                                          { value: 'mvola', label: 'Mvola' },
+                                          { value: 'airtel_money', label: 'Airtel Money' },
+                                          { value: 'orange_money', label: 'Orange Money' },
                                           { value: 'transfer', label: 'Virement' },
                                           { value: 'check', label: 'Chèque' }
                                         ]}

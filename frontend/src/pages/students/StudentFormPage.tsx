@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, getEntityById } from '@/lib/db/offline'
+import { saveEntity, getEntityById } from '@/lib/db/pouchdb-compat'
 import type { Student } from '@/types'
 
 import { Button } from '@/components/ui/button'

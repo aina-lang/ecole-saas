@@ -16,7 +16,7 @@ import {
 } from '@radix-ui/react-icons'
 import { Send, RotateCw } from 'lucide-react'
 import client from '@/api/client'
-import { queryEntities, saveEntity } from '@/lib/db/offline'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Message, ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

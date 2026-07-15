@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { deleteEntity, queryEntities, countEntities } from '@/lib/db/offline'
+import { deleteEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
 import type { Student, PaginatedResponse } from '@/types'
 import { formatDate, getInitials, cn } from '@/lib/utils'
 import { StudentPhoto } from '@/components/ui/student-photo'
@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
-import { PlusIcon, Pencil2Icon, MagnifyingGlassIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { PlusIcon, Pencil2Icon, MagnifyingGlassIcon, ReloadIcon, TrashIcon } from '@radix-ui/react-icons'
 
 const statusLabels: Record<
   string,

@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, saveEntity } from '@/lib/db/offline'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'

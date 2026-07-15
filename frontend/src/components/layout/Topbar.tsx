@@ -18,6 +18,7 @@ import { HamburgerMenuIcon } from '@radix-ui/react-icons'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { SidebarContent } from './SidebarContent'
 import { ModeToggle } from '../mode-toggle'
+import { useNavigate } from 'react-router-dom'
 
 interface TopbarProps {
   title: string
@@ -25,6 +26,7 @@ interface TopbarProps {
 
 export function Topbar({ title }: TopbarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const isOnline = useSyncStore((s) => s.isOnline)
@@ -99,8 +101,12 @@ export function Topbar({ title }: TopbarProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>Paramètres</DropdownMenuItem>
-            <DropdownMenuItem disabled>Profil</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/administration/settings')}>
+              Paramètres
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => user?.id && navigate(`/administration/users/${user.id}/edit`)}>
+              Profil
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive">
               Déconnexion

@@ -247,8 +247,8 @@ export function PaymentListPage() {
                       {getStudentName(payment.studentId)}
                     </TableCell>
                     <TableCell>{/* TODO: fee structure label */}Frais généraux</TableCell>
-                    <TableCell>{payment.amount.toLocaleString('fr-FR')} XAF</TableCell>
-                    <TableCell>{payment.paidAmount.toLocaleString('fr-FR')} XAF</TableCell>
+                    <TableCell>{payment.amount.toLocaleString('fr-FR')} Ar</TableCell>
+                    <TableCell>{payment.paidAmount.toLocaleString('fr-FR')} Ar</TableCell>
                     <TableCell>
                       {format(new Date(payment.dueDate), 'dd/MM/yyyy', { locale: fr })}
                     </TableCell>

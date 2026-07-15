@@ -5,7 +5,7 @@ import { fr } from 'date-fns/locale'
 import { CalendarIcon, Users, TrendingUp, Award, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities } from '@/lib/db/offline'
+import { queryEntities } from '@/lib/db/pouchdb-compat'
 import client from '@/api/client'
 import { cn } from '@/lib/utils'
 

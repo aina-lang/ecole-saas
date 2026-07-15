@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { getEntityById, queryEntities } from '@/lib/db/offline'
+import { getEntityById, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Class, Student, Subject, Teacher } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 

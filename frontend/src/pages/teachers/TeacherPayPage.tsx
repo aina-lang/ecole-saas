@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, saveEntity } from '@/lib/db/offline'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -220,7 +220,7 @@ export function TeacherPayPage() {
                 key: 'baseAmount',
                 label: 'Base',
                 sortable: true,
-                render: (payment) => `${(payment as any).baseAmount.toLocaleString()} XAF`,
+                render: (payment) => `${(payment as any).baseAmount.toLocaleString()} Ar`,
               },
               {
                 key: 'bonusAmount',
@@ -240,7 +240,7 @@ export function TeacherPayPage() {
                 key: 'totalAmount',
                 label: 'Total',
                 sortable: true,
-                render: (payment) => <span className="font-bold">{(payment as any).totalAmount.toLocaleString()} XAF</span>,
+                render: (payment) => <span className="font-bold">{(payment as any).totalAmount.toLocaleString()} Ar</span>,
               },
               {
                 key: 'status',
@@ -299,7 +299,7 @@ export function TeacherPayPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Taux horaire</span>
-                  <span>{calcResult.hourlyRate} XAF/h</span>
+                  <span>{calcResult.hourlyRate} Ar/h</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Assiduité</span>
@@ -308,22 +308,22 @@ export function TeacherPayPage() {
                 <Separator />
                 <div className="flex justify-between">
                   <span>Salaire de base</span>
-                  <span>{calcResult.baseAmount.toLocaleString()} XAF</span>
+                  <span>{calcResult.baseAmount.toLocaleString()} Ar</span>
                 </div>
                 <div className="flex justify-between text-green-600">
                   <span>Prime d'assiduité</span>
-                  <span>+{calcResult.bonusAmount.toLocaleString()} XAF</span>
+                  <span>+{calcResult.bonusAmount.toLocaleString()} Ar</span>
                 </div>
                 {calcResult.deductionAmount > 0 && (
                   <div className="flex justify-between text-red-600">
                     <span>Retenue</span>
-                    <span>-{calcResult.deductionAmount.toLocaleString()} XAF</span>
+                    <span>-{calcResult.deductionAmount.toLocaleString()} Ar</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span>{calcResult.totalAmount.toLocaleString()} XAF</span>
+                  <span>{calcResult.totalAmount.toLocaleString()} Ar</span>
                 </div>
               </div>
               <Button className="w-full" onClick={() => saveMutation.mutate()}>
