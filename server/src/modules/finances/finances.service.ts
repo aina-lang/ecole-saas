@@ -33,6 +33,9 @@ export class FinancesService {
       newValue: dto,
     });
 
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('FeeStructure', fee);
+
     return fee;
   }
 
@@ -84,6 +87,9 @@ export class FinancesService {
       newValue: dto,
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('FeeStructure', updated);
+
     return updated;
   }
 
@@ -107,6 +113,9 @@ export class FinancesService {
       entityId: id,
       oldValue: existing,
     });
+
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('FeeStructure', { id, tenantId, deletedAt: new Date() });
 
     return { message: 'Structure de frais supprimée' };
   }
@@ -145,6 +154,9 @@ export class FinancesService {
       entityId: payment.id,
       newValue: { studentId: dto.studentId, amount: dto.amount },
     });
+
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('Payment', payment);
 
     return payment;
   }
@@ -204,6 +216,9 @@ export class FinancesService {
       newValue: dto,
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('Payment', updated);
+
     return updated;
   }
 
@@ -224,6 +239,9 @@ export class FinancesService {
       entityId: id,
       oldValue: existing,
     });
+
+    // Propager la suppression (soft) vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('Payment', { id, tenantId, deletedAt: new Date() });
 
     return { message: 'Paiement supprimé' };
   }
@@ -252,6 +270,9 @@ export class FinancesService {
       entityId: id,
       newValue: { paidAmount, paymentMethod, reference },
     });
+
+    // Propager le paiement enregistré vers CouchDB
+    this.prisma.notifyWrite('Payment', updated);
 
     return updated;
   }

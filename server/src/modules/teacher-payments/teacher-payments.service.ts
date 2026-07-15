@@ -38,7 +38,7 @@ export class TeacherPaymentsService {
     const teacher = await this.prisma.teacher.findFirst({ where: { id: dto.teacherId, tenantId } });
     if (!teacher) throw new NotFoundException('Enseignant non trouvé');
 
-    return this.prisma.teacherPayment.create({
+    const created = await this.prisma.teacherPayment.create({
       data: {
         tenantId,
         teacherId: dto.teacherId,
@@ -59,6 +59,11 @@ export class TeacherPaymentsService {
         },
       },
     });
+
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('TeacherPayment', created);
+
+    return created;
   }
 
   async calculate(tenantId: string, dto: CalculateTeacherPaymentDto) {
@@ -162,13 +167,18 @@ export class TeacherPaymentsService {
     const payment = await this.prisma.teacherPayment.findFirst({ where: { id, tenantId } });
     if (!payment) throw new NotFoundException('Paiement enseignant non trouvé');
 
-    return this.prisma.teacherPayment.update({
+    const updated = await this.prisma.teacherPayment.update({
       where: { id },
       data: {
         status: 'PAID' as any,
         paidAt: new Date(),
       },
     });
+
+    // Propager le paiement vers CouchDB
+    this.prisma.notifyWrite('TeacherPayment', updated);
+
+    return updated;
   }
 
   async remove(id: string, tenantId: string) {
@@ -176,6 +186,8 @@ export class TeacherPaymentsService {
     if (!payment) throw new NotFoundException('Paiement enseignant non trouvé');
 
     await this.prisma.teacherPayment.delete({ where: { id } });
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('TeacherPayment', { id, tenantId, deletedAt: new Date() });
     return { message: 'Paiement supprimé' };
   }
 }

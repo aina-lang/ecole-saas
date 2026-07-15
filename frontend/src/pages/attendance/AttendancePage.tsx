@@ -67,6 +67,7 @@ export function AttendancePage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const queryClient = useQueryClient()
   const { data: classes } = useLocalQuery<ClassOption>('Class')
+  const today = new Date()
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
@@ -156,6 +157,7 @@ export function AttendancePage() {
           <DatePicker
             value={date}
             onChange={(d) => d && setDate(d)}
+            max={today}
           />
         </div>
         <div className="w-48 space-y-1.5">

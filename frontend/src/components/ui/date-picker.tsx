@@ -20,6 +20,7 @@ interface DatePickerProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  max?: Date
 }
 
 export function DatePicker({
@@ -27,7 +28,8 @@ export function DatePicker({
   onChange,
   placeholder = 'Sélectionner une date',
   className,
-  disabled
+  disabled,
+  max,
 }: DatePickerProps) {
   const date = React.useMemo(() => {
     if (!value) return undefined
@@ -59,6 +61,7 @@ export function DatePicker({
           onSelect={onChange}
           initialFocus
           locale={fr}
+          disabled={(day) => max ? day > max : false}
         />
       </PopoverContent>
     </Popover>

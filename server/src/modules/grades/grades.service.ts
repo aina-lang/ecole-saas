@@ -84,6 +84,9 @@ export class GradesService {
       newValue: dto,
     });
 
+    // Propager vers CouchDB pour que les clients PouchDB reçoivent la note en pull
+    this.prisma.notifyWrite('Grade', grade);
+
     return grade;
   }
 
@@ -112,6 +115,9 @@ export class GradesService {
       newValue: dto,
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('Grade', grade);
+
     return grade;
   }
 
@@ -132,6 +138,9 @@ export class GradesService {
       entityId: id,
       oldValue: existing,
     });
+
+    // Propager la suppression vers CouchDB (deletedAt → _deleted dans le middleware)
+    this.prisma.notifyWrite('Grade', { id, tenantId, deletedAt: new Date() });
 
     return { message: 'Note supprimée' };
   }
@@ -164,6 +173,7 @@ export class GradesService {
         },
       });
       created.push(createdGrade);
+      this.prisma.notifyWrite('Grade', createdGrade);
     }
 
     await this.audit.log({
@@ -194,6 +204,9 @@ export class GradesService {
       entityId: id,
     });
 
+    // Propager la publication vers CouchDB
+    this.prisma.notifyWrite('Grade', grade);
+
     return grade;
   }
 
@@ -213,6 +226,9 @@ export class GradesService {
       entityType: 'Grade',
       entityId: id,
     });
+
+    // Propager la dépublication vers CouchDB
+    this.prisma.notifyWrite('Grade', grade);
 
     return grade;
   }

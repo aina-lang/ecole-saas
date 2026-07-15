@@ -159,6 +159,9 @@ export class StudentsService {
       newValue: { registrationNumber: student.registrationNumber, firstName: student.firstName, lastName: student.lastName },
     });
 
+    // Propager vers CouchDB pour que les clients PouchDB reçoivent le nouvel élève en pull
+    this.prisma.notifyWrite('Student', student);
+
     return student;
   }
 
@@ -222,6 +225,9 @@ export class StudentsService {
       newValue: { firstName: student.firstName, lastName: student.lastName },
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('Student', student);
+
     return student;
   }
 
@@ -231,7 +237,7 @@ export class StudentsService {
     });
     if (!student) throw new NotFoundException('Étudiant non trouvé');
 
-    await this.prisma.student.update({
+    const deleted = await this.prisma.student.update({
       where: { id },
       data: { deletedAt: new Date(), version: { increment: 1 }, updatedBy: userId },
     });
@@ -244,6 +250,9 @@ export class StudentsService {
       entityId: id,
       oldValue: { registrationNumber: student.registrationNumber, firstName: student.firstName, lastName: student.lastName },
     });
+
+    // Propager la suppression vers CouchDB (deletedAt → _deleted dans le middleware)
+    this.prisma.notifyWrite('Student', deleted);
 
     return { message: 'Étudiant supprimé avec succès' };
   }

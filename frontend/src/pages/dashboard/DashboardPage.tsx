@@ -1,50 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
 import { PersonIcon, ReaderIcon, BellIcon, StarIcon, ReloadIcon } from '@radix-ui/react-icons'
 import { Link } from 'react-router-dom'
-import { cn } from '@/lib/utils'
-
-const stats = [
-  {
-    label: 'Total Élèves',
-    value: '245',
-    icon: PersonIcon,
-    change: '+8%',
-    variant: 'default' as const
-  },
-  {
-    label: 'Enseignants',
-    value: '18',
-    icon: ReaderIcon,
-    change: '+2',
-    variant: 'default' as const
-  },
-  {
-    label: 'Classes',
-    value: '12',
-    icon: BellIcon,
-    change: '0',
-    variant: 'default' as const
-  },
-  {
-    label: 'Taux de présence',
-    value: '94%',
-    icon: StarIcon,
-    change: '+1%',
-    variant: 'default' as const
-  }
-]
-
-const recentActivity = [
-  { action: 'Nouvel élève inscrit', detail: 'Marie Dupont - 6ème A', time: 'Il y a 5 min' },
-  { action: 'Note ajoutée', detail: 'Mathématiques - M. Martin', time: 'Il y a 12 min' },
-  { action: 'Présence validée', detail: 'Classe de T5 (7ème/CM2) - 28/30 présents', time: 'Il y a 1h' },
-  { action: 'Paiement reçu', detail: 'Frais de scolarité - Jean Camara', time: 'Il y a 2h' },
-  { action: 'Communication envoyée', detail: 'Aux parents des 5ème B', time: 'Il y a 3h' }
-]
+import { useQuery } from '@tanstack/react-query'
+import { queryEntities } from '@/lib/db/pouchdb-compat'
 
 const quickActions = [
   { label: 'Inscrire un élève', path: '/students/new', variant: 'default' as const },
@@ -55,6 +15,61 @@ const quickActions = [
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user)
+
+  const { data: counts, isLoading, refetch } = useQuery({
+    queryKey: ['dashboard-counts'],
+    queryFn: async () => {
+      const [students, teachers, classes, attendances] = await Promise.all([
+        queryEntities('Student'),
+        queryEntities('Teacher'),
+        queryEntities('Class'),
+        queryEntities('Attendance'),
+      ])
+      const totalStudents = (students ?? []).length
+      const totalTeachers = (teachers ?? []).length
+      const totalClasses = (classes ?? []).length
+      const attendancesList = attendances ?? []
+      const totalDays = attendancesList.length
+      const presentDays = attendancesList.filter((a: any) => a.status === 'present').length
+      const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0
+
+      return { totalStudents, totalTeachers, totalClasses, attendanceRate }
+    },
+    staleTime: 30_000,
+  })
+
+  const stats = [
+    {
+      label: 'Total Élèves',
+      value: isLoading ? '...' : String(counts?.totalStudents ?? 0),
+      icon: PersonIcon,
+      change: '—',
+      variant: 'default' as const,
+    },
+    {
+      label: 'Enseignants',
+      value: isLoading ? '...' : String(counts?.totalTeachers ?? 0),
+      icon: ReaderIcon,
+      change: '—',
+      variant: 'default' as const,
+    },
+    {
+      label: 'Classes',
+      value: isLoading ? '...' : String(counts?.totalClasses ?? 0),
+      icon: BellIcon,
+      change: '—',
+      variant: 'default' as const,
+    },
+    {
+      label: 'Taux de présence',
+      value: isLoading ? '...' : `${counts?.attendanceRate ?? 0}%`,
+      icon: StarIcon,
+      change: '—',
+      variant: 'default' as const,
+    },
+  ]
+
+  const handleRefresh = () => refetch()
 
   return (
     <div className="space-y-6">
@@ -68,9 +83,10 @@ export function DashboardPage() {
         <Button
           variant="outline"
           size="icon"
-          onClick={() => window.location.reload()}
+          onClick={handleRefresh}
+          disabled={isLoading}
         >
-          <ReloadIcon className="h-4 w-4" />
+          <ReloadIcon className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
         </Button>
       </div>
 
@@ -86,53 +102,27 @@ export function DashboardPage() {
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
               <p className="mt-1 text-xs text-muted-foreground">
-                <span className="text-green-600">{stat.change}</span> vs mois dernier
+                Données synchronisées localement
               </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Activité récente</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((item, i) => (
-                <div key={i}>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{item.action}</p>
-                      <p className="text-xs text-muted-foreground">{item.detail}</p>
-                    </div>
-                    <Badge variant="secondary" className="shrink-0 text-[10px]">
-                      {item.time}
-                    </Badge>
-                  </div>
-                  {i < recentActivity.length - 1 && <Separator className="mt-3" />}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Actions rapides</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {quickActions.map((action) => (
-                <Button key={action.label} variant={action.variant} asChild className="h-20">
-                  <Link to={action.path}>{action.label}</Link>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Actions rapides</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3">
+            {quickActions.map((action) => (
+              <Button key={action.label} variant={action.variant} asChild className="h-20">
+                <Link to={action.path}>{action.label}</Link>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

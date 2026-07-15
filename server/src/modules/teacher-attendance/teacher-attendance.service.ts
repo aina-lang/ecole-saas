@@ -60,7 +60,7 @@ export class TeacherAttendanceService {
     const date = new Date(dto.date);
     date.setHours(0, 0, 0, 0);
 
-    return this.prisma.teacherAttendance.upsert({
+    const attendance = await this.prisma.teacherAttendance.upsert({
       where: { teacherId_date: { teacherId: dto.teacherId, date } },
       update: { status: dto.status as any, justification: dto.justification },
       create: {
@@ -76,6 +76,11 @@ export class TeacherAttendanceService {
         },
       },
     });
+
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('TeacherAttendance', attendance);
+
+    return attendance;
   }
 
   async bulkUpsert(tenantId: string, dto: BulkTeacherAttendanceDto) {
@@ -98,6 +103,7 @@ export class TeacherAttendanceService {
           justification: record.justification,
         },
       });
+      this.prisma.notifyWrite('TeacherAttendance', attendance);
       results.push(attendance);
     }
 

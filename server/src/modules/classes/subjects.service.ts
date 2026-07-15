@@ -70,6 +70,9 @@ export class SubjectsService {
       newValue: dto,
     });
 
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('Subject', subject);
+
     return subject;
   }
 
@@ -112,6 +115,9 @@ export class SubjectsService {
       newValue: dto,
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('Subject', updated);
+
     return updated;
   }
 
@@ -129,6 +135,9 @@ export class SubjectsService {
       entityId: id,
       oldValue: subject,
     });
+
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('Subject', { id: subject.id, tenantId, deletedAt: new Date() });
 
     return { message: 'Matière supprimée' };
   }
@@ -155,6 +164,9 @@ export class SubjectsService {
       newValue: { teacherId },
     });
 
+    // Propager la matière (avec ses relations mises à jour) vers CouchDB
+    this.prisma.notifyWrite('Subject', updated);
+
     return updated;
   }
 
@@ -176,6 +188,9 @@ export class SubjectsService {
       entityId: subjectId,
       newValue: { teacherId },
     });
+
+    // Propager la matière (avec ses relations mises à jour) vers CouchDB
+    this.prisma.notifyWrite('Subject', updated);
 
     return updated;
   }

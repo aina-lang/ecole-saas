@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import client, { UNAUTHORIZED_EVENT } from '../api/client'
+import { setCurrentTenant, destroyAllDatabases, scheduleTenantCleanup } from '../lib/db/pouchdb'
+import { stopAllSyncs, performSync } from '../lib/db/sync-manager'
 
 declare global {
   interface Window {
@@ -79,6 +81,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('tenantId', resolvedTenantId)
 
+    // Basculer les bases PouchDB vers le contexte du nouveau tenant
+    // AVANT la hydration pour garantir que les bons buckets sont utilisés
+    setCurrentTenant(resolvedTenantId)
+
     set({
       user,
       accessToken,
@@ -97,19 +103,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('tenantId')
+    // Capturer le tenantId AVANT de le supprimer du state
+    const tenantId = localStorage.getItem('tenantId') || 'default'
 
-    set({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      tenantId: null,
-      isAuthenticated: false
-    })
+    // 1. Arrêter les syncs en cours
+    stopAllSyncs()
 
-    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+    // Finalise le logout : purge localStorage + state + event, UNIQUEMENT
+    // une fois que la sync finale a eu la chance de s'exécuter (cf. #3).
+    const finalizeLogout = () => {
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('tenantId')
+
+      set({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        tenantId: null,
+        isAuthenticated: false
+      })
+
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+    }
+
+    if (navigator.onLine) {
+      // ─── ONLINE : sync rapide puis destruction immédiate ───────────────────
+      // IMPORTANT (#3) : la sync finale a besoin du accessToken (fetchCouchDBConfig
+      // appelle GET /sync/couchdb-config avec le JWT). On NE supprime le token
+      // QUE dans le .finally, après que la sync a pu s'exécuter. Sinon la sync
+      // échoue en 401 et les données non envoyées sont perdues à la destruction.
+      performSync()
+        .then(() => destroyAllDatabases(tenantId))
+        .catch(() => destroyAllDatabases(tenantId)) // détruire même si la sync échoue
+        .catch((err) => console.warn('[Logout] Purge locale échouée :', err))
+        .finally(finalizeLogout)
+    } else {
+      // ─── OFFLINE : cleanup DIFFÉRÉ ─────────────────────────────────────────
+      // On ne peut pas synchroniser maintenant — on NE DÉTRUIT PAS les bases.
+      // Elles seront syncées puis détruites automatiquement à la prochaine
+      // connexion réseau (processPendingCleanups dans sync-manager.ts).
+      scheduleTenantCleanup(tenantId)
+      console.log("[Logout] Hors ligne — données locales préservées jusqu'à la prochaine connexion")
+      finalizeLogout()
+    }
   },
 
   register: async (payload: RegisterPayload) => {
@@ -129,6 +166,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { data } = await client.post('/auth/refresh', { refreshToken })
       const { accessToken, refreshToken: newRefreshToken, user } = data
+
+      // (#6) Re-basculer le contexte PouchDB sur le bon tenant. En cas de
+      // cold start l'app a pu recharger avec un tenantId différent en mémoire ;
+      // on s'assure que les bases actives correspondent au user rafraîchi.
+      if (user?.tenantId) setCurrentTenant(user.tenantId)
 
       localStorage.setItem('accessToken', accessToken)
       localStorage.setItem('refreshToken', newRefreshToken)

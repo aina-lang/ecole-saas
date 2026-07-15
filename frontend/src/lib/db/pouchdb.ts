@@ -22,6 +22,22 @@ let couchDBUrl = 'http://localhost:5984'
 let couchDBUser = ''
 let couchDBPass = ''
 
+/**
+ * TenantId actif — inclus dans le nom des bases IndexedDB pour isoler
+ * les données entre comptes. Sans ça, tous les tenants partagent
+ * la même base `ecole_saas_student` et se voient mutuellement.
+ */
+let currentTenantId: string = localStorage.getItem('tenantId') || 'default'
+
+/**
+ * À appeler immédiatement après login pour basculer les bases locales
+ * vers le contexte du nouveau tenant.
+ */
+export function setCurrentTenant(tenantId: string): void {
+  currentTenantId = tenantId
+  console.log(`[PouchDB] Tenant basculé : ${tenantId}`)
+}
+
 export function configureCouchDB(url: string, user?: string, pass?: string): void {
   couchDBUrl = url.replace(/\/+$/, '')
   couchDBUser = user || ''
@@ -34,12 +50,19 @@ export async function fetchCouchDBConfig(): Promise<void> {
     if (data?.url) couchDBUrl = data.url.replace(/\/+$/, '')
     if (data?.user) couchDBUser = data.user
     if (data?.pass) couchDBPass = data.pass
-  } catch {
+    console.log('[PouchDB] CouchDB config:', couchDBUrl)
+  } catch (e) {
+    console.warn('[PouchDB] Cannot fetch CouchDB config, using default', couchDBUrl)
   }
 }
 
+/**
+ * Nom de la DB locale — inclut le tenantId pour isoler les données.
+ * ex : `ecole_saas_tid_abc123_student`
+ */
 function getDbName(entityType: EntityType): string {
-  return `${DB_PREFIX}${entityType.toLowerCase()}`
+  const tid = currentTenantId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `${DB_PREFIX}${tid}_${entityType.toLowerCase()}`
 }
 
 function getRemoteDbName(entityType: EntityType): string {
@@ -147,5 +170,84 @@ export async function bulkCreateDocuments(
     return result
   } finally {
     db.close()
+  }
+}
+
+
+// ─── Deferred Cleanup (Logout offline) ─────────────────────────────────────
+// Clé localStorage qui stocke les tenantIds dont les bases doivent être
+// nettoyées dès que la connexion est rétablie.
+export const PENDING_CLEANUP_KEY = 'pouchdb_pending_cleanup'
+
+export interface PendingCleanup {
+  tenantId: string
+  loggedOutAt: string // ISO timestamp
+}
+
+/** Enregistre un tenant pour cleanup différé (utilisé au logout offline). */
+export function scheduleTenantCleanup(tenantId: string): void {
+  const existing = getPendingCleanups()
+  // Éviter les doublons
+  if (existing.find(p => p.tenantId === tenantId)) return
+  const updated: PendingCleanup[] = [
+    ...existing,
+    { tenantId, loggedOutAt: new Date().toISOString() },
+  ]
+  localStorage.setItem(PENDING_CLEANUP_KEY, JSON.stringify(updated))
+  console.log(`[PouchDB] Cleanup différé planifié pour tenant "${tenantId}"`)
+}
+
+/** Retourne la liste des tenants en attente de cleanup. */
+export function getPendingCleanups(): PendingCleanup[] {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_CLEANUP_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+/** Supprime un tenant de la liste de cleanup différé une fois nettoyé. */
+export function removePendingCleanup(tenantId: string): void {
+  const updated = getPendingCleanups().filter(p => p.tenantId !== tenantId)
+  localStorage.setItem(PENDING_CLEANUP_KEY, JSON.stringify(updated))
+}
+// ────────────────────────────────────────────────────────────────────────────
+
+const ALL_ENTITY_TYPES: EntityType[] = [
+  'Student', 'User', 'Teacher', 'Subject', 'Class', 'Grade',
+  'Attendance', 'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
+  'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
+]
+
+/**
+ * Détruit toutes les bases IndexedDB d'un tenant donné.
+ *
+ * @param tenantId  - Le tenant à purger (par défaut : tenant courant).
+ *                    Passer un ID explicite pour les cleanups différés
+ *                    d'un tenant déjà déconnecté.
+ */
+export async function destroyAllDatabases(tenantId?: string): Promise<void> {
+  const tid = (tenantId || currentTenantId).replace(/[^a-zA-Z0-9_-]/g, '_')
+
+  const results = await Promise.allSettled(
+    ALL_ENTITY_TYPES.map(async (entityType) => {
+      const dbName = `${DB_PREFIX}${tid}_${entityType.toLowerCase()}`
+      const db = new PouchDB(dbName, { adapter: 'idb' })
+      await db.destroy()
+      console.log(`[PouchDB] Base détruite : ${dbName}`)
+    })
+  )
+
+  // Détruire aussi la base méta (timestamps de sync)
+  try {
+    const metaDb = new PouchDB(`ecole_saas_${tid}_sync_meta`, { adapter: 'idb' })
+    await metaDb.destroy()
+  } catch { /* ignoré si absente */ }
+
+  const failed = results.filter(r => r.status === 'rejected')
+  if (failed.length > 0) {
+    console.warn(`[PouchDB] ${failed.length} base(s) non détruites pour tenant "${tid}"`)
+  } else {
+    console.log(`[PouchDB] Toutes les bases du tenant "${tid}" purgées`)
   }
 }

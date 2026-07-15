@@ -115,40 +115,50 @@ export const SettingsPage = () => {
   const { data: schoolData, isLoading: loadingSchool } = useQuery({
     queryKey: ['settings-school'],
     queryFn: async () => {
-      const raw = await (window as any).api?.settings?.get?.('school')
-      return JSON.parse(raw) as SchoolSettings
+      try {
+        const raw = await (window as any).api?.settings?.get?.('school')
+        return raw ? JSON.parse(raw) as SchoolSettings : null
+      } catch { return null }
     }
   })
 
   const { data: academicData, isLoading: loadingAcademic } = useQuery({
     queryKey: ['settings-academic'],
     queryFn: async () => {
-      const raw = await (window as any).api?.settings?.get?.('academic_year')
-      return JSON.parse(raw) as AcademicYear
+      try {
+        const raw = await (window as any).api?.settings?.get?.('academic_year')
+        return raw ? JSON.parse(raw) as AcademicYear : null
+      } catch { return null }
     }
   })
 
   const { data: syncDevices, isLoading: loadingDevices } = useQuery({
     queryKey: ['settings-sync-devices'],
-    queryFn: async () => {
-      const devices = await (window as any).api?.sync?.getDevices?.() as SyncDevice[]
-      return devices
+    queryFn: async (): Promise<SyncDevice[]> => {
+      try {
+        const devices = await (window as any).api?.sync?.getDevices?.()
+        return Array.isArray(devices) ? devices : []
+      } catch { return [] }
     }
   })
 
   const { data: syncInfo, isLoading: loadingSyncInfo } = useQuery({
     queryKey: ['settings-sync-info'],
-    queryFn: async () => {
-      const info = await (window as any).api?.sync?.getStatus?.() as { lastSyncAt: string | null; pendingCount: number; online: boolean }
-      return info
+    queryFn: async (): Promise<{ lastSyncAt: string | null; pendingCount: number; online: boolean }> => {
+      try {
+        const info = await (window as any).api?.sync?.getStatus?.()
+        return info ?? { lastSyncAt: null, pendingCount: 0, online: navigator.onLine }
+      } catch { return { lastSyncAt: null, pendingCount: 0, online: navigator.onLine } }
     }
   })
 
   const { data: securityData, isLoading: loadingSecurity } = useQuery({
     queryKey: ['settings-security'],
     queryFn: async () => {
-      const raw = await (window as any).api?.settings?.get?.('security')
-      return JSON.parse(raw) as SecuritySettings
+      try {
+        const raw = await (window as any).api?.settings?.get?.('security')
+        return raw ? JSON.parse(raw) as SecuritySettings : { twoFactorEnabled: false }
+      } catch { return { twoFactorEnabled: false } }
     }
   })
 

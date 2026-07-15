@@ -59,22 +59,52 @@ export class SyncWorkerService implements OnModuleInit {
     if (!change.doc || change.doc._id.startsWith('_design/')) return;
     const data = stripMeta(change.doc);
     const tenantId = data.tenantId || data.tenant_id;
-    if (!tenantId) return;
+
+    if (!tenantId) {
+      // FIXE : log explicite au lieu d'un rejet silencieux — facilite le débogage
+      this.logger.warn(
+        `[sync-worker] ${entity}/${change.id}: tenantId absent — document IGNORÉ. ` +
+        `Vérifier que le frontend injecte tenantId avant l'écriture PouchDB.`
+      );
+      return;
+    }
 
     const model = this.entityModel(entity);
 
     if (change.deleted) {
-      try { await model.update({ where: { id: change.id }, data: { deletedAt: new Date() } }); }
+      try {
+        const existing = await (model as any).findFirst({ where: { id: change.id } });
+        if (existing && existing.tenantId !== tenantId) {
+          this.logger.error(
+            `[sync-worker] ${entity}/${change.id}: tenantId mismatch on delete — ` +
+            `CouchDB dit tenantId=${tenantId}, PostgreSQL a tenantId=${existing.tenantId}. ` +
+            `Suppression BLOQUÉE.`
+          );
+          return;
+        }
+        await model.update({ where: { id: change.id }, data: { deletedAt: new Date() } });
+      }
       catch {}
       return;
     }
 
     try {
+      const existing = await (model as any).findFirst({ where: { id: change.id } });
+      if (existing && existing.tenantId !== tenantId) {
+        this.logger.error(
+          `[sync-worker] ${entity}/${change.id}: tenantId mismatch — ` +
+          `CouchDB dit tenantId=${tenantId}, PostgreSQL a tenantId=${existing.tenantId}. ` +
+          `Mise à jour BLOQUÉE (possible fuite de données inter-tenants).`
+        );
+        return;
+      }
+
       await model.upsert({
         where: { id: change.id },
         create: { ...data, id: change.id, tenantId },
         update: data,
       });
+      this.logger.verbose(`[sync-worker] ${entity}/${change.id}: upsert OK`);
     } catch (err: any) {
       this.logger.error(`sync ${entity}/${change.id}: ${err.message}`);
     }

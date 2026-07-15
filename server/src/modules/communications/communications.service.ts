@@ -43,6 +43,9 @@ export class CommunicationsService {
       newValue: { subject: dto.subject, recipientCount: dto.recipientIds.length },
     });
 
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('Message', message);
+
     return message;
   }
 
@@ -148,6 +151,9 @@ export class CommunicationsService {
       entityType: 'Message',
       entityId: id,
     });
+
+    // Propager l'archivage vers CouchDB
+    this.prisma.notifyWrite('Message', updated);
 
     return updated;
   }

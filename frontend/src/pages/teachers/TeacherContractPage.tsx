@@ -1,12 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { toast } from 'sonner'
-import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
+import { queryEntities, saveEntity, enrichTeachers } from '@/lib/db/pouchdb-compat'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -14,7 +10,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
-import { DataTable, ColumnDef } from '@/components/ui/data-table'
+import { DataTable } from '@/components/ui/data-table'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import {
   Dialog,
@@ -27,6 +23,9 @@ import { Badge } from '@/components/ui/badge'
 import { ReloadIcon } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 
 const contractSchema = z.object({
   teacherId: z.string().min(1, 'Enseignant requis'),
@@ -49,21 +48,34 @@ const contractTypeLabels: Record<string, string> = {
 
 export function TeacherContractPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const queryClient = useQueryClient()
 
-  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachersRaw, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
+
+  const { data: teachers, isLoading: isLoadingEnriched } = useQuery({
+    queryKey: ['enriched-teachers-contract', teachersRaw],
+    queryFn: () => enrichTeachers(teachersRaw ?? []),
+    enabled: !!teachersRaw,
+  })
 
   const { data: contracts, isLoading: isLoadingContracts } = useQuery({
-    queryKey: ['teacher-contracts'],
+    queryKey: ['teacher-contracts', refreshKey],
     queryFn: () => queryEntities('TeacherContract')
   })
 
-  const isLoading = loadingTeachers || isLoadingContracts
+  const isLoading = loadingTeachers || isLoadingEnriched || isLoadingContracts
 
   const handleRefresh = () => {
     refetchTeachers()
-    queryClient.invalidateQueries({ queryKey: ['teacher-contracts'] })
+    setRefreshKey((k) => k + 1)
   }
+
+  const teacherOptions = (teachers ?? []).map((t) => {
+    const first = (t as any).user_firstName || ''
+    const last = (t as any).user_lastName || ''
+    return { value: t.id, label: `${first} ${last}`.trim() || `Enseignant ${t.id.slice(0, 6)}` }
+  })
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractSchema),
@@ -81,16 +93,6 @@ export function TeacherContractPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: ContractFormValues) => {
-      const payload: any = {
-        teacherId: values.teacherId,
-        contractType: values.contractType,
-        startDate: values.startDate
-      }
-      if (values.hourlyRate) payload.hourlyRate = Number(values.hourlyRate)
-      if (values.monthlySalary) payload.monthlySalary = Number(values.monthlySalary)
-      if (values.fixedAmount) payload.fixedAmount = Number(values.fixedAmount)
-      if (values.endDate) payload.endDate = values.endDate
-
       await saveEntity('TeacherContract', {
         id: crypto.randomUUID(),
         teacherId: values.teacherId,
@@ -100,10 +102,11 @@ export function TeacherContractPage() {
         salary: Number(values.hourlyRate || values.monthlySalary || values.fixedAmount || 0),
         hoursPerWeek: values.contractType === 'HOURLY' ? Number(values.hourlyRate) : 0,
         status: values.isActive !== false ? 'ACTIVE' : 'INACTIVE',
+        teacherId_ref: values.teacherId,
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-contracts'] })
+      setRefreshKey((k) => k + 1)
       toast.success('Contrat créé')
       setDialogOpen(false)
       form.reset()
@@ -112,9 +115,19 @@ export function TeacherContractPage() {
   })
 
   function getContractInfo(contract: any) {
-    if (contract.contractType === 'HOURLY') return `${contract.hourlyRate} Ar/h`
-    if (contract.contractType === 'MONTHLY') return `${contract.monthlySalary} Ar/mois`
-    return `${contract.fixedAmount} Ar`
+    if (contract.contractType === 'HOURLY') return `${contract.hourlyRate ?? contract.salary ?? '-'} Ar/h`
+    if (contract.contractType === 'MONTHLY') return `${contract.monthlySalary ?? contract.salary ?? '-'} Ar/mois`
+    return `${contract.fixedAmount ?? contract.salary ?? '-'} Ar`
+  }
+
+  function getContractTeacherName(contract: any): string {
+    const t = teachers?.find((t) => t.id === contract.teacherId)
+    if (t) {
+      const first = (t as any).user_firstName || ''
+      const last = (t as any).user_lastName || ''
+      return `${first} ${last}`.trim() || `Enseignant ${contract.teacherId?.slice(0, 6) || '?'}`
+    }
+    return `Enseignant ${contract.teacherId?.slice(0, 6) || '?'}`
   }
 
   return (
@@ -146,13 +159,13 @@ export function TeacherContractPage() {
               {
                 key: 'teacherName',
                 label: 'Enseignant',
-                render: (contract) => `${(contract as any).teacher?.user?.firstName} ${(contract as any).teacher?.user?.lastName}`,
+                render: (contract) => getContractTeacherName(contract as any),
                 className: 'font-medium',
               },
               {
                 key: 'contractType',
                 label: 'Type',
-                render: (contract) => contractTypeLabels[(contract as any).contractType],
+                render: (contract) => contractTypeLabels[(contract as any).contractType] || '-',
               },
               {
                 key: 'rate',
@@ -162,7 +175,7 @@ export function TeacherContractPage() {
               {
                 key: 'startDate',
                 label: 'Début',
-                render: (contract) => (contract as any).startDate?.split('T')[0],
+                render: (contract) => (contract as any).startDate?.split('T')[0] || '-',
               },
               {
                 key: 'endDate',
@@ -173,8 +186,8 @@ export function TeacherContractPage() {
                 key: 'status',
                 label: 'Statut',
                 render: (contract) => (
-                  <Badge variant={(contract as any).isActive ? 'default' : 'secondary'}>
-                    {(contract as any).isActive ? 'Actif' : 'Inactif'}
+                  <Badge variant={(contract as any).status === 'ACTIVE' || (contract as any).isActive ? 'default' : 'secondary'}>
+                    {(contract as any).status === 'ACTIVE' || (contract as any).isActive ? 'Actif' : 'Inactif'}
                   </Badge>
                 ),
               },
@@ -207,7 +220,7 @@ export function TeacherContractPage() {
                     <FormLabel>Enseignant</FormLabel>
                     <FormControl>
                       <Combobox
-                        options={teachers?.map((t) => ({ value: t.id, label: `${t.user.firstName} ${t.user.lastName}` })) ?? []}
+                        options={teacherOptions}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner"

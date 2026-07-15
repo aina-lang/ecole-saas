@@ -2,8 +2,17 @@ import PouchDB from 'pouchdb'
 import { useSyncStore } from '@/stores/sync-store'
 import { createDatabase, createRemoteDatabase, createSync, type EntityType } from './pouchdb'
 
-const SYNC_META_DB = 'ecole_saas_sync_meta'
 const SYNC_DEVICE_ID_KEY = 'sync_device_id'
+
+/** Résout et assainit le tenantId courant (source : localStorage). */
+function getTenantId(): string {
+  return localStorage.getItem('tenantId')?.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default'
+}
+
+/** Construit la clé de la Map activeSyncs en incluant le tenantId. */
+function getSyncKey(entityType: EntityType): string {
+  return `${getTenantId()}:${entityType}`
+}
 
 export interface SyncResult {
   entityType: EntityType
@@ -15,7 +24,11 @@ export interface SyncResult {
 }
 
 const SYNC_ENTITY_TYPES: EntityType[] = [
+  // Entités de base — synchronisées depuis le début
   'Student', 'Grade', 'Attendance', 'Class', 'Subject', 'Teacher',
+  // FIXE : entités manquantes — le sync-worker serveur les surveille mais le frontend ne les répliquait pas
+  'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
+  'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
 ]
 
 const activeSyncs = new Map<string, PouchDB.Replication.Sync>()
@@ -30,7 +43,8 @@ function getDeviceId(): string {
 }
 
 function getMetaDb(): PouchDB.Database {
-  return new PouchDB(SYNC_META_DB, { adapter: 'idb' })
+  const tid = getTenantId()
+  return new PouchDB(`ecole_saas_${tid}_sync_meta`, { adapter: 'idb' })
 }
 
 async function setLastSyncTimestamp(entityType: string, timestamp: string): Promise<void> {
@@ -49,7 +63,7 @@ async function setLastSyncTimestamp(entityType: string, timestamp: string): Prom
 }
 
 export async function startEntitySync(entityType: EntityType): Promise<PouchDB.Replication.Sync> {
-  const key = `${entityType}`
+  const key = getSyncKey(entityType)
   if (activeSyncs.has(key)) {
     return activeSyncs.get(key)!
   }
@@ -93,7 +107,7 @@ export async function startEntitySync(entityType: EntityType): Promise<PouchDB.R
 }
 
 export function stopEntitySync(entityType: EntityType): void {
-  const key = `${entityType}`
+  const key = getSyncKey(entityType)
   const sync = activeSyncs.get(key)
   if (sync) {
     sync.cancel()
@@ -187,6 +201,9 @@ export async function syncAllNow(): Promise<SyncResult[]> {
 }
 
 export async function getPendingOperations(): Promise<any[]> {
+  const tenantPrefix = `${getTenantId()}:`
   const replicating = Array.from(activeSyncs.keys())
-  return replicating.map((key) => ({ entityType: key, status: 'replicating' }))
+  return replicating
+    .filter((key) => key.startsWith(tenantPrefix))
+    .map((key) => ({ entityType: key.slice(tenantPrefix.length), status: 'replicating' }))
 }

@@ -82,7 +82,11 @@ export class TimetableService {
       newValue: dto,
     });
 
-    return this.findById(slot.id, tenantId);
+    // Propager vers CouchDB
+    const created = await this.findById(slot.id, tenantId);
+    this.prisma.notifyWrite('TimetableSlot', created);
+
+    return created;
   }
 
   async update(id: string, tenantId: string, dto: UpdateTimetableSlotDto, userId?: string) {
@@ -111,7 +115,11 @@ export class TimetableService {
       newValue: dto,
     });
 
-    return this.findById(id, tenantId);
+    // Propager la mise à jour vers CouchDB
+    const updated = await this.findById(id, tenantId);
+    this.prisma.notifyWrite('TimetableSlot', updated);
+
+    return updated;
   }
 
   async remove(id: string, tenantId: string, userId?: string) {
@@ -127,6 +135,9 @@ export class TimetableService {
       entityType: 'TimetableSlot',
       entityId: id,
     });
+
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('TimetableSlot', { id, tenantId, deletedAt: new Date() });
 
     return { message: 'Créneau supprimé' };
   }

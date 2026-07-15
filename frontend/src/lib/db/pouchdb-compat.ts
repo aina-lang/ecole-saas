@@ -7,8 +7,54 @@ import {
   type EntityType,
 } from './pouchdb'
 
+/** Résout le tenantId courant depuis le store Zustand ou localStorage. */
+function getCurrentTenantId(): string | null {
+  // localStorage est la source la plus fiable dans Electron (partagée entre renderer et main)
+  return localStorage.getItem('tenantId') ?? null
+}
+
+/**
+ * Enrichit un array de Teacher en lisant les infos User depuis la base User locale.
+ * Ajoute les champs user_firstName, user_lastName, user_email sur chaque Teacher.
+ * Utilisable quand Teacher.user est un objet plat { id: '...' } sans détails.
+ */
+export async function enrichTeachers(teachers: any[]): Promise<any[]> {
+  try {
+    const users = await queryEntities<any>('User')
+    const userMap = new Map(users.map((u) => [u.id, u]))
+    return teachers.map((t) => {
+      const userId = t.userId || (t.user && typeof t.user === 'object' ? t.user.id : null)
+      const user = userId ? userMap.get(userId) : null
+      const enriched: any = {
+        ...t,
+        user_firstName: t.user_firstName ?? (user?.firstName ?? t.user?.firstName ?? ''),
+        user_lastName: t.user_lastName ?? (user?.lastName ?? t.user?.lastName ?? ''),
+        user_email: t.user_email ?? (user?.email ?? t.user?.email ?? ''),
+      }
+      // Phones: user_phone_0, user_phone_1, user_phone_2
+      for (let i = 0; i < 3; i++) {
+        if (!enriched[`user_phone_${i}`] && user?.phones?.[i]?.value) {
+          enriched[`user_phone_${i}`] = user.phones[i].value
+        }
+      }
+      return enriched
+    })
+  } catch {
+    return teachers
+  }
+}
+
 export async function queryEntities<T = any>(entityType: EntityType, filters?: Record<string, any>): Promise<T[]> {
   let results = await getAllDocuments(entityType)
+
+  // (#7) Filtre de garde : on ne renvoie que les docs du tenant courant.
+  // La DB est déjà isolée par tenant (nom incluant le tenantId), mais si un
+  // doc sans tenantId a été injecté par erreur, on l'écarte pour éviter
+  // toute fuite de données entre tenants.
+  const guardTenantId = getCurrentTenantId()
+  if (guardTenantId) {
+    results = results.filter((doc: any) => !doc.tenantId || doc.tenantId === guardTenantId)
+  }
 
   if (filters) {
     let limit: number | undefined
@@ -76,6 +122,14 @@ export async function getEntityById<T = any>(entityType: EntityType, id: string)
 
 export async function saveEntity(entityType: EntityType, data: any): Promise<any> {
   const id = data._id || data.id || crypto.randomUUID()
+
+  // FIXE CRITIQUE : garantir que tenantId est toujours présent dans le document.
+  // Sans lui, le sync-worker serveur jette le doc silencieusement (processChange:61).
+  const tenantId = data.tenantId || getCurrentTenantId()
+  if (!tenantId) {
+    console.warn(`[PouchDB] saveEntity(${entityType}, ${id}): tenantId manquant — le document ne sera pas synchronisé avec PostgreSQL`)
+  }
+
   const db = createDatabase(entityType)
   let existingRev: string | undefined
   try {
@@ -83,7 +137,9 @@ export async function saveEntity(entityType: EntityType, data: any): Promise<any
     existingRev = existing._rev
   } catch { }
   db.close()
-  const doc = { ...data, _id: id }
+
+  // tenantId forcé dans le doc, qu'il vienne du payload ou du store
+  const doc: any = { ...data, _id: id, tenantId }
   if (existingRev) doc._rev = existingRev
   let response: any
   try {

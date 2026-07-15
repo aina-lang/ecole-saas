@@ -80,6 +80,9 @@ export class AttendanceService {
       newValue: dto,
     });
 
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('Attendance', attendance);
+
     return attendance;
   }
 
@@ -109,6 +112,9 @@ export class AttendanceService {
       newValue: dto,
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('Attendance', attendance);
+
     return attendance;
   }
 
@@ -131,6 +137,9 @@ export class AttendanceService {
       oldValue: existing,
     });
 
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('Attendance', { id, tenantId, deletedAt: new Date() });
+
     return { message: 'Présence supprimée' };
   }
 
@@ -149,13 +158,14 @@ export class AttendanceService {
             results.skipped++;
             continue;
           }
-          await this.prisma.attendance.update({
+          const updated = await this.prisma.attendance.update({
             where: { id: existing.id },
             data: { status: record.status, justification: record.justification, updatedBy: userId },
           });
+          this.prisma.notifyWrite('Attendance', updated);
           results.created++;
         } else {
-          await this.prisma.attendance.create({
+          const created = await this.prisma.attendance.create({
             data: {
               tenantId,
               studentId: record.studentId,
@@ -165,6 +175,7 @@ export class AttendanceService {
               updatedBy: userId,
             },
           });
+          this.prisma.notifyWrite('Attendance', created);
           results.created++;
         }
       } catch (error) {

@@ -108,7 +108,11 @@ export class TeachersService {
       newValue: dto,
     });
 
-    return this.findById(teacher.id, tenantId);
+    // Propager vers CouchDB
+    const created = await this.findById(teacher.id, tenantId);
+    this.prisma.notifyWrite('Teacher', created);
+
+    return created;
   }
 
   async update(id: string, tenantId: string, dto: UpdateTeacherDto, userId?: string) {
@@ -149,7 +153,11 @@ export class TeachersService {
       newValue: dto,
     });
 
-    return this.findById(id, tenantId);
+    // Propager la mise à jour vers CouchDB
+    const updated = await this.findById(id, tenantId);
+    this.prisma.notifyWrite('Teacher', updated);
+
+    return updated;
   }
 
   async remove(id: string, tenantId: string, userId?: string) {
@@ -168,6 +176,9 @@ export class TeachersService {
       entityType: 'Teacher',
       entityId: id,
     });
+
+    // Propager la désactivation vers CouchDB (isActive:false) pour que le client pull la nouvelle version
+    this.prisma.notifyWrite('Teacher', { id: teacher.id, tenantId, isActive: false });
 
     return { message: 'Enseignant désactivé' };
   }

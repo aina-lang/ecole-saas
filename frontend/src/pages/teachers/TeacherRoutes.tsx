@@ -1,10 +1,13 @@
 import { Routes, Route, Navigate, NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { TeacherListPage } from './TeacherListPage'
+import { TeacherFormPage } from './TeacherFormPage'
 import { TeacherAttendancePage } from './TeacherAttendancePage'
 import { TeacherPayPage } from './TeacherPayPage'
 import { TeacherContractPage } from './TeacherContractPage'
 
 const tabs = [
+  { label: 'Liste', to: '/teachers/list' },
   { label: 'Présences', to: '/teachers/attendance' },
   { label: 'Paie', to: '/teachers/payments' },
   { label: 'Contrats', to: '/teachers/contracts' }
@@ -40,11 +43,14 @@ export function TeacherRoutes() {
   return (
     <Routes>
       <Route element={<TeacherLayout />}>
-        <Route index element={<Navigate to="/teachers/attendance" replace />} />
+        <Route index element={<Navigate to="/teachers/list" replace />} />
+        <Route path="list" element={<TeacherListPage />} />
+        <Route path="new" element={<TeacherFormPage />} />
+        <Route path=":id/edit" element={<TeacherFormPage />} />
         <Route path="attendance" element={<TeacherAttendancePage />} />
         <Route path="payments" element={<TeacherPayPage />} />
         <Route path="contracts" element={<TeacherContractPage />} />
-        <Route path="*" element={<Navigate to="/teachers/attendance" replace />} />
+        <Route path="*" element={<Navigate to="/teachers/list" replace />} />
       </Route>
     </Routes>
   )

@@ -57,7 +57,7 @@ export class TeacherContractsService {
     const contract = await this.prisma.teacherContract.findFirst({ where: { id, tenantId } });
     if (!contract) throw new NotFoundException('Contrat non trouvé');
 
-    return this.prisma.teacherContract.update({
+    const updated = await this.prisma.teacherContract.update({
       where: { id },
       data: {
         contractType: dto.contractType,
@@ -74,6 +74,11 @@ export class TeacherContractsService {
         },
       },
     });
+
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('TeacherContract', updated);
+
+    return updated;
   }
 
   async remove(id: string, tenantId: string) {
@@ -81,6 +86,8 @@ export class TeacherContractsService {
     if (!contract) throw new NotFoundException('Contrat non trouvé');
 
     await this.prisma.teacherContract.delete({ where: { id } });
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('TeacherContract', { id, tenantId, deletedAt: new Date() });
     return { message: 'Contrat supprimé' };
   }
 }

@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
+import { queryEntities, saveEntity, enrichTeachers } from '@/lib/db/pouchdb-compat'
 import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -34,15 +33,22 @@ export function TeacherAttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [refreshKey, setRefreshKey] = useState(0)
   const queryClient = useQueryClient()
+  const today = new Date().toISOString().split('T')[0]
 
-  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachersRaw, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
+
+  const { data: teachers, isLoading: isLoadingTeachers } = useQuery({
+    queryKey: ['enriched-teachers', teachersRaw],
+    queryFn: () => enrichTeachers(teachersRaw ?? []),
+    enabled: !!teachersRaw,
+  })
 
   const { data: attendances, isLoading: isLoadingAttendances } = useQuery({
     queryKey: ['teacher-attendance', date, refreshKey],
     queryFn: () => queryEntities('TeacherAttendance', { date })
   })
 
-  const isLoading = loadingTeachers || isLoadingAttendances
+  const isLoading = isLoadingTeachers || isLoadingAttendances
 
   const handleRefresh = () => {
     refetchTeachers()
@@ -93,8 +99,14 @@ export function TeacherAttendancePage() {
           </Button>
           <DatePicker
             value={date}
-            onChange={(d) => d && setDate(format(d, 'yyyy-MM-dd'))}
+            onChange={(d) => {
+              if (d) {
+                const formatted = format(d, 'yyyy-MM-dd')
+                if (formatted <= today) setDate(formatted)
+              }
+            }}
             className="w-[180px]"
+            max={new Date(today)}
           />
         </div>
       </div>
@@ -106,23 +118,24 @@ export function TeacherAttendancePage() {
               {
                 key: 'name',
                 label: 'Enseignant',
-                render: (teacher) => {
-                  const t = teacher as any
-                  const name = t.user ? `${t.user.firstName || ''} ${t.user.lastName || ''}`.trim() : `${t.firstName || ''} ${t.lastName || ''}`.trim()
-                  return name || 'Enseignant inconnu'
+                render: (row) => {
+                  const t = row as any
+                  const first = t.user?.firstName ?? t.user_firstName ?? ''
+                  const last = t.user?.lastName ?? t.user_lastName ?? ''
+                  return `${first} ${last}`.trim() || 'Sans nom'
                 },
                 className: 'font-medium',
               },
               {
                 key: 'specialty',
                 label: 'Spécialité',
-                render: (teacher) => (teacher as any).specialty || '-',
+                render: (row) => (row as any).specialty || '-',
               },
               {
                 key: 'status',
                 label: 'Statut',
-                render: (teacher) => {
-                  const att = attendanceMap.get((teacher as any).id)
+                render: (row) => {
+                  const att = attendanceMap.get((row as any).id)
                   return att ? (
                     <Badge className={statusColors[att.status] || ''} variant="secondary">
                       {statusLabels[att.status] || att.status}
@@ -135,8 +148,8 @@ export function TeacherAttendancePage() {
               {
                 key: 'actions',
                 label: 'Actions',
-                render: (teacher) => {
-                  const att = attendanceMap.get((teacher as any).id)
+                render: (row) => {
+                  const att = attendanceMap.get((row as any).id)
                   return (
                     <div className="flex gap-1">
                       {['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].map((status) => (
@@ -144,7 +157,7 @@ export function TeacherAttendancePage() {
                           key={status}
                           size="sm"
                           variant={att?.status === status ? 'default' : 'outline'}
-                          onClick={() => setStatus((teacher as any).id, status)}
+                          onClick={() => setStatus((row as any).id, status)}
                           disabled={bulkMutation.isPending}
                         >
                           {statusLabels[status]}
@@ -160,7 +173,7 @@ export function TeacherAttendancePage() {
             page={1}
             limit={100}
             onPageChange={() => {}}
-            getRowId={(teacher) => (teacher as any).id}
+            getRowId={(row) => (row as any).id}
             isLoading={isLoading}
             emptyMessage="Aucun enseignant"
           />

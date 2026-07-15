@@ -164,15 +164,23 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const cspHeader = details.responseHeaders?.['content-security-policy']
     const csp = Array.isArray(cspHeader) ? cspHeader[0] : cspHeader
-    if (csp && !csp.includes('local-asset:')) {
-      const fixed = csp.replace(/img-src[^;]*/, '$& local-asset: http://localhost:3000')
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'content-security-policy': [fixed],
-        },
-      })
-      return
+    if (csp) {
+      let fixed = csp
+      if (!csp.includes('local-asset:')) {
+        fixed = fixed.replace(/img-src[^;]*/, '$& local-asset: http://localhost:3000')
+      }
+      if (!csp.includes('51.178.50.63:5984')) {
+        fixed = fixed.replace(/connect-src[^;]*/, '$& http://51.178.50.63:5984')
+      }
+      if (fixed !== csp) {
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'content-security-policy': [fixed],
+          },
+        })
+        return
+      }
     }
     callback({ responseHeaders: details.responseHeaders })
   })

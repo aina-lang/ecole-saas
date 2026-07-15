@@ -81,6 +81,9 @@ export class ClassesService {
       newValue: dto,
     });
 
+    // Propager vers CouchDB
+    this.prisma.notifyWrite('Class', cls);
+
     return cls;
   }
 
@@ -118,6 +121,9 @@ export class ClassesService {
       newValue: dto,
     });
 
+    // Propager la mise à jour vers CouchDB
+    this.prisma.notifyWrite('Class', updated);
+
     return updated;
   }
 
@@ -141,6 +147,9 @@ export class ClassesService {
       entityId: id,
       oldValue: cls,
     });
+
+    // Propager la suppression vers CouchDB (deletedAt → _deleted)
+    this.prisma.notifyWrite('Class', { id: cls.id, tenantId, deletedAt: new Date() });
 
     return { message: 'Classe supprimée' };
   }
@@ -169,6 +178,9 @@ export class ClassesService {
       metadata: { classId },
     });
 
+    // Propager la modification de l'étudiant vers CouchDB
+    this.prisma.notifyWrite('Student', updated);
+
     return updated;
   }
 
@@ -195,6 +207,9 @@ export class ClassesService {
       entityId: studentId,
       metadata: { removedFromClassId: classId },
     });
+
+    // Propager la modification de l'étudiant vers CouchDB
+    this.prisma.notifyWrite('Student', updated);
 
     return updated;
   }
@@ -225,6 +240,9 @@ export class ClassesService {
       newValue: { teacherId },
     });
 
+    // Propager la classe (avec ses relations mises à jour) vers CouchDB
+    this.prisma.notifyWrite('Class', updated);
+
     return updated;
   }
 
@@ -251,6 +269,9 @@ export class ClassesService {
       newValue: { teacherId },
     });
 
+    // Propager la classe (avec ses relations mises à jour) vers CouchDB
+    this.prisma.notifyWrite('Class', updated);
+
     return updated;
   }
 
@@ -276,6 +297,9 @@ export class ClassesService {
       newValue: { subjectId },
     });
 
+    // Propager la classe (avec ses relations mises à jour) vers CouchDB
+    this.prisma.notifyWrite('Class', updated);
+
     return updated;
   }
 
@@ -297,6 +321,9 @@ export class ClassesService {
       entityId: classId,
       newValue: { subjectId },
     });
+
+    // Propager la classe (avec ses relations mises à jour) vers CouchDB
+    this.prisma.notifyWrite('Class', updated);
 
     return updated;
   }

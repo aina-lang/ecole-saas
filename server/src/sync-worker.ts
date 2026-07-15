@@ -51,12 +51,33 @@ async function processChange(entity: string, change: any) {
   const id = change.id
 
   if (change.deleted) {
-    try { await model.update({ where: { id }, data: { deletedAt: new Date() } }) }
+    try {
+      const existing = await (model as any).findFirst({ where: { id } });
+      if (existing && existing.tenantId !== tenantId) {
+        console.error(
+          `[sync-worker] ${entity}/${id}: tenantId mismatch on delete — ` +
+          `CouchDB dit tenantId=${tenantId}, PostgreSQL a tenantId=${existing.tenantId}. ` +
+          `Suppression BLOQUÉE.`
+        );
+        return;
+      }
+      await model.update({ where: { id }, data: { deletedAt: new Date() } })
+    }
     catch {}
     return
   }
 
   try {
+    const existing = await (model as any).findFirst({ where: { id } });
+    if (existing && existing.tenantId !== tenantId) {
+      console.error(
+        `[sync-worker] ${entity}/${id}: tenantId mismatch — ` +
+        `CouchDB dit tenantId=${tenantId}, PostgreSQL a tenantId=${existing.tenantId}. ` +
+        `Mise à jour BLOQUÉE (possible fuite de données inter-tenants).`
+      );
+      return;
+    }
+
     await model.upsert({
       where: { id },
       create: { ...data, id, tenantId },
