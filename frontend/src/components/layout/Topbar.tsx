@@ -78,6 +78,18 @@ export function Topbar({ title }: TopbarProps) {
           </span>
         </div>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={async () => {
+            const { performSync } = await import('@/lib/db/sync-manager')
+            await performSync()
+          }}
+          disabled={isSyncing}
+        >
+          <ReloadIcon className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+        </Button>
+
         <ModeToggle />
 
         <DropdownMenu>

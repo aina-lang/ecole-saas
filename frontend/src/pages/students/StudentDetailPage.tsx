@@ -135,8 +135,8 @@ export function StudentDetailPage() {
                 <Badge variant={status.variant}>{status.label}</Badge>
               </div>
               <div className="flex gap-4 text-sm text-muted-foreground">
-                <span>Matricule: {student.registrationNumber}</span>
-                <span>Classe: {student.class?.name ?? student.classId}</span>
+                <span>Matricule: {student.registrationNumber || 'Non défini'}</span>
+                <span>Classe: {student.class?.name ?? classes?.find((c: any) => c.id === student.classId)?.name ?? student.classId}</span>
               </div>
             </div>
           </div>
@@ -177,7 +177,7 @@ export function StudentDetailPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Matricule:</span>
-                  <p className="font-medium">{student.registrationNumber}</p>
+                  <p className="font-medium">{student.registrationNumber || 'Non défini'}</p>
                 </div>
               </div>
             </CardContent>
@@ -239,7 +239,7 @@ export function StudentDetailPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Inscrit le:</span>
-                  <p className="font-medium">{formatDate(student.createdAt)}</p>
+                  <p className="font-medium">{formatDate(student.enrollmentDate)}</p>
                 </div>
               </CardContent>
             </Card>

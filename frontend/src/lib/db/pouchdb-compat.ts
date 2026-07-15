@@ -3,6 +3,7 @@ import {
   getDocument,
   putDocument,
   deleteDocument,
+  createDatabase,
   type EntityType,
 } from './pouchdb'
 import { enqueueOperation } from './sync-engine'
@@ -11,16 +12,19 @@ export async function queryEntities<T = any>(entityType: EntityType, filters?: R
   let results = await getAllDocuments(entityType)
 
   if (filters) {
+    let limit: number | undefined
+    let offset: number | undefined
+
     for (const [key, value] of Object.entries(filters)) {
       if (value === undefined || value === null) continue
 
       if (key === 'limit') {
-        results = results.slice(0, value as number)
+        limit = value as number
         continue
       }
 
       if (key === 'offset') {
-        results = results.slice(value as number)
+        offset = value as number
         continue
       }
 
@@ -52,13 +56,17 @@ export async function queryEntities<T = any>(entityType: EntityType, filters?: R
 
       results = results.filter((doc: any) => doc[key] === value)
     }
+
+    if (offset) results = results.slice(offset)
+    if (limit) results = results.slice(0, limit)
   }
 
   return results as T[]
 }
 
 export async function countEntities(entityType: EntityType, filters?: Record<string, any>): Promise<number> {
-  const results = await queryEntities(entityType, filters)
+  const { limit: _limit, offset: _offset, ...cleanFilters } = filters || {}
+  const results = await queryEntities(entityType, cleanFilters)
   return results.length
 }
 
@@ -69,13 +77,28 @@ export async function getEntityById<T = any>(entityType: EntityType, id: string)
 
 export async function saveEntity(entityType: EntityType, data: any): Promise<any> {
   const id = data._id || data.id || crypto.randomUUID()
+  const db = createDatabase(entityType)
+  let existingRev: string | undefined
+  try {
+    const existing = await db.get(id)
+    existingRev = existing._rev
+  } catch { }
+  db.close()
   const doc = { ...data, _id: id }
-  const response = await putDocument(entityType, doc)
+  if (existingRev) doc._rev = existingRev
+  const isUpdate = !!existingRev
+  let response: any
+  try {
+    response = await putDocument(entityType, doc)
+  } catch (err) {
+    console.error(`saveEntity(${entityType}, ${id}) putDocument error:`, err)
+    throw err
+  }
 
   await enqueueOperation(
     entityType,
     data.id || id,
-    data.id ? 'UPDATE' : 'CREATE',
+    isUpdate ? 'UPDATE' : 'CREATE',
     data,
   )
 

@@ -5,6 +5,7 @@ import { AppRouter } from '@/router'
 import { useSyncInvalidation } from '@/lib/db/hooks'
 import { useEffect } from 'react'
 import { initSyncEngine, destroySyncEngine } from '@/lib/db/sync-manager'
+import { SyncDebugPanel } from '@/components/debug/SyncDebugPanel'
 import '@/global.css'
 
 const queryClient = new QueryClient({
@@ -32,6 +33,7 @@ function AppInner() {
     <BrowserRouter>
       <AppRouter />
       <Toaster position="top-right" richColors />
+      <SyncDebugPanel />
     </BrowserRouter>
   )
 }

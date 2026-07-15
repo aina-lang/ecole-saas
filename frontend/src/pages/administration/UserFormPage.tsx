@@ -241,6 +241,10 @@ export function UserFormPage() {
       if (values.email) payload.email = values.email
       if (values.password) payload.password = values.password
       if (values.role === 'TEACHER') {
+        await saveEntity('User', {
+          ...payload,
+          role: values.role
+        })
         await saveEntity('Teacher', {
           ...payload,
           specialty: values.specialty || undefined,
@@ -305,6 +309,10 @@ export function UserFormPage() {
       if (values.email) payload.email = values.email
       if (values.password) payload.password = values.password
       if (values.role === 'TEACHER') {
+        await saveEntity('User', {
+          ...payload,
+          role: values.role
+        })
         await saveEntity('Teacher', {
           ...payload,
           id: user.teacher.id,

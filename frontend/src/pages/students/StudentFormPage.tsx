@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { saveEntity, getEntityById } from '@/lib/db/pouchdb-compat'
+import { getDocument, putDocument } from '@/lib/db/pouchdb'
 import type { Student } from '@/types'
 
 import { Button } from '@/components/ui/button'
@@ -112,13 +113,51 @@ export function StudentFormPage() {
     setLoadingStudent(true)
     ;(async () => {
       let data = await getEntityById<any>('Student', id!)
+      console.log(`[StudentFormPage] Load from PouchDB (id=${id}):`, data)
+
+      const needsPhotoUrl = data && !data.photoUrl
+
       if (!data) {
         try {
           const { data: res } = await client.get(`/students/${id}`)
-          data = res.data ?? res
-          if (data) await saveEntity('Student', data)
-        } catch { /* offline */ }
+          const apiData = res.data ?? res
+          console.log(`[StudentFormPage] Load from API (id=${id}):`, apiData)
+          if (apiData) {
+            await saveEntity('Student', apiData)
+            data = apiData
+          }
+        } catch (err) {
+          console.warn(`[StudentFormPage] API fallback failed for ${id}:`, err)
+        }
+      } else if (needsPhotoUrl) {
+        try {
+          const { data: res } = await client.get(`/students/${id}`)
+          const apiData = res.data ?? res
+          console.log(`[StudentFormPage] Refresh photo from API (id=${id}):`, apiData)
+          if (apiData?.photoUrl) {
+            await saveEntity('Student', { ...data, photoUrl: apiData.photoUrl })
+            data = { ...data, photoUrl: apiData.photoUrl }
+          }
+        } catch (err) {
+          console.warn(`[StudentFormPage] API photo fallback failed for ${id}:`, err)
+        }
       }
+
+      if (!data?.photoUrl) {
+        const api = window.api
+        if (api?.file?.getEntityPhoto && id) {
+          try {
+            const localPhotoUrl = await api.file.getEntityPhoto('Student', id)
+            if (localPhotoUrl) {
+              console.log(`[StudentFormPage] Found local photo:`, localPhotoUrl)
+              data = { ...(data || { id, firstName: '', lastName: '' }), photoUrl: localPhotoUrl }
+            }
+          } catch (photoErr) {
+            console.warn(`[StudentFormPage] Local photo fallback failed:`, photoErr)
+          }
+        }
+      }
+
       setStudent(data as Student)
       setLoadingStudent(false)
     })()
@@ -148,6 +187,7 @@ export function StudentFormPage() {
 
   useEffect(() => {
     if (student) {
+      console.log(`[StudentFormPage] Resetting form with student:`, { ...student, photoUrl: student.photoUrl })
       form.reset({
         firstName: student.firstName,
         lastName: student.lastName,
@@ -208,8 +248,12 @@ export function StudentFormPage() {
   const createMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
       const localId = crypto.randomUUID()
+      const year = new Date().getFullYear()
+      const randomNum = String(Math.floor(Math.random() * 99999)).padStart(5, '0')
       const payload: Record<string, unknown> = {
         id: localId,
+        registrationNumber: `STU-${year}-${randomNum}`,
+        enrollmentDate: values.enrollmentDate || new Date().toISOString().split('T')[0],
         firstName: values.firstName || undefined,
         lastName: values.lastName,
         birthDate: values.birthDate || undefined,
@@ -225,7 +269,6 @@ export function StudentFormPage() {
         medicalNotes: values.medicalNotes || undefined,
         allergies: values.allergies || undefined,
         classId: values.classId || undefined,
-        enrollmentDate: values.enrollmentDate || undefined,
       }
       Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
 
@@ -235,10 +278,17 @@ export function StudentFormPage() {
         const api = window.api
         if (api?.file) {
           const buffer = await pendingPhoto.arrayBuffer()
-          await api.file.save({
+          const result = await api.file.save({
             buffer, entityType: 'Student', entityId: localId,
             fieldName: 'photo_url', originalName: pendingPhoto.name, mimeType: pendingPhoto.type,
           })
+          const localUrl = await api.file.getUrl(result.localPath)
+          if (localUrl) {
+            const existing = await getDocument('Student', localId)
+            if (existing) {
+              await putDocument('Student', { ...existing, photoUrl: localUrl })
+            }
+          }
         }
         setPendingPhoto(null)
       }
@@ -250,7 +300,8 @@ export function StudentFormPage() {
       toast.success('Élève créé (mode hors-ligne)')
       navigate('/students')
     },
-    onError: () => {
+    onError: (err) => {
+      console.error('Create student error:', err)
       toast.error("Erreur lors de la création de l'élève")
     }
   })
@@ -286,8 +337,10 @@ export function StudentFormPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
+      const regNumber = student?.registrationNumber || `STU-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`
       const payload: Record<string, unknown> = {
         id,
+        registrationNumber: regNumber,
         firstName: values.firstName || undefined,
         lastName: values.lastName,
         birthDate: values.birthDate || undefined,
@@ -315,7 +368,8 @@ export function StudentFormPage() {
       toast.success('Élève mis à jour (mode hors-ligne)')
       navigate('/students')
     },
-    onError: () => {
+    onError: (err) => {
+      console.error('Update student error:', err)
       toast.error('Erreur lors de la mise à jour')
     }
   })
@@ -325,6 +379,13 @@ export function StudentFormPage() {
       updateMutation.mutate(values)
     } else {
       createMutation.mutate(values)
+    }
+  }
+
+  async function updateStudentPhotoUrl(studentId: string, photoUrl: string | null) {
+    const existing = await getDocument('Student', studentId)
+    if (existing) {
+      await putDocument('Student', { ...existing, photoUrl })
     }
   }
 
@@ -353,11 +414,12 @@ export function StudentFormPage() {
       const { data } = await client.post(`/students/${id}/photo`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      const student = data.data ?? data
-      return { url: student.photoUrl }
+      const studentData = data.data ?? data
+      return { url: studentData.photoUrl }
     },
-    onSuccess: () => {
-      if (!id) return
+    onSuccess: async (result) => {
+      if (!id || !result?.url) return
+      await updateStudentPhotoUrl(id, result.url)
       queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: ['student', id] })
     },
@@ -369,8 +431,9 @@ export function StudentFormPage() {
       const { data } = await client.delete(`/students/${id}/photo`)
       return data.data ?? data
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       if (!id) return
+      await updateStudentPhotoUrl(id, null)
       queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: ['student', id] })
     },

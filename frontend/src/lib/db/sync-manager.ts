@@ -29,6 +29,7 @@ export async function initSyncEngine(): Promise<void> {
   isInitialized = true
 
   const store = useSyncStore.getState()
+  console.log('[Sync] Initializing sync engine, online:', navigator.onLine)
 
   onlineListener = () => {
     store.setOnline(true)
@@ -43,11 +44,19 @@ export async function initSyncEngine(): Promise<void> {
   window.addEventListener('offline', offlineListener)
 
   await registerDevice()
+  console.log('[Sync] Device registered')
 
   const queueStats = await getQueueStats()
   store.setPendingCount(queueStats.total)
+  console.log('[Sync] Pending count:', queueStats.total)
 
   startPeriodicSync()
+  console.log('[Sync] Periodic sync started')
+
+  if (navigator.onLine) {
+    console.log('[Sync] Online on init, triggering sync')
+    scheduleSync()
+  }
 }
 
 export function startPeriodicSync(intervalMs = 60000): void {
@@ -69,11 +78,14 @@ export function stopPeriodicSync(): void {
 let syncInProgress = false
 
 export async function performSync(): Promise<SyncResult[]> {
+  console.log('[Sync] performSync called, online:', navigator.onLine)
   if (!navigator.onLine) {
+    console.log('[Sync] Offline, skipping sync')
     return [{ entityType: '_all', ok: false, synced: 0, errors: 0, conflicts: 0, error: 'Hors ligne' }]
   }
 
   if (syncInProgress) {
+    console.log('[Sync] Sync already in progress, skipping')
     return []
   }
 
@@ -83,18 +95,26 @@ export async function performSync(): Promise<SyncResult[]> {
   store.setError(null)
 
   try {
+    console.log('[Sync] Fetching snapshot...')
     const snapshot = await fetchSnapshot()
     if (snapshot) {
+      console.log('[Sync] Snapshot fetched, applying...')
       await applySnapshot(snapshot)
       store.setLastSync(snapshot.serverTimestamp)
+      console.log('[Sync] Snapshot applied, last sync:', snapshot.serverTimestamp)
+    } else {
+      console.log('[Sync] No snapshot received')
     }
 
+    console.log('[Sync] Processing queue...')
     const queueResult = await processQueue()
 
+    console.log('[Sync] Polling changes...')
     await pollAllChanges()
 
     const queueStats = await getQueueStats()
     store.setPendingCount(queueStats.total)
+    console.log('[Sync] Queue stats:', queueStats)
 
     const results: SyncResult[] = [
       {
@@ -108,6 +128,7 @@ export async function performSync(): Promise<SyncResult[]> {
 
     return results
   } catch (err: any) {
+    console.error('[Sync] Error during sync:', err)
     store.setError(err.message)
     return [
       {

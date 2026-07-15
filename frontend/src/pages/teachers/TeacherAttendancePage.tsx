@@ -32,12 +32,13 @@ const statusLabels: Record<string, string> = {
 
 export function TeacherAttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [refreshKey, setRefreshKey] = useState(0)
   const queryClient = useQueryClient()
 
   const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
   const { data: attendances, isLoading: isLoadingAttendances } = useQuery({
-    queryKey: ['teacher-attendance', date],
+    queryKey: ['teacher-attendance', date, refreshKey],
     queryFn: () => queryEntities('TeacherAttendance', { date })
   })
 
@@ -63,6 +64,7 @@ export function TeacherAttendancePage() {
       }
     },
     onSuccess: () => {
+      setRefreshKey((k) => k + 1)
       queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] })
       toast.success('Présences enregistrées (mode hors-ligne)')
     },
@@ -104,7 +106,11 @@ export function TeacherAttendancePage() {
               {
                 key: 'name',
                 label: 'Enseignant',
-                render: (teacher) => `${(teacher as any).user.firstName} ${(teacher as any).user.lastName}`,
+                render: (teacher) => {
+                  const t = teacher as any
+                  const name = t.user ? `${t.user.firstName || ''} ${t.user.lastName || ''}`.trim() : `${t.firstName || ''} ${t.lastName || ''}`.trim()
+                  return name || 'Enseignant inconnu'
+                },
                 className: 'font-medium',
               },
               {

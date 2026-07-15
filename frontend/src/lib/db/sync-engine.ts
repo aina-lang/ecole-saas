@@ -161,7 +161,13 @@ async function setLastSyncTimestamp(entityType: string, timestamp: string): Prom
 
 async function mapEntityToDoc(entityType: EntityType, entity: any): Promise<any> {
   const doc = { ...entity }
-  doc._id = String(entity.id)
+  const rawId = entity.id ?? entity._id
+  if (rawId == null) {
+    console.warn(`[Sync] ${entityType} entity missing id:`, entity)
+    doc._id = `${entityType.toLowerCase()}-${crypto.randomUUID()}`
+  } else {
+    doc._id = String(rawId)
+  }
   delete doc.id
   delete doc.tenantId
   if (entityType === 'Class') {
@@ -172,59 +178,90 @@ async function mapEntityToDoc(entityType: EntityType, entity: any): Promise<any>
 
 async function storeSnapshotEntity(entityType: EntityType, entities: any[]): Promise<void> {
   if (!entities.length) return
-  const docs = entities.map((e) => mapEntityToDoc(entityType, e))
-  const db = createDatabase(entityType)
   try {
-    const existing = await db.allDocs({ include_docs: false })
-    const existingIds = new Set(existing.rows.map((r: any) => r.id))
-    const toDelete = existingIds
-    for (const doc of docs) {
-      toDelete.delete(doc._id)
+    const docs = entities.map((e) => {
       try {
-        const existingDoc = await db.get(doc._id)
-        await db.put({ ...doc, _rev: existingDoc._rev })
-      } catch {
-        await db.put(doc)
+        return mapEntityToDoc(entityType, e)
+      } catch (err) {
+        console.error(`[Sync] mapEntityToDoc error for ${entityType}:`, err, e)
+        return null
       }
-    }
-    for (const id of toDelete) {
-      try {
-        const doc = await db.get(id)
-        await db.remove(doc)
-      } catch {
+    }).filter(Boolean) as any[]
+    if (!docs.length) return
+    const validDocs = docs.filter((d) => {
+      const hasId = d._id && String(d._id).trim()
+      if (!hasId) console.warn(`[Sync] ${entityType} doc missing _id:`, JSON.stringify(d))
+      return hasId
+    })
+    if (!validDocs.length) return
+    const db = createDatabase(entityType)
+    try {
+      const existing = await db.allDocs({ include_docs: false })
+      const existingIds = new Set(existing.rows.map((r: any) => r.id))
+      const toDelete = existingIds
+      for (const doc of validDocs) {
+        toDelete.delete(doc._id)
+        try {
+          const existingDoc = await db.get(doc._id)
+          await db.put({ ...doc, _rev: existingDoc._rev })
+        } catch (putErr) {
+          try {
+            await db.put(doc)
+          } catch (createErr) {
+            console.error(`[Sync] Failed to put ${entityType} doc:`, { _id: doc._id, error: createErr.message })
+          }
+        }
       }
+      for (const id of toDelete) {
+        try {
+          const doc = await db.get(id)
+          await db.remove(doc)
+        } catch {
+        }
+      }
+    } finally {
+      db.close()
     }
-  } finally {
-    db.close()
+  } catch (err) {
+    console.error(`[Sync] Unexpected error storing ${entityType}:`, err)
   }
 }
 
 export async function fetchSnapshot(): Promise<SyncSnapshot | null> {
   try {
+    console.log('[Sync] GET /sync/snapshot')
     const { data } = await client.get('/sync/snapshot')
+    console.log('[Sync] snapshot response', data)
     return data as SyncSnapshot
-  } catch {
+  } catch (err) {
+    console.error('[Sync] snapshot error', err)
     return null
   }
 }
 
 export async function applySnapshot(snapshot: SyncSnapshot): Promise<void> {
+  console.log('[Sync] Applying snapshot with timestamp:', snapshot.serverTimestamp)
   const entityMap: [EntityType, any[]][] = [
-    ['Class', snapshot.classes],
-    ['Subject', snapshot.subjects],
-    ['Teacher', snapshot.teachers],
-    ['Student', snapshot.students],
-    ['Grade', snapshot.grades],
-    ['Attendance', snapshot.attendance],
+    ['Class', snapshot.classes ?? []],
+    ['Subject', snapshot.subjects ?? []],
+    ['Teacher', snapshot.teachers ?? []],
+    ['Student', snapshot.students ?? []],
+    ['Grade', snapshot.grades ?? []],
+    ['Attendance', snapshot.attendance ?? []],
   ]
 
   await Promise.all(
-    entityMap.map(([type, entities]) => storeSnapshotEntity(type, entities)),
+    entityMap.map(([type, entities]) =>
+      storeSnapshotEntity(type, entities).catch((err) => {
+        console.error(`[Sync] Error storing ${type} entities:`, err)
+      }),
+    ),
   )
 
   for (const [type] of entityMap) {
     await setLastSyncTimestamp(type, snapshot.serverTimestamp)
   }
+  console.log('[Sync] Snapshot applied successfully')
 }
 
 export async function processQueue(): Promise<{
