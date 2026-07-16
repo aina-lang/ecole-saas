@@ -1,12 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import client from '@/api/client'
+import { queryEntities, saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 import { cn } from '@/lib/utils'
@@ -21,7 +20,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '@/components/ui/dialog'
 import {
   Form,
@@ -29,63 +28,99 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
+  FormMessage,
 } from '@/components/ui/form'
-import { TrashIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { TrashIcon, RefreshCw, PlusIcon, MoveIcon, PencilIcon, FileDown } from 'lucide-react'
 
 const DAYS = [
-  { value: 1, label: 'Lundi' },
-  { value: 2, label: 'Mardi' },
-  { value: 3, label: 'Mercredi' },
-  { value: 4, label: 'Jeudi' },
-  { value: 5, label: 'Vendredi' },
-  { value: 6, label: 'Samedi' }
+  { value: 1, label: 'Lundi', short: 'Lun' },
+  { value: 2, label: 'Mardi', short: 'Mar' },
+  { value: 3, label: 'Mercredi', short: 'Mer' },
+  { value: 4, label: 'Jeudi', short: 'Jeu' },
+  { value: 5, label: 'Vendredi', short: 'Ven' },
+  { value: 6, label: 'Samedi', short: 'Sam' },
+  { value: 0, label: 'Dimanche', short: 'Dim' },
 ]
 
-interface TimetableSlot {
-  id: string
-  classId: string
-  subjectId: string
-  subject: { id: string; name: string; code: string | null; level: string | null; class?: { id: string; name: string } | null }
-  teacher?: { id: string; user: { firstName: string; lastName: string } } | null
-  dayOfWeek: number
-  startTime: string
-  endTime: string
-  room?: string | null
-}
+const TIME_SLOTS = [
+  '07:00', '08:00', '09:00', '10:00', '11:00',
+  '12:00', '13:00', '14:00', '15:00', '16:00',
+  '17:00', '18:00',
+]
 
 const slotSchema = z.object({
-  dayOfWeek: z.coerce.number().min(1).max(7),
+  id: z.string().optional(),
+  classId: z.string().min(1, 'Classe requise'),
+  dayOfWeek: z.coerce.number().min(0).max(6),
   subjectId: z.string().min(1, 'Matière requise'),
   teacherId: z.string().optional().or(z.literal('')),
   startTime: z.string().min(1, 'Heure de début requise'),
   endTime: z.string().min(1, 'Heure de fin requise'),
-  room: z.string().optional().or(z.literal(''))
+  room: z.string().optional().or(z.literal('')),
 })
 
 type SlotFormValues = z.infer<typeof slotSchema>
+
+interface TimetableSlot {
+  id: string
+  classId: string
+  dayOfWeek: number
+  subjectId: string
+  subject?: { id: string; name: string; code?: string | null }
+  teacherId?: string | null
+  teacher?: { id: string; user: { firstName: string; lastName: string } } | null
+  startTime: string
+  endTime: string
+  room?: string | null
+  deletedAt?: string | null
+  subjectLabel?: string
+  teacherDisplay?: string
+}
 
 export function TimetablePage() {
   const queryClient = useQueryClient()
   const [classId, setClassId] = useState('')
   const [open, setOpen] = useState(false)
-  const [selectedDay, setSelectedDay] = useState<number>(1)
+  const [editingSlot, setEditingSlot] = useState<TimetableSlot | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data: classes, loading: loadingClasses, refetch: refetchClasses } = useLocalQuery<{ id: string; name: string }>('Class')
+  const { data: subjects, loading: loadingSubjects, refetch: refetchSubjects } = useLocalQuery<Subject>('Subject')
+  const { data: teachersRaw, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<any>('Teacher')
 
-  const { data: slots, isLoading: isLoadingSlots } = useQuery<TimetableSlot[]>({
-    queryKey: ['timetable', classId],
+  const { data: slotsRaw, isLoading: isLoadingSlots } = useQuery({
+    queryKey: ['timetable-slots', classId],
     enabled: !!classId,
     queryFn: async () => {
-      const items = await queryEntities<any>('Timetable', { classId })
-      return items ?? []
-    }
+      const items = await queryEntities<any>('TimetableSlot', { classId })
+      return (items ?? []).filter((s: any) => !s.deletedAt) as TimetableSlot[]
+    },
   })
 
-  const { data: subjects, loading: loadingSubjects, refetch: refetchSubjects } = useLocalQuery<Subject>('Subject')
+  const teacherName = (id?: string | null) => {
+    if (!id) return ''
+    const t = (teachersRaw ?? []).find((t) => t.id === id)
+    if (!t) return ''
+    const first = (t as any).user_firstName || (t as any).user?.firstName || ''
+    const last = (t as any).user_lastName || (t as any).user?.lastName || ''
+    return `${first} ${last}`.trim()
+  }
 
-  const { data: teachers, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<{ id: string; user: { firstName: string; lastName: string } }>('Teacher')
+  const subjectLabel = (id: string) => {
+    const s = (subjects ?? []).find((s) => s.id === id)
+    return s ? formatSubjectLabel(s) : id
+  }
+
+  const slots = useMemo(() => {
+    if (!slotsRaw) return []
+    return slotsRaw.map((slot) => ({
+      ...slot,
+      subjectLabel: subjectLabel(slot.subjectId),
+      teacherDisplay: teacherName(slot.teacherId),
+    }))
+  }, [slotsRaw, subjects, teachersRaw])
 
   const isLoading = loadingClasses || isLoadingSlots || loadingSubjects || loadingTeachers
 
@@ -93,81 +128,167 @@ export function TimetablePage() {
     refetchClasses()
     refetchSubjects()
     refetchTeachers()
-    if (classId) queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
+    if (classId) queryClient.invalidateQueries({ queryKey: ['timetable-slots', classId] })
+  }
+
+  const handleExportPdf = () => {
+    if (!classId || !slots.length) {
+      toast.error('Sélectionnez une classe avec des cours')
+      return
+    }
+    const className = (classes ?? []).find((c) => c.id === classId)?.name || 'classe'
+    const rows = DAYS.map((d) => {
+      const daySlots = slots.filter((s) => s.dayOfWeek === d.value).sort((a, b) => a.startTime.localeCompare(b.startTime))
+      const cells = daySlots.map((s) => `${s.startTime}-${s.endTime}: ${s.subjectLabel}${s.teacherDisplay ? ` (${s.teacherDisplay})` : ''}${s.room ? ` [${s.room}]` : ''}`).join('\n')
+      return `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${d.label}</td><td style="padding:8px;border:1px solid #ddd;white-space:pre-line">${cells || '-'}</td></tr>`
+    }).join('')
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Emploi du temps - ${className}</title>
+<style>body{font-family:Arial,sans-serif;padding:20px}h1{text-align:center}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:10px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}</style></head><body>
+<h1>Emploi du temps - ${className}</h1>
+<table><thead><tr><th>Jour</th><th>Cours</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const win = window.open(url, '_blank')
+    if (win) {
+      win.onload = () => {
+        win.print()
+        URL.revokeObjectURL(url)
+      }
+    } else {
+      URL.revokeObjectURL(url)
+      toast.error('Popup bloquée. Autorisez les popups pour exporter le PDF.')
+    }
   }
 
   const form = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema),
     defaultValues: {
+      id: '',
+      classId: '',
       dayOfWeek: 1,
       subjectId: '',
       teacherId: '',
       startTime: '08:00',
       endTime: '09:00',
-      room: ''
-    }
+      room: '',
+    },
   })
 
-  function openCreate(day: number) {
-    setSelectedDay(day)
+  function openCreate(day: number, time = '08:00') {
+    setEditingSlot(null)
     form.reset({
+      id: '',
+      classId,
       dayOfWeek: day,
       subjectId: '',
       teacherId: '',
-      startTime: '08:00',
+      startTime: time,
       endTime: '09:00',
-      room: ''
+      room: '',
+    })
+    setOpen(true)
+  }
+
+  function openEdit(slot: TimetableSlot) {
+    setEditingSlot(slot)
+    form.reset({
+      id: slot.id,
+      classId: slot.classId,
+      dayOfWeek: slot.dayOfWeek,
+      subjectId: slot.subjectId,
+      teacherId: slot.teacherId || '',
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      room: slot.room || '',
     })
     setOpen(true)
   }
 
   const saveMutation = useMutation({
     mutationFn: async (values: SlotFormValues) => {
-      await saveEntity('Timetable', {
-        id: crypto.randomUUID(),
-        classId,
+      const payload: any = {
+        id: values.id || crypto.randomUUID(),
+        classId: values.classId,
         dayOfWeek: values.dayOfWeek,
         subjectId: values.subjectId,
-        teacherId: values.teacherId && values.teacherId !== '__none__' ? values.teacherId : null,
+        teacherId: values.teacherId || null,
         startTime: values.startTime,
         endTime: values.endTime,
         room: values.room || null,
-      })
+      }
+      await saveEntity('TimetableSlot', payload)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
-      toast.success('Créneau ajouté (mode hors-ligne)')
+      queryClient.invalidateQueries({ queryKey: ['timetable-slots'] })
+      toast.success(editingSlot ? 'Créneau modifié' : 'Créneau ajouté')
       setOpen(false)
+      setEditingSlot(null)
     },
-    onError: () => toast.error('Erreur lors de l\'ajout du créneau')
+    onError: () => toast.error('Erreur lors de l\'enregistrement'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await saveEntity('Timetable', { id, deletedAt: new Date().toISOString() })
+      await saveEntity('TimetableSlot', { id, deletedAt: new Date().toISOString() })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['timetable', classId] })
-      toast.success('Créneau supprimé (mode hors-ligne)')
+      queryClient.invalidateQueries({ queryKey: ['timetable-slots'] })
+      toast.success('Créneau supprimé')
       setDeleteId(null)
     },
-    onError: () => toast.error('Erreur lors de la suppression')
+    onError: () => toast.error('Erreur lors de la suppression'),
   })
 
-  const timeSlots = Array.from(
-    new Set((slots ?? []).map((s) => s.startTime))
-  ).sort()
+  const moveMutation = useMutation({
+    mutationFn: async ({ id, dayOfWeek, startTime }: { id: string; dayOfWeek: number; startTime: string }) => {
+      await saveEntity('TimetableSlot', { id, dayOfWeek, startTime })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timetable-slots'] })
+    },
+    onError: () => toast.error('Erreur lors du déplacement'),
+  })
 
-  function slotAt(day: number, time: string) {
-    return (slots ?? []).filter((s) => s.dayOfWeek === day && s.startTime === time)
+  function handleDragStart(id: string) {
+    setDragId(id)
   }
+
+  function handleDragOver(e: React.DragEvent, cellKey: string) {
+    e.preventDefault()
+    setDragOver(cellKey)
+  }
+
+  function handleDragLeave() {
+    setDragOver(null)
+  }
+
+  function handleDrop(day: number, time: string) {
+    if (!dragId) return
+    const slot = slots.find((s) => s.id === dragId)
+    if (!slot) return
+    if (slot.dayOfWeek === day && slot.startTime === time) {
+      setDragId(null)
+      setDragOver(null)
+      return
+    }
+    moveMutation.mutate({ id: dragId, dayOfWeek: day, startTime: time })
+    setDragId(null)
+    setDragOver(null)
+  }
+
+  function getSlotAt(day: number, time: string): TimetableSlot | undefined {
+    return slots.find((s) => s.dayOfWeek === day && s.startTime === time)
+  }
+
+  const cellKey = (day: number, time: string) => `${day}-${time}`
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Emploi du temps</h2>
-          <p className="text-muted-foreground">Planifiez les cours par classe et par jour.</p>
+          <p className="text-muted-foreground">Glissez-déposez les cours pour modifier l'horaire</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -176,7 +297,16 @@ export function TimetablePage() {
             onClick={handleRefresh}
             disabled={isLoading}
           >
-            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleExportPdf}
+            disabled={!classId || !slots.length}
+            title="Générer PDF"
+          >
+            <FileDown className="h-4 w-4" />
           </Button>
           <div className="w-56">
             <Combobox
@@ -191,92 +321,143 @@ export function TimetablePage() {
       </div>
 
       {!classId ? (
-        <p className="text-center text-muted-foreground py-12">
-          Sélectionnez une classe pour afficher son emploi du temps.
-        </p>
+        <div className="flex h-64 items-center justify-center text-muted-foreground">
+          Sélectionnez une classe pour afficher l'emploi du temps
+        </div>
       ) : isLoading ? (
-        <p className="text-center text-muted-foreground py-12">Chargement...</p>
+        <div className="flex h-64 items-center justify-center text-muted-foreground">
+          Chargement...
+        </div>
       ) : (
-        <div
-          className="grid gap-2 border rounded-lg p-3 bg-card"
-          style={{ gridTemplateColumns: `90px repeat(${DAYS.length}, minmax(0, 1fr))` }}
-        >
-          <div />
-          {DAYS.map((d) => (
-            <div key={d.value} className="text-center text-sm font-semibold py-2">
-              {d.label}
-            </div>
-          ))}
+        <div className="rounded-lg border overflow-auto">
+          <div
+            className="grid min-w-[800px]"
+            style={{ gridTemplateColumns: `70px repeat(${DAYS.length}, minmax(0, 1fr))` }}
+          >
+            <div className="border-b p-2" />
+            {DAYS.map((d) => (
+              <div key={d.value} className="border-b p-2 text-center text-sm font-semibold">
+                {d.label}
+              </div>
+            ))}
 
-          {timeSlots.length === 0 && (
-            <div
-              className="col-span-full text-center text-muted-foreground py-12"
-              style={{ gridColumn: `1 / span ${DAYS.length + 1}` }}
-            >
-              Aucun cours planifié. Cliquez sur un jour pour ajouter un créneau.
-            </div>
-          )}
+            {TIME_SLOTS.map((time) => (
+              <Fragment key={time}>
+                <div
+                  key={`time-${time}`}
+                  className="border-t flex items-center justify-center text-xs text-muted-foreground"
+                >
+                  {time}
+                </div>
+                {DAYS.map((d) => {
+                  const slot = getSlotAt(d.value, time)
+                  const key = cellKey(d.value, time)
+                  const isOver = dragOver === key
+                  const isDragging = dragId === slot?.id
 
-          {timeSlots.map((time) => (
-            <FragmentRow
-              key={time}
-              time={time}
-              days={DAYS}
-              slotAt={slotAt}
-              onAdd={openCreate}
-              onDelete={(id) => setDeleteId(id)}
-            />
-          ))}
-          <ConfirmDialog
-            open={!!deleteId}
-            onOpenChange={(open) => !open && setDeleteId(null)}
-            onConfirm={() => { if (deleteId) deleteMutation.mutate(deleteId) }}
-            title="Supprimer le créneau"
-            description="Êtes-vous sûr de vouloir supprimer ce créneau ? Cette action est irréversible."
-          />
+                  return (
+                    <div
+                      key={key}
+                      className={cn(
+                        'border-t p-1 min-h-[70px] transition-colors',
+                        isOver && !slot && 'bg-primary/5',
+                      )}
+                      onDragOver={(e) => handleDragOver(e, key)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={() => handleDrop(d.value, time)}
+                    >
+                      {slot ? (
+                        <div
+                          draggable
+                          onDragStart={() => handleDragStart(slot.id)}
+                          onDragEnd={() => { setDragId(null); setDragOver(null) }}
+                          className={cn(
+                            'group relative rounded-md border bg-primary/5 p-2 text-xs cursor-grab active:cursor-grabbing select-none',
+                            isDragging && 'opacity-40',
+                          )}
+                        >
+                          <div className="flex items-start gap-1">
+                            <MoveIcon className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{slot.subjectLabel}</div>
+                              {slot.teacherDisplay && (
+                                <div className="text-muted-foreground truncate">
+                                  {slot.teacherDisplay}
+                                </div>
+                              )}
+                              <div className="text-muted-foreground">
+                                {slot.startTime} - {slot.endTime}
+                                {slot.room ? ` · ${slot.room}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => { e.stopPropagation(); openEdit(slot) }}
+                              >
+                                <PencilIcon className="h-3 w-3" />
+                              </Button>
+                              <ConfirmDialog
+                                open={deleteId === slot.id}
+                                onOpenChange={(open) => !open && setDeleteId(null)}
+                                onConfirm={() => deleteMutation.mutate(slot.id)}
+                                title="Supprimer le créneau"
+                                description="Êtes-vous sûr ?"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => { e.stopPropagation(); setDeleteId(slot.id) }}
+                              >
+                                <TrashIcon className="h-3 w-3 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openCreate(d.value, time)}
+                          className="w-full h-full min-h-[48px] rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:border-primary hover:text-primary text-xs"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </Fragment>
+            ))}
+          </div>
         </div>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Ajouter un créneau</DialogTitle>
+            <DialogTitle>{editingSlot ? 'Modifier le créneau' : 'Ajouter un créneau'}</DialogTitle>
             <DialogDescription>
-              {DAYS.find((d) => d.value === selectedDay)?.label} — {classId ? 'classe sélectionnée' : ''}
+              {DAYS.find((d) => d.value === form.getValues('dayOfWeek'))?.label}
+              {classId ? ' · classe sélectionnée' : ''}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
               <FormField
                 control={form.control}
-                name="dayOfWeek"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Jour</FormLabel>
-                      <FormControl>
-                        <Combobox
-                          value={String(field.value)}
-                          onValueChange={(v) => field.onChange(Number(v))}
-                          placeholder="Sélectionner"
-                          options={DAYS.map((d) => ({ value: String(d.value), label: d.label }))}
-                        />
-                      </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="subjectId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Matière</FormLabel>
+                    <FormLabel>Matière *</FormLabel>
                     <FormControl>
                       <Combobox
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner"
-                        searchPlaceholder="Rechercher une matière..."
+                        searchPlaceholder="Rechercher..."
                         options={(subjects ?? []).map((s) => ({
                           value: s.id,
                           label: formatSubjectLabel(s),
@@ -298,12 +479,12 @@ export function TimetablePage() {
                         value={field.value || '__none__'}
                         onValueChange={(v) => field.onChange(v || '__none__')}
                         placeholder="Aucun"
-                        searchPlaceholder="Rechercher un enseignant..."
+                        searchPlaceholder="Rechercher..."
                         options={[
                           { value: '__none__', label: 'Aucun' },
-                          ...(teachers ?? []).map((t) => ({
+                          ...(teachersRaw ?? []).map((t) => ({
                             value: t.id,
-                            label: `${t.user.firstName} ${t.user.lastName}`,
+                            label: teacherName(t.id) || t.id,
                           })),
                         ]}
                       />
@@ -318,7 +499,7 @@ export function TimetablePage() {
                   name="startTime"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Début</FormLabel>
+                      <FormLabel>Début *</FormLabel>
                       <FormControl>
                         <Input type="time" {...field} />
                       </FormControl>
@@ -331,7 +512,7 @@ export function TimetablePage() {
                   name="endTime"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fin</FormLabel>
+                      <FormLabel>Fin *</FormLabel>
                       <FormControl>
                         <Input type="time" {...field} />
                       </FormControl>
@@ -353,13 +534,17 @@ export function TimetablePage() {
                   </FormItem>
                 )}
               />
+              <input type="hidden" {...form.register('classId')} value={classId} />
+              <input type="hidden" {...form.register('dayOfWeek')} />
               <DialogFooter>
                 <Button type="submit" disabled={saveMutation.isPending}>
-                  {saveMutation.isPending ? (
-                    <>
-                      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                      Enregistrement...
-                    </>
+                    {saveMutation.isPending ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Enregistrement...
+                      </>
+                    ) : editingSlot ? (
+                    'Modifier'
                   ) : (
                     'Ajouter'
                   )}
@@ -369,69 +554,14 @@ export function TimetablePage() {
           </Form>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
 
-function FragmentRow({
-  time,
-  days,
-  slotAt,
-  onAdd,
-  onDelete
-}: {
-  time: string
-  days: typeof DAYS
-  slotAt: (day: number, time: string) => TimetableSlot[]
-  onAdd: (day: number) => void
-  onDelete: (id: string) => void
-}) {
-  return (
-    <>
-      <div className="flex items-center justify-center text-sm font-medium text-muted-foreground border-t pt-2">
-        {time}
-      </div>
-      {days.map((d) => {
-        const cellSlots = slotAt(d.value, time)
-        return (
-          <div key={d.value} className="border-t pt-2 min-h-[60px] p-1">
-            {cellSlots.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => onAdd(d.value)}
-                className="w-full h-full min-h-[48px] rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:border-primary hover:text-primary text-xs"
-              >
-                +
-              </button>
-            ) : (
-              cellSlots.map((slot) => (
-                <div
-                  key={slot.id}
-                  className="group relative rounded-md border bg-primary/5 p-2 text-xs"
-                >
-                  <div className="font-medium">{formatSubjectLabel(slot.subject)}</div>
-                  {slot.teacher && (
-                    <div className="text-muted-foreground">
-                      {slot.teacher.user.firstName} {slot.teacher.user.lastName}
-                    </div>
-                  )}
-                  <div className="text-muted-foreground">
-                    {slot.startTime} - {slot.endTime}
-                    {slot.room ? ` · ${slot.room}` : ''}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(slot.id)}
-                    className="absolute right-1 top-1 opacity-0 group-hover:opacity-100"
-                  >
-                    <TrashIcon className="h-3.5 w-3.5 text-destructive" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        )
-      })}
-    </>
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+        onConfirm={() => { if (deleteId) deleteMutation.mutate(deleteId) }}
+        title="Supprimer le créneau"
+        description="Êtes-vous sûr de vouloir supprimer ce créneau ?"
+      />
+    </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,14 +8,17 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { Download, RotateCw } from 'lucide-react'
-import { PlusIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
-import client from '@/api/client'
-import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
+import { PlusIcon, MagnifyingGlassIcon, Pencil2Icon, TrashIcon } from '@radix-ui/react-icons'
+import { queryEntities, deleteEntity, saveEntity, countEntities } from '@/lib/db/pouchdb-compat'
+import { useLocalQuery } from '@/lib/db/hooks'
 import type { Payment, Student } from '@/types'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
+import { DataTable } from '@/components/ui/data-table'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -30,14 +34,6 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 
@@ -59,38 +55,18 @@ const recordPaymentSchema = z.object({
 
 type RecordPaymentValues = z.infer<typeof recordPaymentSchema>
 
-function fetchPayments(
-  params: Record<string, string>
-): Promise<Payment[]> {
-  return queryEntities<Payment>('Payment', params)
-}
-
-function recordPaymentFn(paymentId: string, data: RecordPaymentValues) {
-  return saveEntity('Payment', {
-    id: crypto.randomUUID(),
-    feeId: paymentId,
-    amount: data.amount,
-    paymentMethod: data.method,
-    transactionId: data.reference || null,
-    paymentDate: new Date().toISOString(),
-  })
-}
-
-async function exportCsv(params: Record<string, string>) {
-  const payments = await queryEntities<any>('Payment', params)
-  const students = (await queryEntities<any>('Student')).reduce((map, s) => {
-    map[s.id] = `${s.firstName || ''} ${s.lastName || ''}`.trim()
-    return map
-  }, {} as Record<string, string>)
-
+async function exportCsv(
+  payments: Payment[],
+  students: Record<string, string>
+) {
   const header = 'Date;Élève;Montant;Méthode;Référence;Statut'
   const rows = (payments ?? []).map((p) =>
     [
-      p.paymentDate ? format(new Date(p.paymentDate), 'dd/MM/yyyy') : '',
+      p.dueDate ? format(new Date(p.dueDate), 'dd/MM/yyyy') : '',
       students[p.studentId] || p.studentId || '',
       p.amount || 0,
-      p.paymentMethod || '',
-      p.transactionId || '',
+      '-',
+      '-',
       p.status || 'pending',
     ].join(';'),
   )
@@ -105,22 +81,61 @@ async function exportCsv(params: Record<string, string>) {
 }
 
 export function PaymentListPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [filters, setFilters] = useState<Record<string, string>>({})
-  const [searchStudent, setSearchStudent] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortBy, setSortBy] = useState<string>('')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['payments', filters],
-    queryFn: () => fetchPayments(filters)
-  })
+  const { data: studentsRaw, loading: loadingStudents } = useLocalQuery<Student>('Student')
+  const studentsMap = ((studentsRaw ?? []) as any[]).reduce((map, s) => {
+    const first = s.firstName ?? (s as any).user_firstName ?? ''
+    const last = s.lastName ?? (s as any).user_lastName ?? ''
+    map[s.id] = `${first} ${last}`.trim()
+    return map
+  }, {} as Record<string, string>)
 
-  const { data: studentsData } = useQuery({
-    queryKey: ['students-list'],
+  const { data: paymentsData, isLoading } = useQuery({
+    queryKey: ['payments', search, statusFilter, dateFrom, dateTo, sortBy, sortDirection],
     queryFn: async () => {
-      const data = await queryEntities<Student>('Student', { limit: 200 })
-      return { data: { data } } as any
-    }
+      let results = await queryEntities<Payment>('Payment')
+
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        results = results.filter((p) => {
+          const name = (studentsMap[p.studentId] || '').toLowerCase()
+          return name.includes(q) || (p.studentId || '').toLowerCase().includes(q)
+        })
+      }
+      if (statusFilter !== 'all') {
+        results = results.filter((p) => p.status === statusFilter)
+      }
+      if (dateFrom) {
+        const from = new Date(dateFrom).getTime()
+        results = results.filter((p) => p.dueDate && new Date(p.dueDate).getTime() >= from)
+      }
+      if (dateTo) {
+        const to = new Date(dateTo).getTime()
+        results = results.filter((p) => p.dueDate && new Date(p.dueDate).getTime() <= to)
+      }
+      if (sortBy) {
+        results = [...results].sort((a: any, b: any) => {
+          const aVal = a[sortBy] ?? ''
+          const bVal = b[sortBy] ?? ''
+          if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+          if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+          return 0
+        })
+      }
+
+      const total = results.length
+      return { data: results, total } as { data: Payment[]; total: number }
+    },
   })
 
   const form = useForm<RecordPaymentValues>({
@@ -129,7 +144,15 @@ export function PaymentListPage() {
   })
 
   const recordMutation = useMutation({
-    mutationFn: (values: RecordPaymentValues) => recordPaymentFn(paymentDialog!, values),
+    mutationFn: (values: RecordPaymentValues) =>
+      saveEntity('Payment', {
+        id: paymentDialog,
+        amountPaid: (payment as any).amount,
+        paidAmount: values.amount,
+        method: values.method,
+        transactionId: values.reference || null,
+        paymentDate: new Date().toISOString(),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments'] })
       toast.success('Paiement enregistré')
@@ -141,20 +164,24 @@ export function PaymentListPage() {
     }
   })
 
-  const payments = data ?? []
-  const students = studentsData?.data?.data ?? []
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteEntity('Payment', id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      toast.success('Paiement supprimé')
+      setDeleteId(null)
+    },
+    onError: () => toast.error('Erreur lors de la suppression'),
+  })
 
-  function getStudentName(studentId: string) {
-    const s = students.find((st) => st.id === studentId)
-    return s ? `${s.firstName} ${s.lastName}` : studentId
-  }
+  const payments = paymentsData?.data ?? []
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Paiements</h2>
-          <p className="text-muted-foreground">Gérer les paiements des frais de scolarité.</p>
+          <p className="text-muted-foreground">Gérer les paiements des frais de scolarité</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -165,223 +192,200 @@ export function PaymentListPage() {
           >
             <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
           </Button>
-          <Button variant="outline" className="gap-2" onClick={() => exportCsv(filters)}>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => exportCsv(payments, studentsMap)}
+          >
             <Download className="h-4 w-4" />
             Exporter CSV
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex-1 space-y-1">
-              <label className="text-sm font-medium">Élève</label>
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher un élève..."
-                  className="pl-9"
-                  value={searchStudent}
-                  onChange={(e) => {
-                    setSearchStudent(e.target.value)
-                    setFilters((prev) => ({ ...prev, studentId: e.target.value }))
-                  }}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Statut</label>
-              <Combobox
-                options={[
-                  { value: ' ', label: 'Tous' },
-                  { value: 'pending', label: 'En attente' },
-                  { value: 'partial', label: 'Partiel' },
-                  { value: 'paid', label: 'Payé' },
-                  { value: 'overdue', label: 'En retard' }
-                ]}
-                value={filters.status ?? ''}
-                onValueChange={(v) => setFilters((prev) => ({ ...prev, status: v }))}
-                placeholder="Tous"
-                className="w-[150px]"
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Recherche et filtres</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par nom d'élève ou matricule..."
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <Combobox
+              className="w-[150px]"
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v || 'all')}
+              placeholder="Statut"
+              options={[
+                { value: 'all', label: 'Tous' },
+                { value: 'pending', label: 'En attente' },
+                { value: 'partial', label: 'Partiel' },
+                { value: 'paid', label: 'Payé' },
+                { value: 'overdue', label: 'En retard' },
+              ]}
+            />
             <div className="space-y-1">
-              <label className="text-sm font-medium">Du</label>
-              <DatePicker
-                value={filters.dateFrom ?? ''}
-                onChange={(d) => setFilters((prev) => ({ ...prev, dateFrom: d ? format(d, 'yyyy-MM-dd') : '' }))}
-                className="w-[150px]"
-              />
+              <label className="text-xs font-medium text-muted-foreground">Du</label>
+              <DatePicker value={dateFrom} onChange={(d) => setDateFrom(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[140px]" />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium">Au</label>
-              <DatePicker
-                value={filters.dateTo ?? ''}
-                onChange={(d) => setFilters((prev) => ({ ...prev, dateTo: d ? format(d, 'yyyy-MM-dd') : '' }))}
-                className="w-[150px]"
-              />
+              <label className="text-xs font-medium text-muted-foreground">Au</label>
+              <DatePicker value={dateTo} onChange={(d) => setDateTo(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[140px]" />
             </div>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setFilters({})
-                setSearchStudent('')
-              }}
-            >
-              Réinitialiser
-            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Élève</TableHead>
-                <TableHead>Frais</TableHead>
-                <TableHead>Montant</TableHead>
-                <TableHead>Payé</TableHead>
-                <TableHead>Échéance</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
-              ) : payments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    Aucun paiement trouvé
-                  </TableCell>
-                </TableRow>
-              ) : (
-                payments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-medium">
-                      {getStudentName(payment.studentId)}
-                    </TableCell>
-                    <TableCell>{/* TODO: fee structure label */}Frais généraux</TableCell>
-                    <TableCell>{payment.amount.toLocaleString('fr-FR')} Ar</TableCell>
-                    <TableCell>{payment.paidAmount.toLocaleString('fr-FR')} Ar</TableCell>
-                    <TableCell>
-                      {format(new Date(payment.dueDate), 'dd/MM/yyyy', { locale: fr })}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusConfig[payment.status]?.variant ?? 'outline'}>
-                        {statusConfig[payment.status]?.label ?? payment.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {payment.status !== 'paid' && (
-                        <Dialog
-                          open={paymentDialog === payment.id}
-                          onOpenChange={(open) => {
-                            setPaymentDialog(open ? payment.id : null)
-                            if (!open) form.reset()
-                          }}
-                        >
-                          <DialogTrigger asChild>
-                            <Button size="sm" className="gap-2">
-                              <PlusIcon className="h-3 w-3" />
-                              Paiement
+          <DataTable
+            columns={[
+              {
+                key: 'student',
+                label: 'Élève',
+                sortable: true,
+                render: (payment) => {
+                  const p = payment as any
+                  return studentsMap[p.studentId] || '-'
+                },
+                className: 'font-medium',
+              },
+              {
+                key: 'amount',
+                label: 'Montant',
+                sortable: true,
+                render: (payment) => `${(payment as any).amount ?? 0} Ar`,
+              },
+              {
+                key: 'paidAmount',
+                label: 'Payé',
+                sortable: true,
+                render: (payment) => `${(payment as any).paidAmount ?? 0} Ar`,
+              },
+              {
+                key: 'dueDate',
+                label: 'Échéance',
+                sortable: true,
+                render: (payment) => {
+                  const p = payment as any
+                  return p.dueDate ? format(new Date(p.dueDate), 'dd/MM/yyyy', { locale: fr }) : '-'
+                },
+              },
+              {
+                key: 'status',
+                label: 'Statut',
+                sortable: true,
+                render: (payment) => {
+                  const p = payment as any
+                  const cfg = statusConfig[p.status] || statusConfig.pending
+                  return <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                },
+              },
+            ]}
+            data={payments}
+            total={payments.length}
+            page={1}
+            limit={100}
+            onPageChange={() => {}}
+            onSortChange={(key, dir) => {
+              setSortBy(key)
+              setSortDirection(dir)
+            }}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            filters={{ search, statusFilter }}
+            onFilterChange={() => {}}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map((id) => deleteEntity('Payment', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['payments'] })
+                  toast.success(`${ids.length} paiement(s) supprimé(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
+            getRowId={(payment) => (payment as any).id}
+            isLoading={isLoading}
+            emptyMessage="Aucun paiement trouvé"
+            bulkDeleteLabel="paiement(s)"
+            renderRowActions={(payment) => {
+              const p = payment as any
+              return (
+                <>
+                  {p.status !== 'paid' && (
+                    <Dialog open={paymentDialog === p.id} onOpenChange={(open) => { setPaymentDialog(open ? p.id : null); if (!open) form.reset() }}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="icon" title="Enregistrer un paiement">
+                          <PlusIcon className="h-4 w-4" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Enregistrer un paiement</DialogTitle>
+                        </DialogHeader>
+                        <Form {...form}>
+                          <form onSubmit={form.handleSubmit((v) => recordMutation.mutate(v))} className="space-y-4">
+                            <FormField control={form.control} name="amount" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Montant</FormLabel>
+                                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="method" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Moyen de paiement</FormLabel>
+                                <FormControl>
+                                  <Combobox options={[
+                                    { value: 'cash', label: 'Espèces' },
+                                    { value: 'mvola', label: 'Mvola' },
+                                    { value: 'airtel_money', label: 'Airtel Money' },
+                                    { value: 'orange_money', label: 'Orange Money' },
+                                    { value: 'transfer', label: 'Virement' },
+                                    { value: 'check', label: 'Chèque' }
+                                  ]} value={field.value} onValueChange={field.onChange} placeholder="Sélectionner..." />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="reference" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Référence (optionnel)</FormLabel>
+                                <FormControl><Input placeholder="Numéro..." {...field} /></FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <Button type="submit" className="w-full" disabled={recordMutation.isPending}>
+                              {recordMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
                             </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Enregistrer un paiement</DialogTitle>
-                            </DialogHeader>
-                            <Form {...form}>
-                              <form
-                                onSubmit={form.handleSubmit((values) =>
-                                  recordMutation.mutate(values)
-                                )}
-                                className="space-y-4"
-                              >
-                                <FormField
-                                  control={form.control}
-                                  name="amount"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Montant</FormLabel>
-                                      <FormControl>
-                                        <Input type="number" step="0.01" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name="method"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Moyen de paiement</FormLabel>
-                                      <Combobox
-                                        options={[
-                                          { value: 'cash', label: 'Espèces' },
-                                          { value: 'mvola', label: 'Mvola' },
-                                          { value: 'airtel_money', label: 'Airtel Money' },
-                                          { value: 'orange_money', label: 'Orange Money' },
-                                          { value: 'transfer', label: 'Virement' },
-                                          { value: 'check', label: 'Chèque' }
-                                        ]}
-                                        value={field.value}
-                                        onValueChange={field.onChange}
-                                        placeholder="Sélectionner..."
-                                      />
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name="reference"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Référence (optionnel)</FormLabel>
-                                      <FormControl>
-                                        <Input placeholder="Numéro de référence..." {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <div className="flex justify-end gap-3 pt-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setPaymentDialog(null)
-                                      form.reset()
-                                    }}
-                                  >
-                                    Annuler
-                                  </Button>
-                                  <Button type="submit" disabled={recordMutation.isPending}>
-                                    {recordMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
-                                  </Button>
-                                </div>
-                              </form>
-                            </Form>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                          </form>
+                        </Form>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                  <Button variant="ghost" size="icon" onClick={() => navigate(`/finances/payments/${p.id}`)}>
+                    <Pencil2Icon className="h-4 w-4" />
+                  </Button>
+                  <ConfirmDialog
+                    open={deleteId === p.id}
+                    onOpenChange={(open) => !open && setDeleteId(null)}
+                    onConfirm={() => deleteMutation.mutate(p.id)}
+                    title="Supprimer le paiement"
+                    description="Êtes-vous sûr ? Cette action est irréversible."
+                  />
+                  <Button variant="ghost" size="icon" onClick={() => setDeleteId(p.id)}>
+                    <TrashIcon className="h-4 w-4 text-destructive" />
+                  </Button>
+                </>
+              )
+            }}
+          />
         </CardContent>
       </Card>
     </div>

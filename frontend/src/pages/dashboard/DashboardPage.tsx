@@ -1,15 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth-store'
-import { PersonIcon, ReaderIcon, BellIcon, StarIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { PersonIcon, ReaderIcon, BellIcon, StarIcon } from '@radix-ui/react-icons'
+import { RefreshCw, PlusIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
 
 const quickActions = [
   { label: 'Inscrire un élève', path: '/students/new', variant: 'default' as const },
-  { label: 'Ajouter des notes', path: '/grades', variant: 'outline' as const },
+  { label: 'Nouvelle classe', path: '/classes/new', variant: 'default' as const },
+  { label: 'Nouvel enseignant', path: '/teachers/new', variant: 'default' as const },
   { label: "Faire l'appel", path: '/attendance', variant: 'outline' as const },
+  { label: 'Emploi du temps', path: '/timetable', variant: 'outline' as const },
   { label: 'Envoyer un message', path: '/communications', variant: 'outline' as const }
 ]
 
@@ -86,7 +89,7 @@ export function DashboardPage() {
           onClick={handleRefresh}
           disabled={isLoading}
         >
-          <ReloadIcon className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+          <RefreshCw className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
         </Button>
       </div>
 
@@ -114,10 +117,13 @@ export function DashboardPage() {
           <CardTitle className="text-lg">Actions rapides</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {quickActions.map((action) => (
-              <Button key={action.label} variant={action.variant} asChild className="h-20">
-                <Link to={action.path}>{action.label}</Link>
+              <Button key={action.label} variant={action.variant} asChild className="h-16">
+                <Link to={action.path} className="flex items-center gap-2">
+                  <PlusIcon className="h-4 w-4" />
+                  {action.label}
+                </Link>
               </Button>
             ))}
           </div>

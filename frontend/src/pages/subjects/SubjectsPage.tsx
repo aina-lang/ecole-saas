@@ -1,17 +1,21 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
+import { queryEntities, deleteEntity, saveEntity, countEntities } from '@/lib/db/pouchdb-compat'
 import { LEVELS } from '@/lib/levels'
+import { cn } from '@/lib/utils'
 
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
+import { DataTable } from '@/components/ui/data-table'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -21,10 +25,9 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import { TrashIcon, PlusIcon, Pencil2Icon, ReloadIcon } from '@radix-ui/react-icons'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { MagnifyingGlassIcon } from '@radix-ui/react-icons'
 
 interface Subject {
   id: string
@@ -47,17 +50,40 @@ const subjectSchema = z.object({
 type SubjectFormValues = z.infer<typeof subjectSchema>
 
 export function SubjectsPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [sortBy, setSortBy] = useState<string>('')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editing, setEditing] = useState<Subject | null>(null)
   const [open, setOpen] = useState(false)
-
-  const { data: subjects, loading: isLoading } = useLocalQuery<Subject>('Subject')
+  const limit = 10
 
   const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
 
+  const { data: subjectsData, isLoading } = useQuery({
+    queryKey: ['subjects', search, page, sortBy, sortDirection],
+    queryFn: async () => {
+      const offset = (page - 1) * limit
+      const params: Record<string, string | number> = { limit, offset }
+      if (search) params.search = search
+      if (sortBy) {
+        params.sortBy = sortBy
+        params.sortDirection = sortDirection
+      }
+      const [data, total] = await Promise.all([
+        queryEntities<Subject>('Subject', params),
+        countEntities<Subject>('search' in params ? { ...params, limit: undefined, offset: undefined } : params),
+      ])
+      return { data, total } as { data: Subject[]; total: number }
+    },
+  })
+
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectSchema),
-    defaultValues: { name: '', code: '', coefficient: 1, classId: '' }
+    defaultValues: { name: '', code: '', coefficient: 1, classId: '__none__', level: '__none__' }
   })
 
   function openCreate() {
@@ -100,8 +126,6 @@ export function SubjectsPage() {
     onError: () => toast.error('Erreur lors de l\'enregistrement')
   })
 
-  const [deleteId, setDeleteId] = useState<string | null>(null)
-
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await deleteEntity('Subject', id)
@@ -114,6 +138,24 @@ export function SubjectsPage() {
     onError: () => toast.error('Erreur lors de la suppression')
   })
 
+  const totalPages = subjectsData ? Math.ceil((subjectsData.total || 0) / limit) : 0
+
+  function getPageNumbers() {
+    const pages: (number | 'ellipsis')[] = []
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1)
+      if (page > 3) pages.push('ellipsis')
+      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+        pages.push(i)
+      }
+      if (page < totalPages - 2) pages.push('ellipsis')
+      pages.push(totalPages)
+    }
+    return pages
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -122,130 +164,42 @@ export function SubjectsPage() {
           <p className="text-muted-foreground">Gérer les matières et leurs coefficients</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ['subjects'] })}>
-            <ReloadIcon className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['subjects'] })}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
           </Button>
-          <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Ajouter une matière
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>{editing ? 'Modifier la matière' : 'Ajouter une matière'}</DialogTitle>
-              <DialogDescription>
-                {editing ? 'Modifiez les informations de la matière' : 'Créez une nouvelle matière'}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Mathématiques" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Code</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: MATH" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="level"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Niveau</FormLabel>
-                      <FormControl>
-                        <Combobox
-                          value={field.value || '__none__'}
-                          onValueChange={(v) => field.onChange(v || '__none__')}
-                          placeholder="Sélectionner un niveau"
-                          searchPlaceholder="Rechercher un niveau..."
-                          options={[
-                            { value: '__none__', label: 'Aucun' },
-                            ...LEVELS.map((lvl) => ({ value: lvl, label: lvl })),
-                          ]}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="coefficient"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Coefficient</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.5" min="0" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="classId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Classe (optionnel)</FormLabel>
-                      <FormControl>
-                        <Combobox
-                          value={field.value || '__none__'}
-                          onValueChange={(v) => field.onChange(v || '__none__')}
-                          placeholder="Aucune (générale)"
-                          searchPlaceholder="Rechercher une classe..."
-                          options={[
-                            { value: '__none__', label: 'Aucune (générale)' },
-                            ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
-                          ]}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="submit" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending ? (
-                      <>
-                        <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                        Enregistrement...
-                      </>
-                    ) : editing ? (
-                      'Modifier'
-                    ) : (
-                      'Créer'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+          <Button onClick={openCreate}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Ajouter une matière
+          </Button>
+        </div>
       </div>
-    </div>
 
-    <Card>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Recherche</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative flex-1 min-w-[200px]">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher par nom ou code..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="p-0">
           <DataTable
             columns={[
@@ -258,11 +212,13 @@ export function SubjectsPage() {
               {
                 key: 'code',
                 label: 'Code',
+                sortable: true,
                 render: (subject) => (subject as any).code || '-',
               },
               {
                 key: 'level',
                 label: 'Niveau',
+                sortable: true,
                 render: (subject) => (subject as any).level || '-',
               },
               {
@@ -273,14 +229,34 @@ export function SubjectsPage() {
               {
                 key: 'class',
                 label: 'Classe',
-                render: (subject) => (subject as any).class?.name || 'Générale',
+                render: (subject) => {
+                  const s = subject as any
+                  return s.class?.name || 'Générale'
+                },
               },
             ]}
-            data={subjects ?? []}
-            total={(subjects ?? []).length}
-            page={1}
-            limit={100}
-            onPageChange={() => {}}
+            data={subjectsData?.data ?? []}
+            total={subjectsData?.total ?? 0}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            onSortChange={(key, direction) => {
+              setSortBy(key)
+              setSortDirection(direction)
+              setPage(1)
+            }}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            filters={{ search }}
+            onFilterChange={() => {}}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map((id) => deleteEntity('Subject', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['subjects'] })
+                  toast.success(`${ids.length} matière(s) supprimée(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
             getRowId={(subject) => (subject as any).id}
             isLoading={isLoading}
             emptyMessage="Aucune matière"
@@ -312,6 +288,118 @@ export function SubjectsPage() {
           />
         </CardContent>
       </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Modifier la matière' : 'Ajouter une matière'}</DialogTitle>
+            <DialogDescription>
+              {editing ? 'Modifiez les informations de la matière' : 'Créez une nouvelle matière'}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Mathématiques" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: MATH" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="level"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Niveau</FormLabel>
+                    <FormControl>
+                      <Combobox
+                        value={field.value || '__none__'}
+                        onValueChange={(v) => field.onChange(v || '__none__')}
+                        placeholder="Sélectionner un niveau"
+                        searchPlaceholder="Rechercher un niveau..."
+                        options={[
+                          { value: '__none__', label: 'Aucun' },
+                          ...LEVELS.map((lvl) => ({ value: lvl, label: lvl })),
+                        ]}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="coefficient"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Coefficient</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.5" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="classId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Classe (optionnel)</FormLabel>
+                    <FormControl>
+                      <Combobox
+                        value={field.value || '__none__'}
+                        onValueChange={(v) => field.onChange(v || '__none__')}
+                        placeholder="Aucune (générale)"
+                        searchPlaceholder="Rechercher une classe..."
+                        options={[
+                          { value: '__none__', label: 'Aucune (générale)' },
+                          ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+                        ]}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? (
+                    <>
+                      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                      Enregistrement...
+                    </>
+                  ) : editing ? (
+                    'Modifier'
+                  ) : (
+                    'Créer'
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

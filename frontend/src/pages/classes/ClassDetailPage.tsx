@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -27,7 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { Combobox } from '@/components/ui/combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Pencil2Icon, ArrowLeftIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
+import { Pencil2Icon, ArrowLeftIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
 async function generateBulletinHtml(classId: string): Promise<string> {
   const [classData, students, grades, subjects] = await Promise.all([
@@ -105,6 +106,8 @@ export function ClassDetailPage() {
   const [addStudentOpen, setAddStudentOpen] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [removeStudentId, setRemoveStudentId] = useState<string | null>(null)
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
+  const [bulkRemoveOpen, setBulkRemoveOpen] = useState(false)
 
   const { data: classData, isLoading } = useQuery({
     queryKey: ['class', id],
@@ -151,6 +154,39 @@ export function ClassDetailPage() {
     },
     onError: () => toast.error("Erreur lors du retrait de l'élève")
   })
+
+  const bulkRemoveMutation = useMutation({
+    mutationFn: async (studentIds: string[]) => {
+      for (const sid of studentIds) {
+        await saveEntity('Student', { id: sid, classId: null })
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['class-students', id] })
+      queryClient.invalidateQueries({ queryKey: ['class', id] })
+      toast.success(`${selectedRowIds.size} élève(s) retiré(s) de la classe`)
+      setSelectedRowIds(new Set())
+      setBulkRemoveOpen(false)
+    },
+    onError: () => toast.error("Erreur lors du retrait en masse des élèves")
+  })
+
+  function toggleSelectAll() {
+    if (selectedRowIds.size === (students?.length ?? 0)) {
+      setSelectedRowIds(new Set())
+    } else {
+      setSelectedRowIds(new Set((students ?? []).map((s) => s.id)))
+    }
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const generateBulletinsMutation = useMutation({
     mutationFn: async () => {
@@ -241,8 +277,18 @@ export function ClassDetailPage() {
         <TabsContent value="students" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Liste des élèves</CardTitle>
+              <CardTitle>Liste des élèves ({students?.length ?? 0})</CardTitle>
               <div className="flex items-center gap-2">
+                {selectedRowIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setBulkRemoveOpen(true)}
+                  >
+                    <TrashIcon className="mr-2 h-4 w-4" />
+                    Retirer ({selectedRowIds.size})
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -289,6 +335,13 @@ export function ClassDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedRowIds.size > 0 && selectedRowIds.size === (students?.length ?? 0)}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Tout sélectionner"
+                      />
+                    </TableHead>
                     <TableHead>Matricule</TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>Prénom</TableHead>
@@ -299,30 +352,46 @@ export function ClassDetailPage() {
                   {students && students.length > 0 ? (
                     students.map((student) => (
                       <TableRow key={student.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedRowIds.has(student.id)}
+                            onCheckedChange={() => toggleSelectOne(student.id)}
+                            aria-label={`Sélectionner ${student.firstName} ${student.lastName}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{student.registrationNumber}</TableCell>
                         <TableCell>{student.lastName}</TableCell>
                         <TableCell>{student.firstName}</TableCell>
                         <TableCell>
-                          <ConfirmDialog
-                            open={removeStudentId === student.id}
-                            onOpenChange={(open) => !open && setRemoveStudentId(null)}
-                            onConfirm={() => removeStudentMutation.mutate(student.id)}
-                            title="Retirer l'élève"
-                            description={`Êtes-vous sûr de vouloir retirer ${student.firstName} ${student.lastName} de cette classe ?`}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setRemoveStudentId(student.id)}
-                          >
-                            <Cross2Icon className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => navigate(`/students/${student.id}/edit`)}
+                            >
+                              <Pencil2Icon className="h-4 w-4" />
+                            </Button>
+                            <ConfirmDialog
+                              open={removeStudentId === student.id}
+                              onOpenChange={(open) => !open && setRemoveStudentId(null)}
+                              onConfirm={() => removeStudentMutation.mutate(student.id)}
+                              title="Retirer l'élève"
+                              description={`Êtes-vous sûr de vouloir retirer ${student.firstName} ${student.lastName} de cette classe ?`}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setRemoveStudentId(student.id)}
+                            >
+                              <TrashIcon className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                         Aucun élève dans cette classe
                       </TableCell>
                     </TableRow>
@@ -331,6 +400,14 @@ export function ClassDetailPage() {
               </Table>
             </CardContent>
           </Card>
+
+          <ConfirmDialog
+            open={bulkRemoveOpen}
+            onOpenChange={setBulkRemoveOpen}
+            onConfirm={() => bulkRemoveMutation.mutate(Array.from(selectedRowIds))}
+            title={`Retirer ${selectedRowIds.size} élève(s)`}
+            description={`Êtes-vous sûr de vouloir retirer ${selectedRowIds.size} élève(s) de cette classe ? Cette action peut être annulée en les réajoutant.`}
+          />
         </TabsContent>
 
         <TabsContent value="subjects" className="mt-4">

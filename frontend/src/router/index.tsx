@@ -7,6 +7,8 @@ import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { SyncPage } from '@/pages/sync/SyncPage'
 import { StudentRoutes } from '@/pages/students/StudentRoutes'
+import { ParentsPage } from '@/pages/students/ParentsPage'
+import { ParentFormPage } from '@/pages/students/ParentFormPage'
 import { ClassRoutes } from '@/pages/classes/ClassRoutes'
 import { GradeRoutes } from '@/pages/grades/GradeRoutes'
 import { SubjectsPage } from '@/pages/subjects/SubjectsPage'
@@ -50,6 +52,8 @@ export function AppRouter() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="students/*" element={<StudentRoutes />} />
+        <Route path="parents" element={<ParentsPage />} />
+        <Route path="parents/new" element={<ParentFormPage />} />
         <Route path="classes/*" element={<ClassRoutes />} />
         <Route path="grades/*" element={<GradeRoutes />} />
         <Route path="subjects" element={<SubjectsPage />} />

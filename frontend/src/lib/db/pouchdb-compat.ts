@@ -27,15 +27,29 @@ export async function enrichTeachers(teachers: any[]): Promise<any[]> {
       const user = userId ? userMap.get(userId) : null
       const enriched: any = {
         ...t,
-        user_firstName: t.user_firstName ?? (user?.firstName ?? t.user?.firstName ?? ''),
-        user_lastName: t.user_lastName ?? (user?.lastName ?? t.user?.lastName ?? ''),
-        user_email: t.user_email ?? (user?.email ?? t.user?.email ?? ''),
+        user_firstName: t.user_firstName ?? (user?.firstName ?? user?.user_firstName ?? t.user?.firstName ?? ''),
+        user_lastName: t.user_lastName ?? (user?.lastName ?? user?.user_lastName ?? t.user?.lastName ?? ''),
+        user_email: t.user_email ?? (user?.email ?? user?.user_email ?? t.user?.email ?? ''),
       }
-      // Phones: user_phone_0, user_phone_1, user_phone_2
+      // Si la base User a des phones stockés sous forme de champ user_phone_i
       for (let i = 0; i < 3; i++) {
-        if (!enriched[`user_phone_${i}`] && user?.phones?.[i]?.value) {
-          enriched[`user_phone_${i}`] = user.phones[i].value
+        if (!enriched[`user_phone_${i}`]) {
+          if (user?.[`user_phone_${i}`]) {
+            enriched[`user_phone_${i}`] = user[`user_phone_${i}`]
+          } else if (user?.phones?.[i]?.value) {
+            enriched[`user_phone_${i}`] = user.phones[i].value
+          }
         }
+      }
+      // Fallback: certains anciens docs ont firstName/lastName directement
+      if (!enriched.user_firstName && t.firstName) {
+        enriched.user_firstName = t.firstName
+      }
+      if (!enriched.user_lastName && t.lastName) {
+        enriched.user_lastName = t.lastName
+      }
+      if (!enriched.user_email && t.email) {
+        enriched.user_email = t.email
       }
       return enriched
     })

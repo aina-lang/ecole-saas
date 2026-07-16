@@ -165,9 +165,18 @@ export function TeacherListPage() {
             page={1}
             limit={100}
             onPageChange={() => {}}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map((id) => deleteEntity('Teacher', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['teacher-list'] })
+                  toast.success(`${ids.length} enseignant(s) supprimé(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
             getRowId={(teacher) => (teacher as any).id}
             isLoading={isLoading}
             emptyMessage="Aucun enseignant trouvé"
+            bulkDeleteLabel="enseignant(s)"
             renderRowActions={(teacher) => {
               const t = teacher as any
               const name = `${t.user_firstName ?? ''} ${t.user_lastName ?? ''}`.trim() || 'cet enseignant'

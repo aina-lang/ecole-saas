@@ -40,13 +40,35 @@ export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
-    const update = () => (window as any).electron?.window?.isMaximized().then(setIsMaximized)
+    const update = async () => {
+      try {
+        if ((window as any).electron?.window?.isMaximized) {
+          const max = await (window as any).electron.window.isMaximized()
+          setIsMaximized(max)
+        }
+      } catch {}
+    }
     update()
   }, [])
 
   const isElectron = typeof window !== 'undefined' && !!(window as any).electron?.window
 
-  if (!isElectron) return null
+  const handleMinimize = () => {
+    if (isElectron) (window as any).electron.window.minimize()
+    else console.log('[dev] minimize')
+  }
+  const handleMaximize = () => {
+    if (isElectron) {
+      (window as any).electron.window.toggleMaximize()
+      ;(window as any).electron.window.isMaximized().then(setIsMaximized)
+    } else {
+      console.log('[dev] toggle maximize')
+    }
+  }
+  const handleClose = () => {
+    if (isElectron) (window as any).electron.window.close()
+    else console.log('[dev] close')
+  }
 
   return (
     <div
@@ -68,7 +90,7 @@ export function TitleBar() {
         <button
           type="button"
           className={controlButton}
-          onClick={() => (window as any).electron.window.minimize()}
+          onClick={handleMinimize}
           aria-label="Minimiser"
         >
           <MinimizeIcon />
@@ -76,10 +98,7 @@ export function TitleBar() {
         <button
           type="button"
           className={controlButton}
-          onClick={() => {
-            (window as any).electron.window.toggleMaximize()
-            ;(window as any).electron.window.isMaximized().then(setIsMaximized)
-          }}
+          onClick={handleMaximize}
           aria-label="Agrandir"
         >
           {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
@@ -87,7 +106,7 @@ export function TitleBar() {
         <button
           type="button"
           className="flex h-14 w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
-          onClick={() => (window as any).electron.window.close()}
+          onClick={handleClose}
           aria-label="Fermer"
         >
           <CloseIcon />

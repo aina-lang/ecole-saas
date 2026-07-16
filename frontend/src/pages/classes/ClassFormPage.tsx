@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -85,16 +85,20 @@ export function ClassFormPage() {
 
   useEffect(() => {
     if (classData) {
+      const subjectIds = (classData.subjects ?? []).map((s: any) => s.id)
+      const teacherIds = (classData.teachers ?? []).map((t: any) => t.id)
       form.reset({
         name: classData.name,
         level: classData.level,
         room: classData.room || '',
         capacity: classData.capacity,
-        subjectIds: (classData.subjects ?? []).map((s: any) => s.id),
-        teacherIds: (classData.teachers ?? []).map((t: any) => t.id)
+        subjectIds,
+        teacherIds
       })
+      setSelectedSubjectIds(subjectIds)
+      setSelectedTeacherIds(teacherIds)
     }
-  }, [classData, form])
+  }, [classData])
 
   const createMutation = useMutation({
     mutationFn: async (values: ClassFormValues) => {
@@ -126,35 +130,54 @@ export function ClassFormPage() {
   })
 
   function onSubmit(values: ClassFormValues) {
+    const data = {
+      ...values,
+      subjectIds: selectedSubjectIds,
+      teacherIds: selectedTeacherIds,
+    }
     if (isEditing) {
-      updateMutation.mutate(values)
+      updateMutation.mutate(data)
     } else {
-      createMutation.mutate(values)
+      createMutation.mutate(data)
     }
   }
 
-  const selectedSubjectIds = form.watch('subjectIds') || []
-  const selectedTeacherIds = form.watch('teacherIds') || []
-  const selectedLevel = form.watch('level')
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([])
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([])
 
-  const filteredSubjects = (subjects ?? []).filter(
-    (s) => !selectedLevel || !s.level || s.level === selectedLevel
-  )
+  const filteredSubjects = useMemo(() => {
+    const level = form.getValues('level')
+    return (subjects ?? []).filter(
+      (s) => !level || !s.level || s.level === level
+    )
+  }, [subjects, form])
 
   function toggleSubject(subjectId: string) {
-    const current = form.getValues('subjectIds') || []
-    const updated = current.includes(subjectId)
-      ? current.filter((id) => id !== subjectId)
-      : [...current, subjectId]
-    form.setValue('subjectIds', updated)
+    setSelectedSubjectIds((prev) =>
+      prev.includes(subjectId) ? prev.filter((id) => id !== subjectId) : [...prev, subjectId]
+    )
   }
 
+  useEffect(() => {
+    if (selectedSubjectIds.length === 0) {
+      setSelectedTeacherIds([])
+      return
+    }
+    const matchingTeachers = (teachers ?? []).filter((t: any) => {
+      const tSubjectIds = t.subjectIds || []
+      return selectedSubjectIds.some((sid) => tSubjectIds.includes(sid))
+    })
+    setSelectedTeacherIds((prev) => {
+      const newIds = new Set(prev)
+      matchingTeachers.forEach((t: any) => newIds.add(t.id))
+      return Array.from(newIds)
+    })
+  }, [selectedSubjectIds, teachers])
+
   function toggleTeacher(teacherId: string) {
-    const current = form.getValues('teacherIds') || []
-    const updated = current.includes(teacherId)
-      ? current.filter((id) => id !== teacherId)
-      : [...current, teacherId]
-    form.setValue('teacherIds', updated)
+    setSelectedTeacherIds((prev) =>
+      prev.includes(teacherId) ? prev.filter((id) => id !== teacherId) : [...prev, teacherId]
+    )
   }
 
   return (
@@ -281,19 +304,21 @@ export function ClassFormPage() {
                   {teachers.map((teacher) => {
                     const selected = selectedTeacherIds.includes(teacher.id)
                     return (
-                      <div
-                        key={teacher.id}
-                        className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50"
-                        onClick={() => toggleTeacher(teacher.id)}
-                      >
-                        <Checkbox checked={selected} />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">
-                            {teacher.user.firstName} {teacher.user.lastName}
+                    <div
+                      key={teacher.id}
+                      className="flex items-center gap-3 rounded-lg border p-3"
+                    >
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => toggleTeacher(teacher.id)}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                            {(teacher as any).user_firstName || (teacher as any).user?.firstName || ''} {(teacher as any).user_lastName || (teacher as any).user?.lastName || ''}
                           </p>
                           <p className="text-xs text-muted-foreground">{teacher.specialty}</p>
-                        </div>
                       </div>
+                    </div>
                     )
                   })}
                 </div>
