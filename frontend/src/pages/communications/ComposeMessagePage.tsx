@@ -166,7 +166,7 @@ export function ComposeMessagePage() {
                               const u = users.find((x) => x.id === id)
                               return (
                                 <Badge key={id} variant="secondary" className="gap-1">
-                                  {u ? `${u.firstName} ${u.lastName}` : id}
+                                   {u ? `${u.firstName ? `${u.firstName} ` : ''}${u.lastName}` : id}
                                   <button type="button" onClick={() => removeRecipient(id)}>
                                     <Cross2Icon className="h-3 w-3" />
                                   </button>
@@ -188,7 +188,7 @@ export function ComposeMessagePage() {
                                 <CommandItem
                                   key={u.id}
                                   value={u.id}
-                                  keywords={[`${u.firstName} ${u.lastName}`, u.email]}
+                                   keywords={[`${u.firstName ? `${u.firstName} ` : ''}${u.lastName}`, u.email].filter(Boolean)}
                                   onSelect={() => addRecipient(u.id)}
                                 >
                                   <div className="flex items-center gap-2">

@@ -9,6 +9,10 @@ export class CreatePaymentDto {
   @IsOptional()
   feeStructureId?: string;
 
+  @IsString()
+  @IsOptional()
+  academicYearId?: string;
+
   @IsNumber()
   @Min(0)
   @IsNotEmpty()

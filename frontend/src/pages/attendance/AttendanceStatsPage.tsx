@@ -6,7 +6,6 @@ import { CalendarIcon, Users, TrendingUp, Award, ChevronDown, ChevronRight, Rota
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
-import client from '@/api/client'
 import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
@@ -89,13 +88,69 @@ export function AttendanceStatsPage() {
       dateTo?.toISOString()
     ],
     queryFn: async () => {
-      const params: Record<string, string> = {}
-      if (classId) params.classId = classId
-      if (studentId) params.studentId = studentId
-      if (dateFrom) params.from = format(dateFrom, 'yyyy-MM-dd')
-      if (dateTo) params.to = format(dateTo, 'yyyy-MM-dd')
-      const res = await client.get('/attendance/stats', { params })
-      return res.data.data ?? res.data
+      const attendanceFilters: Record<string, string> = {}
+      if (classId && classId !== 'all') attendanceFilters.classId = classId
+      if (studentId && studentId !== 'all') attendanceFilters.studentId = studentId
+      if (dateFrom) attendanceFilters.from = format(dateFrom, 'yyyy-MM-dd')
+      if (dateTo) attendanceFilters.to = format(dateTo, 'yyyy-MM-dd')
+
+      const [attendanceRecords, allStudents, allClasses] = await Promise.all([
+        queryEntities<any>('Attendance', attendanceFilters),
+        queryEntities<any>('Student'),
+        queryEntities<any>('Class'),
+      ])
+
+      const classMap = new Map((allClasses ?? []).map((c: any) => [c.id, c.name]))
+      const studentMap = new Map((allStudents ?? []).map((s: any) => [s.id, s]))
+
+      const byStatus = { present: 0, absent: 0, late: 0, excused: 0 }
+      const byClass = new Map<string, { className: string; present: number; absent: number; late: number; excused: number; total: number }>()
+      const byStudent = new Map<string, { id: string; firstName: string; lastName: string; present: number; absent: number; late: number; excused: number; total: number }>()
+
+      for (const record of attendanceRecords ?? []) {
+        const status = record.status as keyof typeof byStatus
+        if (byStatus[status] !== undefined) byStatus[status]++
+
+        const clsId = record.classId || studentMap.get(record.studentId)?.classId
+        if (clsId) {
+          const className = classMap.get(clsId) || 'Inconnue'
+          if (!byClass.has(clsId)) {
+            byClass.set(clsId, { className, present: 0, absent: 0, late: 0, excused: 0, total: 0 })
+          }
+          const clsStats = byClass.get(clsId)!
+          clsStats.total++
+          if (clsStats[status] !== undefined) clsStats[status]++
+        }
+
+        const stuId = record.studentId
+        if (stuId) {
+          const student = studentMap.get(stuId)
+          const name = student ? `${student.lastName} ${student.firstName}` : 'Inconnu'
+          if (!byStudent.has(stuId)) {
+            byStudent.set(stuId, { id: stuId, firstName: student?.firstName || '', lastName: student?.lastName || '', present: 0, absent: 0, late: 0, excused: 0, total: 0 })
+          }
+          const stuStats = byStudent.get(stuId)!
+          stuStats.total++
+          if (stuStats[status] !== undefined) stuStats[status]++
+        }
+      }
+
+      const totalRecords = attendanceRecords?.length ?? 0
+      const overallRate = totalRecords > 0 ? Math.round((byStatus.present / totalRecords) * 100) : 0
+
+      return {
+        overallRate,
+        totalRecords,
+        byClass: Array.from(byClass.values()).map((cls) => ({
+          ...cls,
+          rate: cls.total > 0 ? Math.round((cls.present / cls.total) * 100) : 0,
+        })),
+        byStatus,
+        students: Array.from(byStudent.values()).map((stu) => ({
+          ...stu,
+          rate: stu.total > 0 ? Math.round((stu.present / stu.total) * 100) : 0,
+        })),
+      }
     }
   })
 

@@ -71,9 +71,9 @@ export function Sidebar() {
               {userInitials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium">
-                {user ? `${user.firstName} ${user.lastName}` : 'Utilisateur'}
-              </p>
+               <p className="truncate text-sm font-medium">
+                 {user ? `${user.firstName ? `${user.firstName} ` : ''}${user.lastName}` : 'Utilisateur'}
+               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {user?.role === 'ADMIN' ? 'Administrateur' : user?.role === 'TEACHER' ? 'Enseignant' : 'Utilisateur'}
               </p>

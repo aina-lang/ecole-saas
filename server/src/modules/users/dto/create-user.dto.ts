@@ -3,9 +3,9 @@ import { Type } from 'class-transformer';
 import { UserRole } from '@prisma/client';
 
 export class CreateUserDto {
-  @IsOptional()
   @IsEmail({}, { message: 'Email invalide' })
-  email?: string;
+  @IsNotEmpty({ message: "L'email est requis" })
+  email: string;
 
   @IsOptional()
   @IsString()

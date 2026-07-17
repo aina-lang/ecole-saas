@@ -8,7 +8,7 @@ import { Edit, Trash2, Plus, RotateCw } from 'lucide-react'
 
 import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
 import { deleteEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
-import type { Grade, PaginatedResponse, Subject } from '@/types'
+import type { Grade, PaginatedResponse, Subject, Student } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatSubjectLabel } from '@/lib/subject'
 
@@ -60,7 +60,10 @@ const evaluationTypeLabels: Record<string, string> = {
   exam: 'Examen',
   test: 'Test',
   homework: 'Devoir',
-  project: 'Projet'
+  oral: 'Oral',
+  project: 'Projet',
+  controle: 'Contrôle',
+  examen_blanc: 'Examen blanc'
 }
 
 const evaluationTypeVariants: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> =
@@ -68,7 +71,10 @@ const evaluationTypeVariants: Record<string, 'default' | 'secondary' | 'outline'
     exam: 'default',
     test: 'secondary',
     homework: 'outline',
-    project: 'destructive'
+    oral: 'secondary',
+    project: 'destructive',
+    controle: 'default',
+    examen_blanc: 'destructive'
   }
 
 export function GradeListPage() {
@@ -101,11 +107,34 @@ export function GradeListPage() {
       if (classId) params.classId = classId
       if (subjectId) params.subjectId = subjectId
       if (periodId) params.periodId = periodId
-      const [result, total] = await Promise.all([
-        queryEntities<GradeWithDetails>('Grade', params),
-        countEntities('Grade', params)
+      const [result, total, students, subjects] = await Promise.all([
+        queryEntities<Grade>('Grade', params),
+        countEntities('Grade', params),
+        queryEntities<Student>('Student'),
+        queryEntities<Subject>('Subject'),
       ])
-      return { data: result, total } as PaginatedResponse<GradeWithDetails>
+      const studentMap = new Map((students ?? []).map((s) => [s.id, s]))
+      const subjectMap = new Map((subjects ?? []).map((s) => [s.id, s]))
+
+      const enriched = result.map((grade: any) => {
+        const student = studentMap.get(grade.studentId)
+        const subject = subjectMap.get(grade.subjectId)
+        return {
+          ...grade,
+          student: student ? { id: student.id, firstName: student.firstName, lastName: student.lastName } : undefined,
+          subject: subject
+            ? {
+                id: subject.id,
+                name: subject.name,
+                code: subject.code,
+                level: subject.level,
+                class: subject.class || null,
+              }
+            : undefined,
+        } as GradeWithDetails
+      })
+
+      return { data: enriched, total } as PaginatedResponse<GradeWithDetails>
     }
   })
 

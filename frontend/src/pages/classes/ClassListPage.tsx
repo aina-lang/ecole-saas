@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Combobox } from '@/components/ui/combobox'
 import { PlusIcon, PersonIcon, ReaderIcon, ReloadIcon, TrashIcon, Pencil2Icon } from '@radix-ui/react-icons'
 import {
   Pagination,
@@ -160,22 +161,24 @@ export function ClassListPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Trier par:</span>
-              <select
-                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+              <Combobox
+                className="w-[220px]"
+                placeholder="Nom (A-Z)"
                 value={`${sortBy}:${sortDirection}`}
-                onChange={(e) => {
-                  const [key, dir] = e.target.value.split(':')
-                  setSortBy(key)
-                  setSortDirection(dir as 'asc' | 'desc')
+                onValueChange={(val) => {
+                  const [key, dir] = val.split(':')
+                  if (key) setSortBy(key)
+                  if (dir) setSortDirection(dir as 'asc' | 'desc')
                 }}
-              >
-                <option value="name:asc">Nom (A-Z)</option>
-                <option value="name:desc">Nom (Z-A)</option>
-                <option value="level:asc">Niveau (A-Z)</option>
-                <option value="level:desc">Niveau (Z-A)</option>
-                <option value="capacity:asc">Capacité (croissant)</option>
-                <option value="capacity:desc">Capacité (décroissant)</option>
-              </select>
+                options={[
+                  { value: 'name:asc', label: 'Nom (A-Z)' },
+                  { value: 'name:desc', label: 'Nom (Z-A)' },
+                  { value: 'level:asc', label: 'Niveau (A-Z)' },
+                  { value: 'level:desc', label: 'Niveau (Z-A)' },
+                  { value: 'capacity:asc', label: 'Capacité (croissant)' },
+                  { value: 'capacity:desc', label: 'Capacité (décroissant)' },
+                ]}
+              />
             </div>
             {pageClasses.length > 0 && (
               <Button

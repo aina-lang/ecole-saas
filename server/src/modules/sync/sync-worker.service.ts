@@ -55,13 +55,54 @@ export class SyncWorkerService implements OnModuleInit {
     return this.prisma[map[name]] as any;
   }
 
+  private stripFlattened(data: any): any {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith('user_')) continue;
+      if (key === 'classIds' || key === 'subjectIds') continue;
+      cleaned[key] = value;
+    }
+    return cleaned;
+  }
+
+  private async resolveTeacherUser(data: any, tenantId: string): Promise<string> {
+    const email = data.user_email || data.email;
+    if (!email) {
+      throw new Error(`Cannot sync Teacher without email (id=${data.id})`);
+    }
+    let user = await this.prisma.user.findFirst({ where: { email, tenantId } });
+    if (!user) {
+      const id = crypto.randomUUID();
+      user = await this.prisma.user.create({
+        data: {
+          id,
+          tenantId,
+          email,
+          firstName: data.user_firstName || data.firstName || '',
+          lastName: data.user_lastName || data.lastName || '',
+          passwordHash: Math.random().toString(36).slice(2, 10) + 'A1!',
+          role: 'TEACHER',
+          isActive: true,
+        },
+      });
+      this.logger.verbose(`Teacher sync: created User ${user.id} for ${email}`);
+    }
+    return user.id;
+  }
+
   private async processChange(entity: string, change: any) {
     if (!change.doc || change.doc._id.startsWith('_design/')) return;
     const data = stripMeta(change.doc);
+
+    for (const key of Object.keys(data)) {
+      if (typeof data[key] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data[key])) {
+        data[key] = `${data[key]}T00:00:00.000Z`;
+      }
+    }
+
     const tenantId = data.tenantId || data.tenant_id;
 
     if (!tenantId) {
-      // FIXE : log explicite au lieu d'un rejet silencieux — facilite le débogage
       this.logger.warn(
         `[sync-worker] ${entity}/${change.id}: tenantId absent — document IGNORÉ. ` +
         `Vérifier que le frontend injecte tenantId avant l'écriture PouchDB.`
@@ -99,10 +140,17 @@ export class SyncWorkerService implements OnModuleInit {
         return;
       }
 
+      const clean = this.stripFlattened(data);
+
+      if (entity === 'Teacher') {
+        const userId = await this.resolveTeacherUser(data, tenantId);
+        clean.userId = userId;
+      }
+
       await model.upsert({
         where: { id: change.id },
-        create: { ...data, id: change.id, tenantId },
-        update: data,
+        create: { ...clean, id: change.id, tenantId, tenant: { connect: { id: tenantId } } },
+        update: clean,
       });
       this.logger.verbose(`[sync-worker] ${entity}/${change.id}: upsert OK`);
     } catch (err: any) {

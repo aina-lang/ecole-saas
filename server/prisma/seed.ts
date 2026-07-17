@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, AttendanceStatus, PaymentStatus, DocumentCategory, TeacherAttendanceStatus, ContractType, TeacherPaymentStatus, MessagePriority, MessageStatus, SyncStatus, SyncOperation } from '@prisma/client'
+import { PrismaClient, UserRole, AttendanceStatus, PaymentStatus, DocumentCategory, TeacherAttendanceStatus, ContractType, TeacherPaymentStatus, MessagePriority, MessageStatus, SyncStatus, SyncOperation, EvaluationType } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { randomUUID } from 'crypto'
@@ -204,12 +204,15 @@ const MESSAGES_CONTENT = [
   { subject: 'Vente de gâteaux', body: 'L\'association des parents d\'élèves organise une vente de gâteaux le vendredi 17 mars.', priority: 'LOW' as MessagePriority },
 ]
 
-const EVALUATION_TYPES = ['EXAM', 'TEST', 'HOMEWORK', 'PROJECT']
+const EVALUATION_TYPES: EvaluationType[] = ['EXAM', 'TEST', 'HOMEWORK', 'PROJECT', 'ORAL', 'CONTROLE', 'EXAMEN_BLANC']
 const EVALUATION_LABELS: Record<string, string> = {
   EXAM: 'Examen trimestriel',
-  TEST: 'Contrôle continu',
+  TEST: 'Test',
   HOMEWORK: 'Devoir à la maison',
   PROJECT: 'Projet',
+  ORAL: 'Oral',
+  CONTROLE: 'Contrôle',
+  EXAMEN_BLANC: 'Examen blanc',
 }
 
 function randomFrom<T>(arr: T[]): T {
@@ -419,15 +422,8 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
     subjectsByLevel[level].push(s)
   }
 
-  for (const cls of classes) {
-    const levelSubjects = subjectsByLevel[cls.level || ''] || []
-    if (levelSubjects.length > 0) {
-      await prisma.class.update({
-        where: { id: cls.id },
-        data: { subjects: { connect: levelSubjects.map(s => ({ id: s.id })) } },
-      })
-    }
-  }
+  // Subjects are tenant-level; class associations are handled via timetable slots
+  // and teacher assignments to classes
 
   // Create AcademicYear, Periods, Holidays
   const academicYear = await prisma.academicYear.create({
@@ -457,7 +453,7 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
   })
 
   // Create Students (25 students)
-  const createdStudents: { id: string; firstName: string; lastName: string; gender: string | null }[] = []
+  const createdStudents: { id: string; firstName: string | null; lastName: string; gender: string | null }[] = []
   for (let i = 0; i < STUDENT_DATA.length; i++) {
     const s = STUDENT_DATA[i]
     const cls = classes[i % classes.length]
@@ -501,21 +497,21 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
 
   // Create Timetable Slots for each class
   let timetableSlotsCount = 0
+  const allSubjects = await prisma.subject.findMany({ where: { tenantId: tenant.id, deletedAt: null } })
   for (const cls of classes) {
-    const classWithRelations = await prisma.class.findUnique({
+    const classWithTeachers = await prisma.class.findUnique({
       where: { id: cls.id },
-      include: { teachers: { include: { subjects: true } }, subjects: true },
+      include: { teachers: { include: { subjects: true } } },
     })
-    if (!classWithRelations || !classWithRelations.subjects.length) continue
+    if (!classWithTeachers) continue
 
-    const classTeachers = classWithRelations.teachers
-    const classSubjects = classWithRelations.subjects
+    const classTeachers = classWithTeachers.teachers
 
     for (const day of DAYS) {
       for (const time of TIME_SLOTS) {
-        const subject = randomFrom(classSubjects)
+        const subject = randomFrom(allSubjects)
         const matchingTeachers = classTeachers.filter(t =>
-          t.subjects.some(ts => (ts as any).subjectId === subject.id)
+          t.subjects.some(ts => ts.id === subject.id)
         )
         const teacher = matchingTeachers.length > 0
           ? randomFrom(matchingTeachers)
@@ -643,7 +639,6 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
             evaluationType: evalType,
             evaluationLabel: EVALUATION_LABELS[evalType],
             comment: Math.random() > 0.5 ? undefined : randomFrom(['Bon travail', 'Peut mieux faire', 'Encourageant', 'Doit fournir plus d\'efforts', 'Excellent travail', 'Continue ainsi']),
-            semester: 1,
             isPublished: true,
           },
         })
@@ -709,7 +704,6 @@ async function seedTenant(tenantConfig: typeof TENANTS[number], tenantIndex: num
         body: msg.body,
         priority: msg.priority,
         status: randomFrom<MessageStatus>(['SENT', 'DELIVERED', 'READ']),
-        readAt: Math.random() > 0.4 ? new Date() : undefined,
         recipients: {
           create: allUsers
             .filter(u => u.id !== sender.id && Math.random() > 0.5)

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EvaluationType } from '@prisma/client';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 
@@ -17,11 +18,10 @@ export class GradesService {
     private audit: AuditService,
   ) {}
 
-  async findAll(tenantId: string, filters?: { studentId?: string; subjectId?: string; classId?: string; semester?: number; periodId?: string }) {
+  async findAll(tenantId: string, filters?: { studentId?: string; subjectId?: string; classId?: string; periodId?: string }) {
     const where: any = { tenantId, deletedAt: null };
     if (filters?.studentId) where.studentId = filters.studentId;
     if (filters?.subjectId) where.subjectId = filters.subjectId;
-    if (filters?.semester) where.semester = filters.semester;
     if (filters?.periodId) where.periodId = filters.periodId;
     if (filters?.classId) {
       where.student = { classId: filters.classId };
@@ -31,7 +31,7 @@ export class GradesService {
       where,
       include: {
         student: { select: { id: true, firstName: true, lastName: true, registrationNumber: true } },
-        subject: { select: { id: true, name: true, code: true, level: true, class: { select: { id: true, name: true } } } },
+        subject: { select: { id: true, name: true, code: true, level: true } },
         period: { select: { id: true, label: true } },
         teacher: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
       },
@@ -44,7 +44,7 @@ export class GradesService {
       where: { id, tenantId, deletedAt: null },
       include: {
         student: { select: { id: true, firstName: true, lastName: true, registrationNumber: true } },
-        subject: { select: { id: true, name: true, code: true, level: true, class: { select: { id: true, name: true } } } },
+        subject: { select: { id: true, name: true, code: true, level: true } },
         period: { select: { id: true, label: true } },
         teacher: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
       },
@@ -59,13 +59,13 @@ export class GradesService {
         tenantId,
         studentId: dto.studentId,
         subjectId: dto.subjectId,
+        teacherId: dto.teacherId,
         value: dto.value,
         maxValue: dto.maxValue ?? 20,
         coefficient: dto.coefficient ?? 1,
-        evaluationType: dto.evaluationType ?? 'EXAM',
+        evaluationType: (dto.evaluationType ?? 'EXAM') as EvaluationType,
         evaluationLabel: dto.evaluationLabel,
         comment: dto.comment,
-        semester: dto.semester ?? 1,
         periodId: dto.periodId,
         updatedBy: userId,
       },
@@ -152,28 +152,33 @@ export class GradesService {
     });
     const studentIds = new Set(students.map((s) => s.id));
 
-    const created: any[] = [];
-    for (const grade of grades) {
-      if (!studentIds.has(grade.studentId)) continue;
+    const created: any[] = await this.prisma.$transaction(async (tx) => {
+      const results: any[] = [];
+      for (const grade of grades) {
+        if (!studentIds.has(grade.studentId)) continue;
 
-      const createdGrade = await this.prisma.grade.create({
-        data: {
-          tenantId,
-          studentId: grade.studentId,
-          subjectId: grade.subjectId,
-          value: grade.value,
-          maxValue: grade.maxValue ?? 20,
-          coefficient: grade.coefficient ?? 1,
-          evaluationType: grade.evaluationType ?? 'EXAM',
-          evaluationLabel: grade.evaluationLabel,
-          comment: grade.comment,
-          semester: grade.semester ?? 1,
-          periodId: grade.periodId,
-          updatedBy: userId,
-        },
-      });
-      created.push(createdGrade);
-      this.prisma.notifyWrite('Grade', createdGrade);
+        const createdGrade = await tx.grade.create({
+          data: {
+            tenantId,
+            studentId: grade.studentId,
+            subjectId: grade.subjectId,
+            value: grade.value,
+            maxValue: grade.maxValue ?? 20,
+            coefficient: grade.coefficient ?? 1,
+            evaluationType: (grade.evaluationType ?? 'EXAM') as EvaluationType,
+            evaluationLabel: grade.evaluationLabel,
+            comment: grade.comment,
+            periodId: grade.periodId,
+            updatedBy: userId,
+          },
+        });
+        results.push(createdGrade);
+      }
+      return results;
+    });
+
+    for (const grade of created) {
+      this.prisma.notifyWrite('Grade', grade);
     }
 
     await this.audit.log({

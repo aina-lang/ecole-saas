@@ -74,19 +74,16 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    console.log('[AUTH-SERVICE] login attempt', { email: dto.email.toLowerCase() });
     const user = await this.prisma.user.findFirst({
       where: { email: dto.email.toLowerCase() },
       include: { tenant: true },
     });
 
-    console.log('[AUTH-SERVICE] user found', { found: !!user, email: user?.email });
     if (!user) throw new UnauthorizedException('Email ou mot de passe incorrect');
     if (!user.isActive) throw new UnauthorizedException('Ce compte est désactivé');
     if (user.tenant.status === 'SUSPENDED') throw new UnauthorizedException('Établissement suspendu');
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
-    console.log('[AUTH-SERVICE] password valid', { valid });
     if (!valid) throw new UnauthorizedException('Email ou mot de passe incorrect');
 
     if (user.twoFactorEnabled && !dto.twoFactorCode) {

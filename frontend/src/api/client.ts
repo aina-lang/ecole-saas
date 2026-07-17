@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '../lib/db/token-cache'
 
 const API_BASE = 'http://localhost:3000'
 
@@ -28,7 +29,7 @@ function processQueue(error: unknown | null) {
 
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('accessToken')
+    const token = getAccessToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -97,29 +98,33 @@ client.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (!refreshToken) {
+      const refreshTok = getRefreshToken()
+      if (!refreshTok) {
         isRefreshing = false
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
+        clearTokens()
         window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
         return Promise.reject(error)
       }
 
       try {
         const { data } = await axios.post('http://localhost:3000/api/v1/auth/refresh', {
-          refreshToken
+          refreshToken: refreshTok
         })
         const { accessToken, refreshToken: newRefreshToken } = data
-        localStorage.setItem('accessToken', accessToken)
-        localStorage.setItem('refreshToken', newRefreshToken)
+        setTokens(accessToken, newRefreshToken)
         client.defaults.headers.common.Authorization = `Bearer ${accessToken}`
         processQueue(null)
         return client(originalRequest)
-      } catch {
+      } catch (refreshError: any) {
         processQueue(error)
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
+        // Ne pas invalider la session si le serveur est injoignable (offline).
+        // On garde les tokens existants — ils fonctionneront à la reconnexion.
+        if (!refreshError?.response && !navigator.onLine) {
+          return Promise.reject(error)
+        }
+        // Si le refresh échoue avec une réponse 401/500, le token est invalide
+        // ou le serveur a rejeté la requête : on peut déconnecter.
+        clearTokens()
         window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
         return Promise.reject(error)
       } finally {

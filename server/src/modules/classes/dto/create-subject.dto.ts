@@ -19,8 +19,4 @@ export class CreateSubjectDto {
   @Min(0)
   @Type(() => Number)
   coefficient?: number = 1.0;
-
-  @IsOptional()
-  @IsString()
-  classId?: string;
 }

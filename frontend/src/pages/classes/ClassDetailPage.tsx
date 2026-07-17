@@ -314,10 +314,10 @@ export function ClassDetailPage() {
                       onValueChange={setSelectedStudentId}
                       placeholder="Sélectionner un élève"
                       searchPlaceholder="Rechercher un élève..."
-                      options={studentsNotInClass.map((student) => ({
-                        value: student.id,
-                        label: `${student.firstName} ${student.lastName} (${student.registrationNumber})`,
-                      }))}
+                       options={studentsNotInClass.map((student) => ({
+                         value: student.id,
+                         label: `${student.firstName ? `${student.firstName} ` : ''}${student.lastName} (${student.registrationNumber})`,
+                       }))}
                     />
                     <Button
                       className="w-full"
@@ -356,7 +356,7 @@ export function ClassDetailPage() {
                           <Checkbox
                             checked={selectedRowIds.has(student.id)}
                             onCheckedChange={() => toggleSelectOne(student.id)}
-                            aria-label={`Sélectionner ${student.firstName} ${student.lastName}`}
+                            aria-label={`Sélectionner ${student.firstName ? `${student.firstName} ` : ''}${student.lastName}`}
                           />
                         </TableCell>
                         <TableCell className="font-medium">{student.registrationNumber}</TableCell>
@@ -376,7 +376,7 @@ export function ClassDetailPage() {
                               onOpenChange={(open) => !open && setRemoveStudentId(null)}
                               onConfirm={() => removeStudentMutation.mutate(student.id)}
                               title="Retirer l'élève"
-                              description={`Êtes-vous sûr de vouloir retirer ${student.firstName} ${student.lastName} de cette classe ?`}
+                              description={`Êtes-vous sûr de vouloir retirer ${student.firstName ? `${student.firstName} ` : ''}${student.lastName} de cette classe ?`}
                             />
                             <Button
                               variant="ghost"

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import client from '@/api/client'
 import { queryEntities, deleteEntity, enrichTeachers } from '@/lib/db/pouchdb-compat'
 import type { Teacher } from '@/types'
 import { getInitials, cn } from '@/lib/utils'
@@ -46,7 +45,7 @@ export function TeacherListPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await client.delete(`/teachers/${id}`)
+      await deleteEntity('Teacher', id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-list'] })
@@ -148,7 +147,7 @@ export function TeacherListPage() {
               },
               {
                 key: 'phones',
-                label: 'Téléphone',
+                label: 'Téléphone(s)',
                 render: (teacher) => {
                   const t = teacher as any
                   const collected: string[] = []

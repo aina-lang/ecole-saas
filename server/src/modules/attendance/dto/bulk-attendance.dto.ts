@@ -14,6 +14,10 @@ class AttendanceRecord {
   @IsOptional()
   @IsString()
   justification?: string;
+
+  @IsOptional()
+  @IsString()
+  classId?: string;
 }
 
 export class BulkAttendanceDto {

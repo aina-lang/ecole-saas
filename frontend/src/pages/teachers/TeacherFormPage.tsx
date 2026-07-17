@@ -145,7 +145,7 @@ export function TeacherFormPage() {
   const isLoading = isEdit && !existingTeacher
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/teachers/list')}>
           <ArrowLeftIcon className="h-4 w-4" />
@@ -198,7 +198,7 @@ export function TeacherFormPage() {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
-              Téléphone <span className="text-xs text-muted-foreground">(max 3)</span>
+              Téléphone(s) <span className="text-xs text-muted-foreground">(max 3)</span>
             </label>
             <div className="flex gap-2">
               <Input

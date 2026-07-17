@@ -5,6 +5,7 @@ const api = {
   db: {
     sync: (entityType: string, remoteUrl?: string) =>
       ipcRenderer.invoke('db:sync', entityType, remoteUrl),
+    reset: () => ipcRenderer.invoke('db:reset'),
   },
   settings: {
     get: (key: string) => ipcRenderer.invoke('local:get-setting', key),

@@ -275,7 +275,7 @@ export function StudentListPage() {
                     onOpenChange={(open) => !open && setDeleteId(null)}
                     onConfirm={() => deleteMutation.mutate(s.id)}
                     title="Supprimer l'élève"
-                    description={`Êtes-vous sûr de vouloir supprimer ${s.firstName} ${s.lastName} ? Cette action est irréversible.`}
+                     description={`Êtes-vous sûr de vouloir supprimer ${s.firstName ? `${s.firstName} ` : ''}${s.lastName} ? Cette action est irréversible.`}
                   />
                   <Button
                     variant="ghost"

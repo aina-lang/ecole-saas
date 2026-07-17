@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -30,7 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { TrashIcon, RefreshCw, PlusIcon, MoveIcon, PencilIcon, FileDown } from 'lucide-react'
+import { TrashIcon, RefreshCw, PlusIcon, PencilIcon, FileDown } from 'lucide-react'
 
 const DAYS = [
   { value: 1, label: 'Lundi', short: 'Lun' },
@@ -82,8 +82,6 @@ export function TimetablePage() {
   const [classId, setClassId] = useState('')
   const [open, setOpen] = useState(false)
   const [editingSlot, setEditingSlot] = useState<TimetableSlot | null>(null)
-  const [dragId, setDragId] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data: classes, loading: loadingClasses, refetch: refetchClasses } = useLocalQuery<{ id: string; name: string }>('Class')
@@ -240,55 +238,29 @@ export function TimetablePage() {
     onError: () => toast.error('Erreur lors de la suppression'),
   })
 
-  const moveMutation = useMutation({
-    mutationFn: async ({ id, dayOfWeek, startTime }: { id: string; dayOfWeek: number; startTime: string }) => {
-      await saveEntity('TimetableSlot', { id, dayOfWeek, startTime })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['timetable-slots'] })
-    },
-    onError: () => toast.error('Erreur lors du déplacement'),
-  })
-
-  function handleDragStart(id: string) {
-    setDragId(id)
+  function timeToMinutes(t: string): number {
+    const [h, m] = t.split(':').map(Number)
+    return h * 60 + m
   }
 
-  function handleDragOver(e: React.DragEvent, cellKey: string) {
-    e.preventDefault()
-    setDragOver(cellKey)
+  const ROW_HEIGHT = 64
+  const FIRST_MIN = timeToMinutes(TIME_SLOTS[0])
+
+  function getSlotsForDay(day: number): TimetableSlot[] {
+    const daySlots = slots.filter((s) => s.dayOfWeek === day)
+    return daySlots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
   }
 
-  function handleDragLeave() {
-    setDragOver(null)
+  function hasSlotAtHour(day: number, hour: string): boolean {
+    return slots.some((s) => s.dayOfWeek === day && s.startTime === hour)
   }
-
-  function handleDrop(day: number, time: string) {
-    if (!dragId) return
-    const slot = slots.find((s) => s.id === dragId)
-    if (!slot) return
-    if (slot.dayOfWeek === day && slot.startTime === time) {
-      setDragId(null)
-      setDragOver(null)
-      return
-    }
-    moveMutation.mutate({ id: dragId, dayOfWeek: day, startTime: time })
-    setDragId(null)
-    setDragOver(null)
-  }
-
-  function getSlotAt(day: number, time: string): TimetableSlot | undefined {
-    return slots.find((s) => s.dayOfWeek === day && s.startTime === time)
-  }
-
-  const cellKey = (day: number, time: string) => `${day}-${time}`
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Emploi du temps</h2>
-          <p className="text-muted-foreground">Glissez-déposez les cours pour modifier l'horaire</p>
+          <p className="text-muted-foreground">Aperçu des cours par classe</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -330,110 +302,123 @@ export function TimetablePage() {
         </div>
       ) : (
         <div className="rounded-lg border overflow-auto">
-          <div
-            className="grid min-w-[800px]"
-            style={{ gridTemplateColumns: `70px repeat(${DAYS.length}, minmax(0, 1fr))` }}
-          >
-            <div className="border-b p-2" />
-            {DAYS.map((d) => (
-              <div key={d.value} className="border-b p-2 text-center text-sm font-semibold">
-                {d.label}
-              </div>
-            ))}
-
-            {TIME_SLOTS.map((time) => (
-              <Fragment key={time}>
+          <div className="flex min-w-[800px]">
+            {/* Time column */}
+            <div className="shrink-0" style={{ width: 56 }}>
+              <div className="border-b" style={{ height: 40 }} />
+              {TIME_SLOTS.map((time) => (
                 <div
-                  key={`time-${time}`}
-                  className="border-t flex items-center justify-center text-xs text-muted-foreground"
+                  key={time}
+                  className="border-t flex items-start justify-center text-xs text-muted-foreground pt-0.5"
+                  style={{ height: ROW_HEIGHT }}
                 >
                   {time}
                 </div>
-                {DAYS.map((d) => {
-                  const slot = getSlotAt(d.value, time)
-                  const key = cellKey(d.value, time)
-                  const isOver = dragOver === key
-                  const isDragging = dragId === slot?.id
+              ))}
+            </div>
 
-                  return (
-                    <div
-                      key={key}
-                      className={cn(
-                        'border-t p-1 min-h-[70px] transition-colors',
-                        isOver && !slot && 'bg-primary/5',
-                      )}
-                      onDragOver={(e) => handleDragOver(e, key)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={() => handleDrop(d.value, time)}
-                    >
-                      {slot ? (
-                        <div
-                          draggable
-                          onDragStart={() => handleDragStart(slot.id)}
-                          onDragEnd={() => { setDragId(null); setDragOver(null) }}
-                          className={cn(
-                            'group relative rounded-md border bg-primary/5 p-2 text-xs cursor-grab active:cursor-grabbing select-none',
-                            isDragging && 'opacity-40',
-                          )}
+            {/* Day columns */}
+            {DAYS.map((d) => {
+              const daySlots = getSlotsForDay(d.value)
+              return (
+                <div key={d.value} className="flex-1 min-w-0">
+                  <div className="border-b border-l p-2 text-center text-sm font-semibold truncate" style={{ height: 40 }}>
+                    {d.short}
+                  </div>
+                  <div className="relative" style={{ height: ROW_HEIGHT * TIME_SLOTS.length }}>
+                    {/* Hour grid lines */}
+                    {TIME_SLOTS.map((time) => (
+                      <div
+                        key={time}
+                        className="border-l border-t"
+                        style={{ height: ROW_HEIGHT }}
+                      />
+                    ))}
+
+                    {/* "+" buttons at hour marks */}
+                    {TIME_SLOTS.map((time, i) => {
+                      if (i === TIME_SLOTS.length - 1) return null
+                      const hasSlot = hasSlotAtHour(d.value, time)
+                      return (
+                        <button
+                          key={`add-${time}`}
+                          type="button"
+                          onClick={() => openCreate(d.value, time)}
+                          className="absolute left-1 right-1 rounded-md border border-dashed border-muted-foreground/20 text-muted-foreground/30 hover:border-primary hover:text-primary text-xs transition-colors"
+                          style={{
+                            top: i * ROW_HEIGHT + 4,
+                            height: ROW_HEIGHT - 8,
+                            display: hasSlot ? 'none' : 'block',
+                          }}
                         >
-                          <div className="flex items-start gap-1">
-                            <MoveIcon className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                          +
+                        </button>
+                      )
+                    })}
+
+                    {/* Cards */}
+                    {daySlots.map((slot) => {
+                      const startMin = timeToMinutes(slot.startTime)
+                      const endMin = timeToMinutes(slot.endTime)
+                      const top = ((startMin - FIRST_MIN) / 60) * ROW_HEIGHT
+                      const height = Math.max(((endMin - startMin) / 60) * ROW_HEIGHT, 24)
+
+                      return (
+                        <div
+                          key={slot.id}
+                          className="group absolute left-1 right-1 rounded-md border bg-primary/10 p-1.5 text-xs select-none overflow-hidden transition-shadow hover:shadow-md"
+                          style={{ top, height }}
+                        >
+                          <div className="flex items-start gap-1 h-full">
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{slot.subjectLabel}</div>
+                              <div className="font-medium truncate leading-tight">{slot.subjectLabel}</div>
                               {slot.teacherDisplay && (
-                                <div className="text-muted-foreground truncate">
+                                <div className="text-muted-foreground truncate leading-tight">
                                   {slot.teacherDisplay}
                                 </div>
                               )}
-                              <div className="text-muted-foreground">
+                              <div className="text-muted-foreground leading-tight">
                                 {slot.startTime} - {slot.endTime}
                                 {slot.room ? ` · ${slot.room}` : ''}
                               </div>
                             </div>
-                            <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex flex-col gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5"
+                                className="h-4 w-4"
                                 onClick={(e) => { e.stopPropagation(); openEdit(slot) }}
                               >
-                                <PencilIcon className="h-3 w-3" />
+                                <PencilIcon className="h-2.5 w-2.5" />
                               </Button>
-                              <ConfirmDialog
-                                open={deleteId === slot.id}
-                                onOpenChange={(open) => !open && setDeleteId(null)}
-                                onConfirm={() => deleteMutation.mutate(slot.id)}
-                                title="Supprimer le créneau"
-                                description="Êtes-vous sûr ?"
-                              />
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5"
+                                className="h-4 w-4"
                                 onClick={(e) => { e.stopPropagation(); setDeleteId(slot.id) }}
                               >
-                                <TrashIcon className="h-3 w-3 text-destructive" />
+                                <TrashIcon className="h-2.5 w-2.5 text-destructive" />
                               </Button>
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openCreate(d.value, time)}
-                          className="w-full h-full min-h-[48px] rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:border-primary hover:text-primary text-xs"
-                        >
-                          +
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </Fragment>
-            ))}
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+        onConfirm={() => { if (deleteId) deleteMutation.mutate(deleteId) }}
+        title="Supprimer le créneau"
+        description="Êtes-vous sûr de vouloir supprimer ce créneau ?"
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[500px]">

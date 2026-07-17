@@ -25,7 +25,7 @@ export class CreateGradeDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['EXAM', 'TEST', 'HOMEWORK', 'ORAL', 'PROJECT'])
+  @IsIn(['EXAM', 'TEST', 'HOMEWORK', 'ORAL', 'PROJECT', 'CONTROLE', 'EXAMEN_BLANC'])
   evaluationType?: string = 'EXAM';
 
   @IsOptional()
@@ -37,11 +37,10 @@ export class CreateGradeDto {
   comment?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  semester?: number = 1;
+  @IsString()
+  periodId?: string;
 
   @IsOptional()
   @IsString()
-  periodId?: string;
+  teacherId?: string;
 }

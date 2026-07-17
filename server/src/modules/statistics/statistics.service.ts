@@ -351,7 +351,6 @@ export class StatisticsService {
           Note: r.value,
           Max: r.maxValue,
           Coefficient: r.coefficient,
-          Semestre: r.semester,
         }));
         break;
       }

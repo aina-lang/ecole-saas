@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "EvaluationType" ADD VALUE 'CONTROLE';
+ALTER TYPE "EvaluationType" ADD VALUE 'EXAMEN_BLANC';

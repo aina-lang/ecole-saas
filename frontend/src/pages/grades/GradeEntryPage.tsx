@@ -211,7 +211,7 @@ export function GradeEntryPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Saisie de notes</h2>
@@ -265,7 +265,10 @@ export function GradeEntryPage() {
                   { value: 'exam', label: 'Examen' },
                   { value: 'test', label: 'Test' },
                   { value: 'homework', label: 'Devoir' },
-                  { value: 'project', label: 'Projet' }
+                  { value: 'oral', label: 'Oral' },
+                  { value: 'project', label: 'Projet' },
+                  { value: 'controle', label: 'Contrôle' },
+                  { value: 'examen_blanc', label: 'Examen blanc' }
                 ]}
               />
             </div>

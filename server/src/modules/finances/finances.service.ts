@@ -3,7 +3,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { Prisma, PaymentStatus } from '@prisma/client';
+import { PaymentStatus } from '@prisma/client';
 
 @Injectable()
 export class FinancesService {
@@ -134,6 +134,7 @@ export class FinancesService {
         tenantId,
         studentId: dto.studentId,
         feeStructureId: dto.feeStructureId,
+        academicYearId: dto.academicYearId,
         amount: dto.amount,
         dueDate: new Date(dto.dueDate),
         paymentMethod: dto.paymentMethod,
@@ -163,9 +164,10 @@ export class FinancesService {
 
   async findAllPayments(tenantId: string, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
+    const where = { tenantId, deletedAt: null };
     const [data, total] = await Promise.all([
       this.prisma.payment.findMany({
-        where: { tenantId },
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -174,7 +176,7 @@ export class FinancesService {
           feeStructure: { select: { id: true, label: true } },
         },
       }),
-      this.prisma.payment.count({ where: { tenantId } }),
+      this.prisma.payment.count({ where }),
     ]);
     return { data, total, page, limit };
   }
@@ -200,6 +202,7 @@ export class FinancesService {
       data: {
         amount: dto.amount,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        feeStructureId: dto.feeStructureId,
         paymentMethod: dto.paymentMethod,
         reference: dto.reference,
         notes: dto.notes,
@@ -282,7 +285,7 @@ export class FinancesService {
     if (!student) throw new NotFoundException('Élève non trouvé');
 
     const payments = await this.prisma.payment.findMany({
-      where: { studentId, tenantId },
+      where: { studentId, tenantId, deletedAt: null, status: { not: 'CANCELLED' } },
     });
 
     const totalDue = payments.reduce((sum, p) => sum + p.amount, 0);

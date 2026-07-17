@@ -51,7 +51,6 @@ describe('GradesService', () => {
       evaluationType: 'EXAM',
       evaluationLabel: 'DS N°1',
       comment: 'Bon travail',
-      semester: 1,
       periodId: 'period-1',
     };
 
@@ -80,7 +79,6 @@ describe('GradesService', () => {
           evaluationType: dto.evaluationType,
           evaluationLabel: dto.evaluationLabel,
           comment: dto.comment,
-          semester: dto.semester,
           periodId: dto.periodId,
           updatedBy: 'user-1',
         },
@@ -113,7 +111,6 @@ describe('GradesService', () => {
         maxValue: 20,
         coefficient: 1,
         evaluationType: 'EXAM',
-        semester: 1,
         tenantId,
         student: { id: 'student-1', firstName: 'Jean', lastName: 'Dupont' },
         subject: { id: 'subject-1', name: 'Mathématiques' },
@@ -125,7 +122,6 @@ describe('GradesService', () => {
       expect(result.maxValue).toBe(20);
       expect(result.coefficient).toBe(1);
       expect(result.evaluationType).toBe('EXAM');
-      expect(result.semester).toBe(1);
     });
   });
 
@@ -172,12 +168,6 @@ describe('GradesService', () => {
 
   describe('calculateAveragesBySubject', () => {
     it('devrait calculer la moyenne pondérée par matière', async () => {
-      mockPrisma.grade.findMany.mockResolvedValue([
-        { id: 'g1', studentId: 'student-1', subjectId: 'subj-1', value: 15, maxValue: 20, coefficient: 2, tenantId: 'tenant-1' },
-        { id: 'g2', studentId: 'student-1', subjectId: 'subj-1', value: 10, maxValue: 20, coefficient: 1, tenantId: 'tenant-1' },
-        { id: 'g3', studentId: 'student-1', subjectId: 'subj-2', value: 18, maxValue: 20, coefficient: 3, tenantId: 'tenant-1' },
-      ], { subject: { id: 'subj-1', name: 'Maths', coefficient: 2 } });
-
       mockPrisma.grade.findMany.mockImplementation(async ({ where }: any) => {
         const allGrades = [
           {

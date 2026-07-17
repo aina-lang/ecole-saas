@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, protocol, session } from 'electron'
 import { join, extname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, existsSync, mkdirSync, rmSync } from 'fs'
 import { getSetting, setSetting, getAllSettings } from './settings'
 import { saveFileLocally, getFileUploadCount, getFileUploadByEntity } from './files'
 import { setAuthToken, getAuthToken } from './auth'
@@ -96,7 +96,6 @@ function setupIPC() {
   })
 
   ipcMain.handle('db:sync', async (_event, entityType, remoteUrl) => {
-    // Sync is handled in the renderer process with PouchDB
     return { ok: true, entityType, remoteUrl }
   })
 
@@ -135,6 +134,24 @@ function setupIPC() {
     return null
   })
 
+  ipcMain.handle('db:reset', async () => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        await mainWindow.webContents.executeJavaScript('window.resetLocalDatabases()')
+      }
+      const uploadDir = join(app.getPath('userData'), 'uploads')
+      if (existsSync(uploadDir)) {
+        rmSync(uploadDir, { recursive: true, force: true })
+        mkdirSync(uploadDir, { recursive: true })
+      }
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('window:is-maximized', async () => mainWindow?.isMaximized() ?? false)
+
   ipcMain.on('window:minimize', () => {
     mainWindow?.minimize()
   })
@@ -147,8 +164,6 @@ function setupIPC() {
   ipcMain.on('window:close', () => {
     mainWindow?.close()
   })
-
-  ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
 }
 
 app.whenReady().then(async () => {

@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class RegisterTenantDto {
   @IsString()
@@ -8,9 +8,9 @@ export class RegisterTenantDto {
   @IsEmail({}, { message: 'Email invalide' })
   adminEmail: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Le prénom est requis' })
-  adminFirstName: string;
+  adminFirstName?: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Le nom est requis' })

@@ -23,10 +23,5 @@ export class UpdateClassDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  subjectIds?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
   teacherIds?: string[];
 }

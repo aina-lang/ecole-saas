@@ -1,9 +1,9 @@
 import { IsEmail, IsString, IsNotEmpty, IsOptional, IsArray, ArrayMaxSize, MinLength } from 'class-validator';
 
 export class CreateTeacherDto {
-  @IsOptional()
   @IsEmail({}, { message: 'Email invalide' })
-  email?: string;
+  @IsNotEmpty({ message: "L'email est requis" })
+  email: string;
 
   @IsOptional()
   @IsString()

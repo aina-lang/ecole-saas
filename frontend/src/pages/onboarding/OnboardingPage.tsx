@@ -53,7 +53,7 @@ export function OnboardingPage() {
       await window.api.settings.set('tenant', JSON.stringify({ primaryColor: form.primaryColor }))
       await window.api.settings.set('academic_year', JSON.stringify({ label: form.yearLabel }))
 
-      setTenant({ name: '', logoUrl: '', primaryColor: form.primaryColor })
+      setTenant({ name: 'École SaaS', logoUrl: '', primaryColor: form.primaryColor })
 
       completeOnboarding()
       toast.success('Établissement configuré avec succès')

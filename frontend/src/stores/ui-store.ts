@@ -19,7 +19,7 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarOpen: true,
   currentTheme: 'light',
   tenant: {
-    name: '',
+    name: 'École SaaS',
     logoUrl: '',
     primaryColor: '#3b82f6'
   },

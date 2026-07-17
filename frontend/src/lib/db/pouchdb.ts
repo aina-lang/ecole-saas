@@ -16,6 +16,7 @@ export type EntityType =
   | 'TeacherContract'
   | 'TeacherPayment'
   | 'TeacherAttendance'
+  | 'StudentDocument'
 
 const DB_PREFIX = 'ecole_saas_'
 let couchDBUrl = 'http://localhost:5984'
@@ -249,5 +250,36 @@ export async function destroyAllDatabases(tenantId?: string): Promise<void> {
     console.warn(`[PouchDB] ${failed.length} base(s) non détruites pour tenant "${tid}"`)
   } else {
     console.log(`[PouchDB] Toutes les bases du tenant "${tid}" purgées`)
+  }
+}
+
+const DOC_NAMES_LOCAL_ID = '_local/document_names'
+
+export async function loadCustomDocNames(): Promise<string[]> {
+  const db = createDatabase('StudentDocument')
+  try {
+    const doc = await db.get(DOC_NAMES_LOCAL_ID)
+    return (doc as any).names ?? []
+  } catch {
+    return []
+  } finally {
+    db.close()
+  }
+}
+
+export async function saveCustomDocName(name: string): Promise<void> {
+  const db = createDatabase('StudentDocument')
+  try {
+    let doc: any
+    try {
+      doc = await db.get(DOC_NAMES_LOCAL_ID)
+      if (doc.names?.includes(name)) { db.close(); return }
+      doc.names = [...new Set([...(doc.names ?? []), name])]
+    } catch {
+      doc = { _id: DOC_NAMES_LOCAL_ID, names: [name] }
+    }
+    await db.put(doc)
+  } finally {
+    db.close()
   }
 }

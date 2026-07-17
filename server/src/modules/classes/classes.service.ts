@@ -3,7 +3,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
-import { Prisma } from '@prisma/client';
+
 
 @Injectable()
 export class ClassesService {
@@ -14,9 +14,9 @@ export class ClassesService {
 
   async findAll(tenantId: string) {
     return this.prisma.class.findMany({
-      where: { tenantId },
+      where: { tenantId, deletedAt: null },
       include: {
-        _count: { select: { students: true, teachers: true, subjects: true } },
+        _count: { select: { students: true, teachers: true } },
       },
       orderBy: { name: 'asc' },
     });
@@ -24,7 +24,7 @@ export class ClassesService {
 
   async findById(id: string, tenantId: string) {
     const cls = await this.prisma.class.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId, deletedAt: null },
       include: {
         students: {
           select: { id: true, firstName: true, lastName: true, registrationNumber: true },
@@ -34,14 +34,6 @@ export class ClassesService {
           include: {
             user: { select: { id: true, firstName: true, lastName: true, email: true } },
           },
-        },
-        subjects: {
-          include: {
-            teachers: {
-              include: { user: { select: { id: true, firstName: true, lastName: true } } },
-            },
-          },
-          orderBy: { name: 'asc' },
         },
         _count: { select: { students: true } },
       },
@@ -63,9 +55,6 @@ export class ClassesService {
         level: dto.level,
         room: dto.room,
         capacity: dto.capacity ?? 30,
-        subjects: dto.subjectIds?.length
-          ? { connect: dto.subjectIds.map((id) => ({ id })) }
-          : undefined,
         teachers: dto.teacherIds?.length
           ? { connect: dto.teacherIds.map((id) => ({ id })) }
           : undefined,
@@ -103,7 +92,6 @@ export class ClassesService {
     if (dto.level !== undefined) data.level = dto.level;
     if (dto.room !== undefined) data.room = dto.room;
     if (dto.capacity !== undefined) data.capacity = dto.capacity;
-    if (dto.subjectIds) data.subjects = { set: dto.subjectIds.map((id) => ({ id })) };
     if (dto.teacherIds) data.teachers = { set: dto.teacherIds.map((id) => ({ id })) };
 
     const updated = await this.prisma.class.update({
@@ -130,14 +118,22 @@ export class ClassesService {
   async remove(id: string, tenantId: string, userId?: string) {
     const cls = await this.prisma.class.findFirst({
       where: { id, tenantId },
-      include: { _count: { select: { students: true } } },
+      include: {
+        _count: { select: { students: true, timetableSlots: true } },
+      },
     });
     if (!cls) throw new NotFoundException('Classe non trouvée');
     if (cls._count.students > 0) {
       throw new ConflictException('Impossible de supprimer une classe contenant des élèves');
     }
+    if (cls._count.timetableSlots > 0) {
+      throw new ConflictException('Impossible de supprimer une classe contenant des créneaux horaires');
+    }
 
-    await this.prisma.class.delete({ where: { id } });
+    const updated = await this.prisma.class.update({
+      where: { id },
+      data: { deletedAt: new Date(), updatedBy: userId },
+    });
 
     await this.auditService.log({
       tenantId,
@@ -146,12 +142,38 @@ export class ClassesService {
       entityType: 'Class',
       entityId: id,
       oldValue: cls,
+      newValue: { deletedAt: updated.deletedAt },
     });
 
-    // Propager la suppression vers CouchDB (deletedAt → _deleted)
-    this.prisma.notifyWrite('Class', { id: cls.id, tenantId, deletedAt: new Date() });
+    this.prisma.notifyWrite('Class', updated);
 
     return { message: 'Classe supprimée' };
+  }
+
+  async restore(id: string, tenantId: string, userId?: string) {
+    const cls = await this.prisma.class.findFirst({
+      where: { id, tenantId, deletedAt: { not: null } },
+    });
+    if (!cls) throw new NotFoundException('Classe non trouvée ou non supprimée');
+
+    const updated = await this.prisma.class.update({
+      where: { id },
+      data: { deletedAt: null, version: { increment: 1 }, updatedBy: userId },
+    });
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'RESTORE',
+      entityType: 'Class',
+      entityId: id,
+      oldValue: { deletedAt: cls.deletedAt },
+      newValue: { deletedAt: null },
+    });
+
+    this.prisma.notifyWrite('Class', updated);
+
+    return updated;
   }
 
   async assignStudent(classId: string, studentId: string, tenantId: string, userId?: string) {
@@ -275,77 +297,27 @@ export class ClassesService {
     return updated;
   }
 
-  async assignSubject(classId: string, subjectId: string, tenantId: string, userId?: string) {
-    const cls = await this.prisma.class.findFirst({ where: { id: classId, tenantId } });
-    if (!cls) throw new NotFoundException('Classe non trouvée');
-
-    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, tenantId } });
-    if (!subject) throw new NotFoundException('Matière non trouvée');
-
-    const updated = await this.prisma.class.update({
-      where: { id: classId },
-      data: { subjects: { connect: { id: subjectId } } },
-      include: { subjects: true },
-    });
-
-    await this.auditService.log({
-      tenantId,
-      userId,
-      action: 'ASSIGN_SUBJECT',
-      entityType: 'Class',
-      entityId: classId,
-      newValue: { subjectId },
-    });
-
-    // Propager la classe (avec ses relations mises à jour) vers CouchDB
-    this.prisma.notifyWrite('Class', updated);
-
-    return updated;
-  }
-
-  async removeSubject(classId: string, subjectId: string, tenantId: string, userId?: string) {
-    const cls = await this.prisma.class.findFirst({ where: { id: classId, tenantId } });
-    if (!cls) throw new NotFoundException('Classe non trouvée');
-
-    const updated = await this.prisma.class.update({
-      where: { id: classId },
-      data: { subjects: { disconnect: { id: subjectId } } },
-      include: { subjects: true },
-    });
-
-    await this.auditService.log({
-      tenantId,
-      userId,
-      action: 'REMOVE_SUBJECT',
-      entityType: 'Class',
-      entityId: classId,
-      newValue: { subjectId },
-    });
-
-    // Propager la classe (avec ses relations mises à jour) vers CouchDB
-    this.prisma.notifyWrite('Class', updated);
-
-    return updated;
-  }
-
   async getTimetableStructure(tenantId: string) {
-    const classes = await this.prisma.class.findMany({
-      where: { tenantId },
-      include: {
-        subjects: {
-          include: {
-            teachers: {
-              include: { user: { select: { id: true, firstName: true, lastName: true } } },
-            },
+    const [classes, allSubjects] = await Promise.all([
+      this.prisma.class.findMany({
+        where: { tenantId, deletedAt: null },
+        include: {
+          teachers: {
+            include: { user: { select: { id: true, firstName: true, lastName: true } } },
+          },
+          _count: { select: { students: true } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.subject.findMany({
+        where: { tenantId, deletedAt: null },
+        include: {
+          teachers: {
+            include: { user: { select: { id: true, firstName: true, lastName: true } } },
           },
         },
-        teachers: {
-          include: { user: { select: { id: true, firstName: true, lastName: true } } },
-        },
-        _count: { select: { students: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+      }),
+    ]);
 
     return classes.map((cls) => ({
       id: cls.id,
@@ -354,7 +326,7 @@ export class ClassesService {
       room: cls.room,
       capacity: cls.capacity,
       studentCount: cls._count.students,
-      subjects: cls.subjects.map((s) => ({
+      subjects: allSubjects.map((s) => ({
         id: s.id,
         name: s.name,
         code: s.code,

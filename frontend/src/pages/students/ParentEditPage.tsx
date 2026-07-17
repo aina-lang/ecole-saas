@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
+import { getEntityById, saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Student } from '@/types'
-import { cn } from '@/lib/utils'
-
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PasswordInput } from '@/components/ui/password-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -23,25 +19,39 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { PlusIcon, Cross2Icon, ArrowLeftIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { ArrowLeftIcon, ReloadIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
 
 const parentSchema = z.object({
   firstName: z.string().optional().or(z.literal('')),
   lastName: z.string().min(1, 'Nom requis'),
   email: z.string().email('Email invalide').optional().or(z.literal('')),
-  password: z.string().optional().or(z.literal('')),
+  isActive: z.boolean(),
 })
 
 type ParentFormValues = z.infer<typeof parentSchema>
 
-export function ParentFormPage() {
+export function ParentEditPage() {
   const navigate = useNavigate()
+  const { id } = useParams()
   const queryClient = useQueryClient()
-  const [showPassword, setShowPassword] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
-  const [npPhones, setNpPhones] = useState<string[]>([''])
+  const [editPhones, setEditPhones] = useState<string[]>([''])
 
-  const { data: students } = useLocalQuery<Student>('Student')
+  const { data: parent, isLoading: loadingParent } = useQuery({
+    queryKey: ['parent', id],
+    queryFn: async () => {
+      const doc = await getEntityById<any>('User', id)
+      return doc ?? null
+    },
+  })
+
+  const { data: allStudents } = useQuery({
+    queryKey: ['students'],
+    queryFn: async () => {
+      const docs = await queryEntities<Student>('Student')
+      return docs ?? []
+    },
+  })
 
   const form = useForm<ParentFormValues>({
     resolver: zodResolver(parentSchema),
@@ -49,67 +59,113 @@ export function ParentFormPage() {
       firstName: '',
       lastName: '',
       email: '',
-      password: '',
+      isActive: true,
     },
   })
 
-  const createMutation = useMutation({
+  useEffect(() => {
+    if (parent) {
+      const phones = parent.phones?.map((p: any) => p.value) ?? (parent.phone ? [parent.phone] : [''])
+      form.reset({
+        firstName: parent.firstName || '',
+        lastName: parent.lastName || '',
+        email: parent.email || '',
+        isActive: parent.isActive ?? true,
+      })
+      setEditPhones(phones.length ? phones : [''])
+      const linked = (allStudents ?? []).filter((s) =>
+        (s as any).parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
+      )
+      setSelectedStudentIds(linked.map((s) => s.id))
+    }
+  }, [parent, allStudents, id, form])
+
+  const updateMutation = useMutation({
     mutationFn: async (values: ParentFormValues) => {
-      const userId = crypto.randomUUID()
-      const tenantId = typeof localStorage !== 'undefined' ? localStorage.getItem('tenantId') : null
-      
-      const phones = npPhones.map((p) => p.trim()).filter(Boolean)
+      if (!id) return
+      const phones = editPhones.map((p) => p.trim()).filter(Boolean)
       await saveEntity('User', {
-        id: userId,
+        ...parent,
+        id,
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email || null,
         phone: phones[0] || null,
         phones: phones.length > 0 ? phones.map((v, i) => ({ value: v, sortOrder: i })) : undefined,
         role: 'PARENT',
-        tenantId,
-        isActive: true,
-        passwordHash: values.password || Math.random().toString(36).slice(2, 10) + 'A1!',
+        isActive: values.isActive,
       })
-
-      for (const studentId of selectedStudentIds) {
-        const existing = await queryEntities<any>('Student', { id: studentId })
-        const student = existing.find((s) => s.id === studentId) || { id: studentId, parents: [] }
-        const parents = Array.isArray(student.parents) ? student.parents : []
+      const currentlyLinked = (allStudents ?? []).filter((s) =>
+        (s as any).parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
+      )
+      const toUnlink = currentlyLinked.filter((s) => !selectedStudentIds.includes(s.id))
+      const toLink = selectedStudentIds.filter(
+        (sid) => !currentlyLinked.some((cl) => cl.id === sid)
+      )
+      for (const student of toUnlink) {
         await saveEntity('Student', {
           ...student,
-          parents: [
-            ...parents,
-            {
-              parentId: userId,
-              relation: 'PARENT',
-              isPrimary: parents.length === 0,
-            },
-          ],
+          parents: (student as any).parents?.filter(
+            (p: any) => p.parentId !== id && p.parent?.id !== id
+          ) ?? [],
         })
+      }
+      for (const studentId of toLink) {
+        const student = allStudents?.find((s) => s.id === studentId)
+        if (student) {
+          const parents = Array.isArray((student as any).parents) ? (student as any).parents : []
+          await saveEntity('Student', {
+            ...student,
+            parents: [
+              ...parents,
+              { parentId: id, relation: 'PARENT', isPrimary: parents.length === 0 },
+            ],
+          })
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parents'] })
-      toast.success('Parent créé avec succès')
-      navigate('/parents')
+      queryClient.invalidateQueries({ queryKey: ['parent', id] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+      toast.success('Parent mis à jour')
+      navigate(`/parents/${id}`)
     },
-    onError: () => toast.error('Erreur lors de la création du parent'),
+    onError: () => toast.error('Erreur lors de la mise à jour'),
   })
 
   function onSubmit(values: ParentFormValues) {
-    createMutation.mutate({ ...values, studentIds: selectedStudentIds })
+    updateMutation.mutate(values)
+  }
+
+  if (loadingParent) {
+    return (
+      <div className="flex h-48 items-center justify-center text-muted-foreground">
+        Chargement...
+      </div>
+    )
+  }
+
+  if (!parent) {
+    return (
+      <div className="flex h-48 flex-col items-center justify-center gap-4 text-muted-foreground">
+        <p>Parent introuvable</p>
+        <Button variant="outline" onClick={() => navigate('/parents')}>
+          Retour à la liste
+        </Button>
+      </div>
+    )
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/parents')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(`/parents/${id}`)}>
           <ArrowLeftIcon className="h-4 w-4" />
         </Button>
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Nouveau parent / tuteur</h2>
-          <p className="text-muted-foreground">Créer un compte parent et lier à des élèves</p>
+          <h2 className="text-2xl font-bold tracking-tight">Modifier le parent</h2>
+          <p className="text-muted-foreground">{parent.firstName} {parent.lastName}</p>
         </div>
       </div>
 
@@ -126,7 +182,7 @@ export function ParentFormPage() {
                   name="firstName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Prénom *</FormLabel>
+                      <FormLabel>Prénom</FormLabel>
                       <FormControl>
                         <Input placeholder="Prénom" {...field} />
                       </FormControl>
@@ -165,26 +221,26 @@ export function ParentFormPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Téléphone (max 3)</label>
-                {npPhones.map((phone, index) => (
+                {editPhones.map((phone, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
                       placeholder="+261 ..."
                       value={phone}
                       onChange={(e) =>
-                        setNpPhones((prev) => {
+                        setEditPhones((prev) => {
                           const next = [...prev]
                           next[index] = e.target.value
                           return next
                         })
                       }
                     />
-                    {npPhones.length > 1 && (
+                    {editPhones.length > 1 && (
                       <Button
                         type="button"
                         variant="outline"
                         size="icon"
                         onClick={() =>
-                          setNpPhones((prev) => {
+                          setEditPhones((prev) => {
                             const next = prev.filter((_, i) => i !== index)
                             return next.length ? next : ['']
                           })
@@ -195,12 +251,12 @@ export function ParentFormPage() {
                     )}
                   </div>
                 ))}
-                {npPhones.length < 3 && (
+                {editPhones.length < 3 && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setNpPhones((prev) => [...prev, ''])}
+                    onClick={() => setEditPhones((prev) => [...prev, ''])}
                   >
                     <PlusIcon className="mr-1 h-4 w-4" />
                     Ajouter un numéro
@@ -210,27 +266,19 @@ export function ParentFormPage() {
 
               <FormField
                 control={form.control}
-                name="password"
+                name="isActive"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mot de passe</FormLabel>
+                    <FormLabel>Statut</FormLabel>
                     <FormControl>
-                      <div className="relative">
-                        <PasswordInput
-                          placeholder="••••••••"
-                          {...field}
-                          className="pr-20"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? 'Masquer' : 'Afficher'}
-                        </Button>
-                      </div>
+                      <Combobox
+                        options={[
+                          { value: 'true', label: 'Actif' },
+                          { value: 'false', label: 'Inactif' },
+                        ]}
+                        value={String(field.value)}
+                        onValueChange={(v) => field.onChange(v === 'true')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -238,9 +286,9 @@ export function ParentFormPage() {
               />
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Élèves à lier (optionnel)</label>
+                <label className="text-sm font-medium">Élèves liés</label>
                 <Combobox
-                  options={(students ?? [])
+                  options={(allStudents ?? [])
                     .filter((s) => !selectedStudentIds.includes(s.id))
                     .map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` }))}
                   value=""
@@ -256,7 +304,7 @@ export function ParentFormPage() {
                 {selectedStudentIds.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {selectedStudentIds.map((sid) => {
-                      const s = students?.find((st) => st.id === sid)
+                      const s = allStudents?.find((st) => st.id === sid)
                       return (
                         <span
                           key={sid}
@@ -278,17 +326,17 @@ export function ParentFormPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button type="submit" disabled={createMutation.isPending} className="flex-1">
-                  {createMutation.isPending ? (
+                <Button type="submit" disabled={updateMutation.isPending} className="flex-1">
+                  {updateMutation.isPending ? (
                     <>
                       <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                      Création...
+                      Enregistrement...
                     </>
                   ) : (
-                    'Créer le compte parent'
+                    'Enregistrer'
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => navigate('/parents')}>
+                <Button type="button" variant="outline" onClick={() => navigate(`/parents/${id}`)}>
                   Annuler
                 </Button>
               </div>

@@ -1,22 +1,18 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import client from '@/api/client'
 import { getEntityById, saveEntity } from '@/lib/db/pouchdb-compat'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { LEVELS } from '@/lib/levels'
-import type { Class, Subject, Teacher } from '@/types'
-import { formatSubjectLabel } from '@/lib/subject'
+import type { Class, Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import {
   Form,
   FormControl,
@@ -26,23 +22,13 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { Combobox } from '@/components/ui/combobox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Cross2Icon } from '@radix-ui/react-icons'
 
 const classFormSchema = z.object({
   name: z.string().min(1, 'Le nom est requis'),
   level: z.string().min(1, 'Le niveau est requis'),
   room: z.string().optional(),
   capacity: z.coerce.number().min(1, 'La capacité minimale est 1'),
-  subjectIds: z.array(z.string()).optional(),
   teacherIds: z.array(z.string()).optional()
 })
 
@@ -57,17 +43,10 @@ export function ClassFormPage() {
   const { data: classData } = useQuery({
     queryKey: ['class', id],
     queryFn: async () => {
-      const data = await getEntityById<Class & { subjectIds?: string[]; teacherIds?: string[] }>('Class', id!)
-      if (data) return data
-      const { data: res } = await client.get(`/classes/${id}`)
-      const result = (res.data ?? res) as any
-      await saveEntity('Class', result)
-      return result
+      return getEntityById<Class & { teacherIds?: string[] }>('Class', id!)
     },
     enabled: isEditing
   })
-
-  const { data: subjects } = useLocalQuery<Subject>('Subject')
 
   const { data: teachers } = useLocalQuery<Teacher>('Teacher')
 
@@ -78,24 +57,20 @@ export function ClassFormPage() {
       level: '',
       room: '',
       capacity: 30,
-      subjectIds: [],
       teacherIds: []
     }
   })
 
   useEffect(() => {
     if (classData) {
-      const subjectIds = (classData.subjects ?? []).map((s: any) => s.id)
       const teacherIds = (classData.teachers ?? []).map((t: any) => t.id)
       form.reset({
         name: classData.name,
         level: classData.level,
         room: classData.room || '',
         capacity: classData.capacity,
-        subjectIds,
         teacherIds
       })
-      setSelectedSubjectIds(subjectIds)
       setSelectedTeacherIds(teacherIds)
     }
   }, [classData])
@@ -132,7 +107,6 @@ export function ClassFormPage() {
   function onSubmit(values: ClassFormValues) {
     const data = {
       ...values,
-      subjectIds: selectedSubjectIds,
       teacherIds: selectedTeacherIds,
     }
     if (isEditing) {
@@ -142,37 +116,7 @@ export function ClassFormPage() {
     }
   }
 
-  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([])
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([])
-
-  const filteredSubjects = useMemo(() => {
-    const level = form.getValues('level')
-    return (subjects ?? []).filter(
-      (s) => !level || !s.level || s.level === level
-    )
-  }, [subjects, form])
-
-  function toggleSubject(subjectId: string) {
-    setSelectedSubjectIds((prev) =>
-      prev.includes(subjectId) ? prev.filter((id) => id !== subjectId) : [...prev, subjectId]
-    )
-  }
-
-  useEffect(() => {
-    if (selectedSubjectIds.length === 0) {
-      setSelectedTeacherIds([])
-      return
-    }
-    const matchingTeachers = (teachers ?? []).filter((t: any) => {
-      const tSubjectIds = t.subjectIds || []
-      return selectedSubjectIds.some((sid) => tSubjectIds.includes(sid))
-    })
-    setSelectedTeacherIds((prev) => {
-      const newIds = new Set(prev)
-      matchingTeachers.forEach((t: any) => newIds.add(t.id))
-      return Array.from(newIds)
-    })
-  }, [selectedSubjectIds, teachers])
 
   function toggleTeacher(teacherId: string) {
     setSelectedTeacherIds((prev) =>
@@ -199,7 +143,7 @@ export function ClassFormPage() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto max-w-3xl space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Informations générales</CardTitle>
@@ -263,34 +207,6 @@ export function ClassFormPage() {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Matières assignées</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredSubjects.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {filteredSubjects.map((subject) => {
-                    const selected = selectedSubjectIds.includes(subject.id)
-                    return (
-                      <Badge
-                        key={subject.id}
-                        variant={selected ? 'default' : 'outline'}
-                        className="cursor-pointer select-none"
-                        onClick={() => toggleSubject(subject.id)}
-                      >
-                        {formatSubjectLabel(subject)}
-                        {selected && <Cross2Icon className="ml-1 h-3 w-3" />}
-                      </Badge>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Aucune matière disponible pour ce niveau</p>
-              )}
             </CardContent>
           </Card>
 

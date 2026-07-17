@@ -6,7 +6,7 @@ export interface UserPhone {
 export interface User {
   id: string
   email: string
-  firstName: string
+  firstName?: string
   lastName: string
   phones?: UserPhone[] | null
   role: string
@@ -19,13 +19,13 @@ export interface StudentParentLink {
   id: string
   relation: 'PARENT' | 'TUTEUR'
   isPrimary: boolean
-  parent: { id: string; firstName: string; lastName: string; email?: string | null; phones?: UserPhone[] | null }
+  parent: { id: string; firstName?: string; lastName: string; email?: string | null; phones?: UserPhone[] | null }
 }
 
 export interface Student {
   id: string
   registrationNumber: string
-  firstName: string
+  firstName?: string
   lastName: string
   birthDate: string
   gender: 'M' | 'F'
@@ -56,8 +56,6 @@ export interface Subject {
   code: string | null
   level: string | null
   coefficient: number
-  classId: string | null
-  class?: { id: string; name: string } | null
 }
 
 export interface Teacher {
@@ -74,10 +72,9 @@ export interface Grade {
   value: number
   maxValue: number
   coefficient: number
-  evaluationType: 'exam' | 'test' | 'homework' | 'project'
+  evaluationType: 'exam' | 'test' | 'homework' | 'oral' | 'project' | 'controle' | 'examen_blanc'
   comment?: string
   periodId?: string
-  semester?: number
 }
 
 export interface Attendance {
@@ -91,10 +88,24 @@ export interface Attendance {
 export interface Payment {
   id: string
   studentId: string
+  academicYearId?: string
   amount: number
   paidAmount: number
   dueDate: string
   status: 'pending' | 'partial' | 'paid' | 'overdue'
+}
+
+export interface StudentDocument {
+  id: string
+  studentId: string
+  fileName: string
+  notes?: string
+  fileData?: string
+  fileMimeType?: string
+  fileOriginalName?: string
+  fileSize?: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Message {

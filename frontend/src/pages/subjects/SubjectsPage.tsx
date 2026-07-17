@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities, deleteEntity, saveEntity, countEntities } from '@/lib/db/pouchdb-compat'
 import { LEVELS } from '@/lib/levels'
 import { cn } from '@/lib/utils'
@@ -35,8 +34,6 @@ interface Subject {
   code: string | null
   level?: string | null
   coefficient: number
-  classId?: string | null
-  class?: { id: string; name: string } | null
 }
 
 const subjectSchema = z.object({
@@ -44,7 +41,6 @@ const subjectSchema = z.object({
   code: z.string().optional().or(z.literal('')),
   level: z.string().optional().or(z.literal('')),
   coefficient: z.coerce.number().min(0, 'Coefficient invalide').default(1),
-  classId: z.string().optional().or(z.literal('__none__'))
 })
 
 type SubjectFormValues = z.infer<typeof subjectSchema>
@@ -61,8 +57,6 @@ export function SubjectsPage() {
   const [open, setOpen] = useState(false)
   const limit = 10
 
-  const { data: classes } = useLocalQuery<{ id: string; name: string }>('Class')
-
   const { data: subjectsData, isLoading } = useQuery({
     queryKey: ['subjects', search, page, sortBy, sortDirection],
     queryFn: async () => {
@@ -75,7 +69,7 @@ export function SubjectsPage() {
       }
       const [data, total] = await Promise.all([
         queryEntities<Subject>('Subject', params),
-        countEntities<Subject>('search' in params ? { ...params, limit: undefined, offset: undefined } : params),
+        countEntities('Subject', 'search' in params ? { ...params, limit: undefined, offset: undefined } : params),
       ])
       return { data, total } as { data: Subject[]; total: number }
     },
@@ -83,12 +77,12 @@ export function SubjectsPage() {
 
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectSchema),
-    defaultValues: { name: '', code: '', coefficient: 1, classId: '__none__', level: '__none__' }
+    defaultValues: { name: '', code: '', coefficient: 1, level: '__none__' }
   })
 
   function openCreate() {
     setEditing(null)
-    form.reset({ name: '', code: '', level: '__none__', coefficient: 1, classId: '__none__' })
+    form.reset({ name: '', code: '', level: '__none__', coefficient: 1 })
     setOpen(true)
   }
 
@@ -99,7 +93,6 @@ export function SubjectsPage() {
       code: subject.code ?? '',
       level: subject.level ?? '__none__',
       coefficient: subject.coefficient,
-      classId: subject.classId ?? '__none__'
     })
     setOpen(true)
   }
@@ -111,7 +104,6 @@ export function SubjectsPage() {
         code: values.code || undefined,
         level: values.level && values.level !== '__none__' ? values.level : undefined,
         coefficient: values.coefficient,
-        classId: values.classId && values.classId !== '__none__' ? values.classId : undefined
       }
       if (editing) {
         payload.id = editing.id
@@ -225,14 +217,6 @@ export function SubjectsPage() {
                 key: 'coefficient',
                 label: 'Coefficient',
                 sortable: true,
-              },
-              {
-                key: 'class',
-                label: 'Classe',
-                render: (subject) => {
-                  const s = subject as any
-                  return s.class?.name || 'Générale'
-                },
               },
             ]}
             data={subjectsData?.data ?? []}
@@ -355,28 +339,6 @@ export function SubjectsPage() {
                     <FormLabel>Coefficient</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.5" min="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="classId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Classe (optionnel)</FormLabel>
-                    <FormControl>
-                      <Combobox
-                        value={field.value || '__none__'}
-                        onValueChange={(v) => field.onChange(v || '__none__')}
-                        placeholder="Aucune (générale)"
-                        searchPlaceholder="Rechercher une classe..."
-                        options={[
-                          { value: '__none__', label: 'Aucune (générale)' },
-                          ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
-                        ]}
-                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

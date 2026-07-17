@@ -6,11 +6,11 @@ import {
   createDatabase,
   type EntityType,
 } from './pouchdb'
+import { getTenantId } from './token-cache'
 
-/** Résout le tenantId courant depuis le store Zustand ou localStorage. */
+/** Résout le tenantId courant depuis la mémoire (token-cache) ou localStorage. */
 function getCurrentTenantId(): string | null {
-  // localStorage est la source la plus fiable dans Electron (partagée entre renderer et main)
-  return localStorage.getItem('tenantId') ?? null
+  return getTenantId() ?? localStorage.getItem('tenantId') ?? null
 }
 
 /**

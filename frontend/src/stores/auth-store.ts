@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import client, { UNAUTHORIZED_EVENT } from '../api/client'
-import { setCurrentTenant, destroyAllDatabases, scheduleTenantCleanup } from '../lib/db/pouchdb'
-import { stopAllSyncs, performSync } from '../lib/db/sync-manager'
+import { setCurrentTenant } from '../lib/db/pouchdb'
+import { stopAllSyncs } from '../lib/db/sync-manager'
+import { saveSession, getSession, clearSession } from '../lib/db/pouchdb-auth'
+import { setTokens, clearTokens as clearTokenCache, setTenantId } from '../lib/db/token-cache'
 
 declare global {
   interface Window {
@@ -45,108 +47,141 @@ interface AuthState {
   tenantId: string | null
   isAuthenticated: boolean
   onboardingCompleted: boolean
+  hydrated: boolean
   login: (email: string, password: string) => Promise<void>
   register: (payload: RegisterPayload) => Promise<void>
   logout: () => void
   refreshAuth: () => Promise<void>
   setUser: (user: User) => void
   completeOnboarding: () => void
+  hydrate: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken: localStorage.getItem('accessToken'),
-  refreshToken: localStorage.getItem('refreshToken'),
-  tenantId: localStorage.getItem('tenantId'),
-  isAuthenticated: !!localStorage.getItem('accessToken'),
+  accessToken: null,
+  refreshToken: null,
+  tenantId: null,
+  isAuthenticated: false,
   onboardingCompleted: localStorage.getItem('onboardingCompleted') === 'true',
+  hydrated: false,
+
+  hydrate: async () => {
+    const session = await getSession()
+    if (session) {
+      setTokens(session.accessToken, session.refreshToken)
+      setTenantId(session.tenantId)
+      setCurrentTenant(session.tenantId)
+      set({
+        user: {
+          id: session.userId,
+          email: session.email,
+          firstName: session.firstName,
+          lastName: session.lastName,
+          role: session.role,
+          tenantId: session.tenantId,
+          isActive: true,
+        },
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        tenantId: session.tenantId,
+        isAuthenticated: true,
+        hydrated: true,
+      })
+    } else {
+      set({ hydrated: true })
+    }
+  },
 
   login: async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase()
-    console.log('[FRONTEND] login request', { email: normalizedEmail })
-    const { data } = await client.post('/auth/login', {
-      email: normalizedEmail,
-      password
-    })
-    console.log('[FRONTEND] login response', {
-      hasUser: !!data?.user,
-      email: data?.user?.email,
-      hasAccessToken: !!data?.accessToken,
-      tenantId: data?.tenantId ?? data?.user?.tenantId
-    })
-    const { user, accessToken, refreshToken, tenantId } = data
-    const resolvedTenantId = tenantId ?? user?.tenantId
 
-    localStorage.setItem('accessToken', accessToken)
-    localStorage.setItem('refreshToken', refreshToken)
-    localStorage.setItem('tenantId', resolvedTenantId)
+    try {
+      const { data } = await client.post('/auth/login', {
+        email: normalizedEmail,
+        password
+      })
 
-    // Basculer les bases PouchDB vers le contexte du nouveau tenant
-    // AVANT la hydration pour garantir que les bons buckets sont utilisés
-    setCurrentTenant(resolvedTenantId)
+      if (!data?.accessToken) {
+        throw new Error('Réponse du serveur invalide')
+      }
 
-    set({
-      user,
-      accessToken,
-      refreshToken,
-      tenantId,
-      isAuthenticated: true
-    })
+      const { user, accessToken, refreshToken, tenantId } = data
+      const resolvedTenantId = tenantId ?? user?.tenantId
 
-    if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
-      window.api.auth.setToken(accessToken).catch(() => {})
-    }
+      setCurrentTenant(resolvedTenantId)
+      setTenantId(resolvedTenantId)
+      setTokens(accessToken, refreshToken)
 
-    if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
-      window.api.sync.hydrate().catch(() => {})
+      await saveSession({
+        userId: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        tenantId: resolvedTenantId,
+        accessToken,
+        refreshToken,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+
+      set({
+        user,
+        accessToken,
+        refreshToken,
+        tenantId: resolvedTenantId,
+        isAuthenticated: true,
+      })
+
+      if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
+        window.api.auth.setToken(accessToken).catch(() => {})
+      }
+      if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
+        window.api.sync.hydrate().catch(() => {})
+      }
+    } catch (err: any) {
+      if (!navigator.onLine || err?.code === 'ERR_NETWORK') {
+        const session = await getSession()
+        if (!session || session.email !== normalizedEmail) {
+          throw new Error('Aucune session locale trouvée. Connectez-vous en ligne d\'abord.')
+        }
+        setCurrentTenant(session.tenantId)
+        setTenantId(session.tenantId)
+        setTokens(session.accessToken, session.refreshToken)
+        set({
+          user: {
+            id: session.userId,
+            email: session.email,
+            firstName: session.firstName,
+            lastName: session.lastName,
+            role: session.role,
+            tenantId: session.tenantId,
+            isActive: true,
+          },
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          tenantId: session.tenantId,
+          isAuthenticated: true,
+        })
+        return
+      }
+      throw err
     }
   },
 
   logout: () => {
-    // Capturer le tenantId AVANT de le supprimer du state
-    const tenantId = localStorage.getItem('tenantId') || 'default'
-
-    // 1. Arrêter les syncs en cours
     stopAllSyncs()
-
-    // Finalise le logout : purge localStorage + state + event, UNIQUEMENT
-    // une fois que la sync finale a eu la chance de s'exécuter (cf. #3).
-    const finalizeLogout = () => {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('tenantId')
-
-      set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        tenantId: null,
-        isAuthenticated: false
-      })
-
-      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
-    }
-
-    if (navigator.onLine) {
-      // ─── ONLINE : sync rapide puis destruction immédiate ───────────────────
-      // IMPORTANT (#3) : la sync finale a besoin du accessToken (fetchCouchDBConfig
-      // appelle GET /sync/couchdb-config avec le JWT). On NE supprime le token
-      // QUE dans le .finally, après que la sync a pu s'exécuter. Sinon la sync
-      // échoue en 401 et les données non envoyées sont perdues à la destruction.
-      performSync()
-        .then(() => destroyAllDatabases(tenantId))
-        .catch(() => destroyAllDatabases(tenantId)) // détruire même si la sync échoue
-        .catch((err) => console.warn('[Logout] Purge locale échouée :', err))
-        .finally(finalizeLogout)
-    } else {
-      // ─── OFFLINE : cleanup DIFFÉRÉ ─────────────────────────────────────────
-      // On ne peut pas synchroniser maintenant — on NE DÉTRUIT PAS les bases.
-      // Elles seront syncées puis détruites automatiquement à la prochaine
-      // connexion réseau (processPendingCleanups dans sync-manager.ts).
-      scheduleTenantCleanup(tenantId)
-      console.log("[Logout] Hors ligne — données locales préservées jusqu'à la prochaine connexion")
-      finalizeLogout()
-    }
+    clearTokenCache()
+    clearSession()
+    set({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      tenantId: null,
+      isAuthenticated: false,
+    })
+    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
   },
 
   register: async (payload: RegisterPayload) => {
@@ -159,7 +194,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshAuth: async () => {
     const { refreshToken } = get()
     if (!refreshToken) {
-      get().logout()
       return
     }
 
@@ -167,30 +201,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data } = await client.post('/auth/refresh', { refreshToken })
       const { accessToken, refreshToken: newRefreshToken, user } = data
 
-      // (#6) Re-basculer le contexte PouchDB sur le bon tenant. En cas de
-      // cold start l'app a pu recharger avec un tenantId différent en mémoire ;
-      // on s'assure que les bases actives correspondent au user rafraîchi.
-      if (user?.tenantId) setCurrentTenant(user.tenantId)
+      if (user?.tenantId) {
+        setCurrentTenant(user.tenantId)
+        setTenantId(user.tenantId)
+      }
 
-      localStorage.setItem('accessToken', accessToken)
-      localStorage.setItem('refreshToken', newRefreshToken)
+      setTokens(accessToken, newRefreshToken)
+
+      const session = await getSession()
+      if (session) {
+        await saveSession({ ...session, accessToken, refreshToken: newRefreshToken, updatedAt: new Date().toISOString() })
+      }
 
       set({
         user,
         accessToken,
         refreshToken: newRefreshToken,
-        isAuthenticated: true
+        isAuthenticated: true,
       })
 
       if (typeof window !== 'undefined' && window.api?.auth?.setToken) {
         window.api.auth.setToken(accessToken).catch(() => {})
       }
-
       if (typeof window !== 'undefined' && window.api?.sync?.hydrate) {
         window.api.sync.hydrate().catch(() => {})
       }
     } catch {
-      get().logout()
+      // Échec du refresh — ne pas déconnecter, les tokens seront réessayés
     }
   },
 

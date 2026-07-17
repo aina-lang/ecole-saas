@@ -156,7 +156,7 @@ export function usePeriods() {
           const labels: Record<string, string[]> = {
             TRIMESTER: ['Trimestre 1', 'Trimestre 2', 'Trimestre 3'],
             SEMESTER: ['Semestre 1', 'Semestre 2'],
-            BIMESTER: ['Bimestre 1', 'Bimestre 2'],
+            BIMESTER: ['Bimestre 1', 'Bimestre 2', 'Bimestre 3', 'Bimestre 4', 'Bimestre 5'],
           }
           const items = (labels[system] || labels.TRIMESTER).map((label, i) => ({
             value: String(i + 1),

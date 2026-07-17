@@ -24,9 +24,9 @@ export class StudentParentLinkDto {
 }
 
 export class CreateStudentDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  firstName: string;
+  firstName?: string;
 
   @IsString()
   @IsNotEmpty()

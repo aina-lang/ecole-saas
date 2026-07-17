@@ -68,6 +68,16 @@ export class ClassesController {
     return this.classesService.remove(id, tenantId, userId);
   }
 
+  @Patch(':id/restore')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  restore(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.classesService.restore(id, tenantId, userId);
+  }
+
   @Post(':id/students')
   @Roles('ADMIN', 'SUPER_ADMIN')
   assignStudent(
@@ -112,26 +122,14 @@ export class ClassesController {
     return this.classesService.removeTeacher(id, teacherId, tenantId, userId);
   }
 
-  @Post(':id/subjects/:subjectId')
+  @Patch('subjects/:id/restore')
   @Roles('ADMIN', 'SUPER_ADMIN')
-  assignSubject(
+  restoreSubject(
     @Param('id') id: string,
-    @Param('subjectId') subjectId: string,
     @CurrentUser('tenantId') tenantId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.classesService.assignSubject(id, subjectId, tenantId, userId);
-  }
-
-  @Delete(':id/subjects/:subjectId')
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  removeSubject(
-    @Param('id') id: string,
-    @Param('subjectId') subjectId: string,
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.classesService.removeSubject(id, subjectId, tenantId, userId);
+    return this.subjectsService.restore(id, tenantId, userId);
   }
 
   @Get(':id/subjects')

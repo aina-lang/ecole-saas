@@ -9,6 +9,8 @@ import { SyncPage } from '@/pages/sync/SyncPage'
 import { StudentRoutes } from '@/pages/students/StudentRoutes'
 import { ParentsPage } from '@/pages/students/ParentsPage'
 import { ParentFormPage } from '@/pages/students/ParentFormPage'
+import { ParentDetailPage } from '@/pages/students/ParentDetailPage'
+import { ParentEditPage } from '@/pages/students/ParentEditPage'
 import { ClassRoutes } from '@/pages/classes/ClassRoutes'
 import { GradeRoutes } from '@/pages/grades/GradeRoutes'
 import { SubjectsPage } from '@/pages/subjects/SubjectsPage'
@@ -22,7 +24,12 @@ import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const hydrated = useAuthStore((s) => s.hydrated)
   const onboardingCompleted = useAuthStore((s) => s.onboardingCompleted)
+
+  if (!hydrated) {
+    return <div className="flex h-screen items-center justify-center text-muted-foreground">Chargement...</div>
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -54,6 +61,8 @@ export function AppRouter() {
         <Route path="students/*" element={<StudentRoutes />} />
         <Route path="parents" element={<ParentsPage />} />
         <Route path="parents/new" element={<ParentFormPage />} />
+        <Route path="parents/:id/edit" element={<ParentEditPage />} />
+        <Route path="parents/:id" element={<ParentDetailPage />} />
         <Route path="classes/*" element={<ClassRoutes />} />
         <Route path="grades/*" element={<GradeRoutes />} />
         <Route path="subjects" element={<SubjectsPage />} />

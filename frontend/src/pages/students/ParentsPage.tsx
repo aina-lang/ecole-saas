@@ -140,7 +140,22 @@ export function ParentsPage() {
               {
                 key: 'email',
                 label: 'Email',
-                render: (parent) => (parent as any).email || '-',
+                render: (parent) => (parent as any).email || 'Non renseigné',
+              },
+              {
+                key: 'phone',
+                label: 'Téléphone(s)',
+                render: (parent) => {
+                  const p = parent as any
+                  const allPhones = [
+                    p.phone,
+                    ...(p.phones?.map((ph: any) => ph.value) ?? []),
+                  ].filter(Boolean)
+                  const unique = [...new Set(allPhones)]
+                  return unique.length > 0
+                    ? unique.join(' / ')
+                    : 'Non renseigné'
+                },
               },
               {
                 key: 'students',
@@ -155,44 +170,15 @@ export function ParentsPage() {
                           key={s.id}
                           variant="secondary"
                           className="cursor-pointer"
-                          onClick={() => navigate(`/students/${s.id}`)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/students/${s.id}`)
+                          }}
                         >
                           {s.firstName} {s.lastName}
                         </Badge>
                       ))}
                     </div>
-                  )
-                },
-              },
-              {
-                key: 'actions',
-                label: 'Actions',
-                render: (parent) => {
-                  const p = parent as any
-                  return (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => navigate(`/administration/users/${p.id}/edit`)}
-                      >
-                        <Pencil2Icon className="h-4 w-4" />
-                      </Button>
-                      <ConfirmDialog
-                        open={deleteId === p.id}
-                        onOpenChange={(open) => !open && setDeleteId(null)}
-                        onConfirm={() => deleteMutation.mutate(p.id)}
-                        title="Supprimer le parent"
-                        description={`Êtes-vous sûr de vouloir supprimer ${p.firstName} ${p.lastName} ? Les liens avec les élèves seront aussi supprimés.`}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteId(p.id)}
-                      >
-                        <TrashIcon className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </>
                   )
                 },
               },
@@ -202,9 +188,54 @@ export function ParentsPage() {
             page={1}
             limit={100}
             onPageChange={() => {}}
+            onRowClick={(parent) => navigate(`/parents/${(parent as any).id}`)}
+            onBulkDelete={async (ids) => {
+              try {
+                await Promise.all(ids.map((id) => deleteEntity('User', id)))
+                queryClient.invalidateQueries({ queryKey: ['parents'] })
+                toast.success(`${ids.length} parent(s) supprimé(s)`)
+              } catch {
+                toast.error('Erreur lors de la suppression')
+              }
+            }}
             getRowId={(parent) => (parent as any).id}
             isLoading={isLoadingParents}
             emptyMessage="Aucun parent trouvé"
+            bulkDeleteLabel="parent(s)"
+            renderRowActions={(parent) => {
+              const p = parent as any
+              return (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/parents/${p.id}/edit`)
+                    }}
+                  >
+                    <Pencil2Icon className="h-4 w-4" />
+                  </Button>
+                  <ConfirmDialog
+                    open={deleteId === p.id}
+                    onOpenChange={(open) => !open && setDeleteId(null)}
+                    onConfirm={() => deleteMutation.mutate(p.id)}
+                    title="Supprimer le parent"
+                    description={`Êtes-vous sûr de vouloir supprimer ${p.firstName ? `${p.firstName} ` : ''}${p.lastName} ? Les liens avec les élèves seront aussi supprimés.`}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteId(p.id)
+                    }}
+                  >
+                    <TrashIcon className="h-4 w-4 text-destructive" />
+                  </Button>
+                </>
+              )
+            }}
           />
         </CardContent>
       </Card>

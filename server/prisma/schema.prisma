@@ -46,15 +46,18 @@ model Tenant {
 }
 
 model AcademicYear {
-  id        String    @id @default(cuid())
-  tenantId  String
-  label     String
-  startDate DateTime
-  endDate   DateTime
-  isCurrent Boolean   @default(false)
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  holidays  Holiday[]
-  periods   Period[]
+  id          String      @id @default(cuid())
+  tenantId    String
+  label       String
+  startDate   DateTime
+  endDate     DateTime
+  isCurrent   Boolean     @default(false)
+  payments    Payment[]
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  holidays    Holiday[]
+  periods     Period[]
+  grades      Grade[]
+  attendances Attendance[]
 
   @@unique([tenantId, label])
   @@map("academic_years")
@@ -64,7 +67,7 @@ model Period {
   id             String       @id @default(cuid())
   academicYearId String
   label          String
-  type           String       @default("TRIMESTER")
+  type           PeriodType   @default(TRIMESTER)
   startDate      DateTime
   endDate        DateTime
   coefficient    Float        @default(1.0)
@@ -88,7 +91,7 @@ model Holiday {
 model User {
   id               String             @id @default(cuid())
   tenantId         String
-  email            String?
+  email            String
   passwordHash     String
   firstName        String?
   lastName         String
@@ -128,7 +131,7 @@ model Student {
   id                 String          @id @default(cuid())
   tenantId           String
   registrationNumber String          @unique
-  firstName          String
+  firstName          String?
   lastName           String
   birthDate          DateTime?
   birthPlace         String?
@@ -143,7 +146,7 @@ model Student {
   allergies          String?
   emergencyContact   String?
   emergencyPhone     String?
-  status             String          @default("ACTIVE")
+  status             StudentStatus   @default(ACTIVE)
   classId            String?
   enrollmentDate     DateTime        @default(now())
   createdAt          DateTime        @default(now())
@@ -183,12 +186,15 @@ model Class {
   level          String?
   room           String?
   capacity       Int             @default(30)
+  deletedAt      DateTime?
+  version        Int             @default(1)
+  updatedBy      String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   students       Student[]
-  subjects       Subject[]
   timetableSlots TimetableSlot[]
+  attendances    Attendance[]
   teachers       Teacher[]       @relation("ClassToTeacher")
 
   @@unique([tenantId, name])
@@ -201,10 +207,11 @@ model Subject {
   name        String
   code        String?
   coefficient Float           @default(1.0)
-  classId     String?
   level       String?
+  deletedAt   DateTime?
+  version     Int             @default(1)
+  updatedBy   String?
   grades      Grade[]
-  class       Class?          @relation(fields: [classId], references: [id])
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   timetable   TimetableSlot[]
   teachers    Teacher[]       @relation("SubjectToTeacher")
@@ -248,6 +255,7 @@ model TimetableSlot {
   teacher   Teacher? @relation(fields: [teacherId], references: [id])
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([classId, dayOfWeek, startTime])
   @@index([tenantId, classId])
   @@map("timetable_slots")
 }
@@ -316,31 +324,32 @@ model TeacherPayment {
 }
 
 model Grade {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
   tenantId        String
+  academicYearId  String?
   studentId       String
   subjectId       String
   teacherId       String?
   periodId        String?
   value           Float
-  maxValue        Float     @default(20.0)
-  coefficient     Float     @default(1.0)
-  evaluationType  String    @default("EXAM")
+  maxValue        Float         @default(20.0)
+  coefficient     Float         @default(1.0)
+  evaluationType  EvaluationType @default(EXAM)
   evaluationLabel String?
   comment         String?
-  semester        Int       @default(1)
-  isPublished     Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isPublished     Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   deletedAt       DateTime?
-  version         Int       @default(1)
+  version         Int           @default(1)
   updatedBy       String?
   deviceId        String?
-  period          Period?   @relation(fields: [periodId], references: [id])
-  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject         Subject   @relation(fields: [subjectId], references: [id])
-  teacher         Teacher?  @relation(fields: [teacherId], references: [id])
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  academicYear    AcademicYear? @relation(fields: [academicYearId], references: [id])
+  period          Period?       @relation(fields: [periodId], references: [id])
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject         Subject       @relation(fields: [subjectId], references: [id])
+  teacher         Teacher?      @relation(fields: [teacherId], references: [id])
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("grades")
 }
@@ -348,7 +357,9 @@ model Grade {
 model Attendance {
   id            String           @id @default(cuid())
   tenantId      String
+  academicYearId String?
   studentId     String
+  classId       String?
   date          DateTime
   status        AttendanceStatus @default(PRESENT)
   justification String?
@@ -358,10 +369,13 @@ model Attendance {
   version       Int              @default(1)
   updatedBy     String?
   deviceId      String?
+  academicYear  AcademicYear?    @relation(fields: [academicYearId], references: [id])
   student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class         Class?           @relation(fields: [classId], references: [id])
   tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, date])
+  @@index([tenantId, classId])
   @@map("attendances")
 }
 
@@ -382,6 +396,7 @@ model FeeStructure {
 model Payment {
   id             String        @id @default(cuid())
   tenantId       String
+  academicYearId String?
   studentId      String
   feeStructureId String?
   amount         Float
@@ -399,6 +414,7 @@ model Payment {
   version        Int           @default(1)
   updatedBy      String?
   deviceId       String?
+  academicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
   feeStructure   FeeStructure? @relation(fields: [feeStructureId], references: [id])
   student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -415,7 +431,6 @@ model Message {
   priority   MessagePriority    @default(NORMAL)
   status     MessageStatus      @default(SENT)
   createdAt  DateTime           @default(now())
-  readAt     DateTime?
   documents  Document[]
   recipients MessageRecipient[]
   sender     User               @relation("sentMessages", fields: [senderId], references: [id])
@@ -517,17 +532,17 @@ model SyncLog {
 }
 
 model SyncJob {
-  id          String    @id @default(cuid())
+  id          String        @id @default(cuid())
   tenantId    String
   jobType     String
   payload     Json
-  status      String    @default("PENDING")
-  priority    Int       @default(0)
-  retryCount  Int       @default(0)
-  createdAt   DateTime  @default(now())
+  status      SyncJobStatus @default(PENDING)
+  priority    Int           @default(0)
+  retryCount  Int           @default(0)
+  createdAt   DateTime      @default(now())
   processedAt DateTime?
   error       String?
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("sync_jobs")
 }
@@ -577,6 +592,7 @@ enum AttendanceStatus {
 
 enum PaymentStatus {
   PENDING
+  PARTIAL
   PAID
   OVERDUE
   CANCELLED
@@ -623,4 +639,35 @@ enum TeacherPaymentStatus {
   PENDING
   PAID
   CANCELLED
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  GRADUATED
+  SUSPENDED
+}
+
+enum PeriodType {
+  TRIMESTER
+  SEMESTER
+  BIMESTER
+}
+
+enum EvaluationType {
+  EXAM
+  TEST
+  HOMEWORK
+  ORAL
+  PROJECT
+  CONTROLE
+  EXAMEN_BLANC
+}
+
+enum SyncJobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  ERROR
 }

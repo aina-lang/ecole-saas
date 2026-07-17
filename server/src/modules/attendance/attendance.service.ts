@@ -18,15 +18,13 @@ export class AttendanceService {
   async findAll(tenantId: string, filters?: { studentId?: string; classId?: string; date?: string; status?: string; startDate?: string; endDate?: string }) {
     const where: any = { tenantId, deletedAt: null };
     if (filters?.studentId) where.studentId = filters.studentId;
+    if (filters?.classId) where.classId = filters.classId;
     if (filters?.status) where.status = filters.status;
     if (filters?.date) where.date = new Date(filters.date);
     if (filters?.startDate || filters?.endDate) {
       where.date = {};
       if (filters.startDate) where.date.gte = new Date(filters.startDate);
       if (filters.endDate) where.date.lte = new Date(filters.endDate);
-    }
-    if (filters?.classId) {
-      where.student = { classId: filters.classId };
     }
 
     return this.prisma.attendance.findMany({
@@ -57,10 +55,17 @@ export class AttendanceService {
       throw new ConflictException('Une présence existe déjà pour cet étudiant à cette date');
     }
 
+    const student = await this.prisma.student.findFirst({
+      where: { id: dto.studentId, tenantId },
+      select: { classId: true },
+    });
+    const classId = dto.classId || student?.classId;
+
     const attendance = await this.prisma.attendance.create({
       data: {
         tenantId,
         studentId: dto.studentId,
+        classId,
         date: new Date(dto.date),
         status: dto.status,
         justification: dto.justification,
@@ -80,7 +85,6 @@ export class AttendanceService {
       newValue: dto,
     });
 
-    // Propager vers CouchDB
     this.prisma.notifyWrite('Attendance', attendance);
 
     return attendance;
@@ -146,6 +150,15 @@ export class AttendanceService {
   async bulkCreate(tenantId: string, dto: BulkAttendanceDto, userId?: string) {
     const results = { created: 0, skipped: 0, errors: [] as any[] };
 
+    const studentIds = [...new Set(dto.records.map((r) => r.studentId))];
+    const students = await this.prisma.student.findMany({
+      where: { id: { in: studentIds }, tenantId },
+      select: { id: true, classId: true },
+    });
+    const studentClassMap = new Map(students.map((s) => [s.id, s.classId]));
+
+    const ops: { type: 'create' | 'update'; id?: string; data: any }[] = [];
+
     for (const record of dto.records) {
       try {
         const existing = await this.prisma.attendance.findUnique({
@@ -158,31 +171,46 @@ export class AttendanceService {
             results.skipped++;
             continue;
           }
-          const updated = await this.prisma.attendance.update({
-            where: { id: existing.id },
+          ops.push({
+            type: 'update',
+            id: existing.id,
             data: { status: record.status, justification: record.justification, updatedBy: userId },
           });
-          this.prisma.notifyWrite('Attendance', updated);
-          results.created++;
         } else {
-          const created = await this.prisma.attendance.create({
+          const classId = record.classId || studentClassMap.get(record.studentId);
+          ops.push({
+            type: 'create',
             data: {
               tenantId,
               studentId: record.studentId,
+              classId,
               date: new Date(dto.date),
               status: record.status,
               justification: record.justification,
               updatedBy: userId,
             },
           });
-          this.prisma.notifyWrite('Attendance', created);
-          results.created++;
         }
       } catch (error) {
         results.errors.push({ studentId: record.studentId, error: error.message });
         results.skipped++;
       }
     }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const op of ops) {
+        if (op.type === 'update') {
+          await tx.attendance.update({ where: { id: op.id }, data: op.data });
+        } else {
+          await tx.attendance.create({ data: op.data });
+        }
+      }
+    });
+
+    for (const op of ops) {
+      this.prisma.notifyWrite('Attendance', op.data);
+    }
+    results.created = ops.length;
 
     await this.audit.log({
       tenantId,
@@ -198,7 +226,7 @@ export class AttendanceService {
   async getStatistics(tenantId: string, filters?: { classId?: string; studentId?: string; startDate?: string; endDate?: string }) {
     const where: any = { tenantId, deletedAt: null };
     if (filters?.studentId) where.studentId = filters.studentId;
-    if (filters?.classId) where.student = { classId: filters.classId };
+    if (filters?.classId) where.classId = filters.classId;
     if (filters?.startDate || filters?.endDate) {
       where.date = {};
       if (filters.startDate) where.date.gte = new Date(filters.startDate);

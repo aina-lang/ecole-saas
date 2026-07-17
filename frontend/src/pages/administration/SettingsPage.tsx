@@ -71,7 +71,7 @@ type PeriodSystem = 'TRIMESTER' | 'SEMESTER' | 'BIMESTER'
 const periodSystemLabels: Record<PeriodSystem, string> = {
   TRIMESTER: 'Trimestre (3 périodes)',
   SEMESTER: 'Semestre (2 périodes)',
-  BIMESTER: 'Bimestre (2 périodes)',
+  BIMESTER: 'Bimestre (5 périodes)',
 }
 
 const generalSchema = z.object({
@@ -296,7 +296,7 @@ export const SettingsPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Paramètres</h2>

@@ -53,22 +53,14 @@ export function TitleBar() {
 
   const isElectron = typeof window !== 'undefined' && !!(window as any).electron?.window
 
-  const handleMinimize = () => {
-    if (isElectron) (window as any).electron.window.minimize()
-    else console.log('[dev] minimize')
-  }
+  if (!isElectron) return null
+
+  const handleMinimize = () => (window as any).electron.window.minimize()
   const handleMaximize = () => {
-    if (isElectron) {
-      (window as any).electron.window.toggleMaximize()
-      ;(window as any).electron.window.isMaximized().then(setIsMaximized)
-    } else {
-      console.log('[dev] toggle maximize')
-    }
+    (window as any).electron.window.toggleMaximize()
+    ;(window as any).electron.window.isMaximized().then(setIsMaximized)
   }
-  const handleClose = () => {
-    if (isElectron) (window as any).electron.window.close()
-    else console.log('[dev] close')
-  }
+  const handleClose = () => (window as any).electron.window.close()
 
   return (
     <div

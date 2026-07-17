@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import client from '@/api/client'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { saveEntity, getEntityById } from '@/lib/db/pouchdb-compat'
 import { getDocument, putDocument } from '@/lib/db/pouchdb'
@@ -114,52 +113,12 @@ export function StudentFormPage() {
     if (!isEditing) return
     setLoadingStudent(true)
     ;(async () => {
-      let data = await getEntityById<any>('Student', id!)
-      console.log(`[StudentFormPage] Load from PouchDB (id=${id}):`, data)
-
-      const needsPhotoUrl = data && !data.photoUrl
-
+      const data = await getEntityById<any>('Student', id!)
       if (!data) {
-        try {
-          const { data: res } = await client.get(`/students/${id}`)
-          const apiData = res.data ?? res
-          console.log(`[StudentFormPage] Load from API (id=${id}):`, apiData)
-          if (apiData) {
-            await saveEntity('Student', apiData)
-            data = apiData
-          }
-        } catch (err) {
-          console.warn(`[StudentFormPage] API fallback failed for ${id}:`, err)
-        }
-      } else if (needsPhotoUrl) {
-        try {
-          const { data: res } = await client.get(`/students/${id}`)
-          const apiData = res.data ?? res
-          console.log(`[StudentFormPage] Refresh photo from API (id=${id}):`, apiData)
-          if (apiData?.photoUrl) {
-            await saveEntity('Student', { ...data, photoUrl: apiData.photoUrl })
-            data = { ...data, photoUrl: apiData.photoUrl }
-          }
-        } catch (err) {
-          console.warn(`[StudentFormPage] API photo fallback failed for ${id}:`, err)
-        }
+        toast.error('Élève introuvable localement. Vérifiez la synchronisation.')
+        setLoadingStudent(false)
+        return
       }
-
-      if (!data?.photoUrl) {
-        const api = window.api
-        if (api?.file?.getEntityPhoto && id) {
-          try {
-            const localPhotoUrl = await api.file.getEntityPhoto('Student', id)
-            if (localPhotoUrl) {
-              console.log(`[StudentFormPage] Found local photo:`, localPhotoUrl)
-              data = { ...(data || { id, firstName: '', lastName: '' }), photoUrl: localPhotoUrl }
-            }
-          } catch (photoErr) {
-            console.warn(`[StudentFormPage] Local photo fallback failed:`, photoErr)
-          }
-        }
-      }
-
       setStudent(data as Student)
       setLoadingStudent(false)
     })()
@@ -183,7 +142,7 @@ export function StudentFormPage() {
       medicalNotes: '',
       allergies: '',
       classId: preselectedClassId || '',
-      enrollmentDate: ''
+      enrollmentDate: new Date().toISOString().split('T')[0]
     }
   })
 
@@ -210,7 +169,7 @@ export function StudentFormPage() {
       })
       setParentLinks(
         (student.parents ?? []).map((p) => ({
-          parentId: p.parent.id,
+          parentId: p.parent?.id ?? (p as any).parentId,
           relation: p.relation,
           isPrimary: p.isPrimary,
         }))
@@ -310,20 +269,24 @@ export function StudentFormPage() {
 
   const createParentMutation = useMutation({
     mutationFn: async () => {
-      const payload: Record<string, unknown> = { lastName: npLastName.trim(), role: 'PARENT' }
-      if (npFirstName.trim()) payload.firstName = npFirstName.trim()
-      if (npEmail.trim()) payload.email = npEmail.trim()
-      if (npPassword.trim()) payload.password = npPassword.trim()
-      const phones = npPhones.map((p) => p.trim()).filter(Boolean)
-      if (phones.length) payload.phones = phones
-      const { data } = await client.post('/users', payload)
-      return data
+      const payload: Record<string, unknown> = {
+        lastName: npLastName.trim(),
+        role: 'PARENT',
+        firstName: npFirstName.trim() || undefined,
+        email: npEmail.trim() || undefined,
+        password: npPassword.trim() || undefined,
+        phones: npPhones.map((p) => p.trim()).filter(Boolean),
+        tenantId: localStorage.getItem('tenantId') || undefined,
+      }
+      Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
+      const saved = await saveEntity('User', payload)
+      return saved
     },
     onSuccess: (data) => {
-      const newUser = data?.data ?? data
-      const id = newUser?.id ?? newUser?._id
+      const id = data?.id ?? data?._id
       if (id) addParent(id)
       queryClient.invalidateQueries({ queryKey: ['parent-users'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       setParentDialogOpen(false)
       setNpLastName('')
       setNpFirstName('')
@@ -384,17 +347,14 @@ export function StudentFormPage() {
     }
   }
 
-  async function updateStudentPhotoUrl(studentId: string, photoUrl: string | null) {
-    const existing = await getDocument('Student', studentId)
-    if (existing) {
-      await putDocument('Student', { ...existing, photoUrl })
-    }
-  }
-
   const photoMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!id) {
+        setPendingPhoto(file)
+        return { url: '' }
+      }
       const api = window.api
-      if (api?.file && id) {
+      if (api?.file) {
         const buffer = await file.arrayBuffer()
         const result = await api.file.save({
           buffer,
@@ -405,23 +365,16 @@ export function StudentFormPage() {
           mimeType: file.type,
         })
         const localUrl = await api.file.getUrl(result.localPath)
+        const existing = await getDocument('Student', id)
+        if (existing) {
+          await putDocument('Student', { ...existing, photoUrl: localUrl })
+        }
         return { url: localUrl || '' }
       }
-      if (!id) {
-        setPendingPhoto(file)
-        return { url: '' }
-      }
-      const fd = new FormData()
-      fd.append('file', file)
-      const { data } = await client.post(`/students/${id}/photo`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      const studentData = data.data ?? data
-      return { url: studentData.photoUrl }
+      return { url: '' }
     },
     onSuccess: async (result) => {
       if (!id || !result?.url) return
-      await updateStudentPhotoUrl(id, result.url)
       queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: ['student', id] })
     },
@@ -430,12 +383,14 @@ export function StudentFormPage() {
   const deletePhotoMutation = useMutation({
     mutationFn: async () => {
       if (!id) return null
-      const { data } = await client.delete(`/students/${id}/photo`)
-      return data.data ?? data
+      const existing = await getDocument('Student', id)
+      if (existing) {
+        await putDocument('Student', { ...existing, photoUrl: null })
+      }
+      return { success: true }
     },
     onSuccess: async () => {
       if (!id) return
-      await updateStudentPhotoUrl(id, null)
       queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: ['student', id] })
     },
@@ -466,7 +421,7 @@ export function StudentFormPage() {
             const tab = fieldTabMap[errorFields[0]]
             if (tab) setActiveTab(tab)
           }
-        })} className="space-y-6">
+        })} className="mx-auto max-w-3xl space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
               <TabsTrigger value="identite">Identité</TabsTrigger>
@@ -775,7 +730,7 @@ export function StudentFormPage() {
                       <Combobox
                         options={(parentUsers ?? [])
                           .filter((u) => !parentLinks.some((l) => l.parentId === u.id))
-                          .map((u) => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))}
+                           .map((u) => ({ value: u.id, label: `${u.firstName ? `${u.firstName} ` : ''}${u.lastName}` }))}
                         value=""
                         onValueChange={(value) => {
                           if (value) addParent(value)
@@ -909,9 +864,9 @@ export function StudentFormPage() {
                           key={link.parentId}
                           className="flex flex-wrap items-center gap-3 rounded-md border p-3"
                         >
-                          <span className="font-medium">
-                            {user ? `${user.firstName} ${user.lastName}` : link.parentId}
-                          </span>
+                            <span className="font-medium">
+                              {user ? `${user.firstName ? `${user.firstName} ` : ''}${user.lastName}` : link.parentId}
+                            </span>
                           <Combobox
                             options={[
                               { value: 'PARENT', label: 'Parent' },

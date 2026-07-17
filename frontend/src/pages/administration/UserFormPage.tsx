@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import client from '@/api/client'
+import { getDocument, putDocument } from '@/lib/db/pouchdb'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Subject } from '@/types'
@@ -104,8 +104,7 @@ export function UserFormPage() {
   const { data: user } = useQuery({
     queryKey: ['user', id],
     queryFn: async () => {
-      const { data } = await client.get(`/users/${id}`)
-      return data.data ?? data
+      return getEntityById<any>('User', id!)
     },
     enabled: isEditing
   })
@@ -129,16 +128,20 @@ export function UserFormPage() {
   const { data: teacherDetail } = useQuery({
     queryKey: ['teacher-detail', user?.teacher?.id],
     queryFn: async () => {
-      const { data } = await client.get(`/teachers/${user.teacher.id}`)
-      return data.data ?? data
+      if (!user?.teacher?.id) return null
+      return getEntityById<any>('Teacher', user.teacher.id)
     },
     enabled: isEditing && !!user?.teacher?.id
   })
 
   const photoMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!id) {
+        setPendingPhoto(file)
+        return { url: '' }
+      }
       const api = window.api
-      if (api?.file && id) {
+      if (api?.file) {
         const buffer = await file.arrayBuffer()
         const result = await api.file.save({
           buffer,
@@ -149,19 +152,13 @@ export function UserFormPage() {
           mimeType: file.type,
         })
         const localUrl = await api.file.getUrl(result.localPath)
+        const existing = await getDocument('User', id)
+        if (existing) {
+          await putDocument('User', { ...existing, photoUrl: localUrl })
+        }
         return { url: localUrl || '' }
       }
-      if (!id) {
-        setPendingPhoto(file)
-        return { url: '' }
-      }
-      const fd = new FormData()
-      fd.append('file', file)
-      const { data } = await client.post(`/users/${id}/photo`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      const user = data.data ?? data
-      return { url: user.photoUrl }
+      return { url: '' }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -172,8 +169,11 @@ export function UserFormPage() {
   const deletePhotoMutation = useMutation({
     mutationFn: async () => {
       if (!id) return null
-      const { data } = await client.delete(`/users/${id}/photo`)
-      return data.data ?? data
+      const existing = await getDocument('User', id)
+      if (existing) {
+        await putDocument('User', { ...existing, photoUrl: null })
+      }
+      return { success: true }
     },
     onSuccess: () => {
       if (!id) return
@@ -262,7 +262,7 @@ export function UserFormPage() {
         if (api?.file) {
           try {
             const buffer = await pendingPhoto.arrayBuffer()
-            await api.file.save({
+            const result = await api.file.save({
               buffer,
               entityType: 'User',
               entityId: localId,
@@ -270,17 +270,12 @@ export function UserFormPage() {
               originalName: pendingPhoto.name,
               mimeType: pendingPhoto.type,
             })
+            const localUrl = await api.file.getUrl(result.localPath)
+            const existing = await getDocument('User', localId)
+            if (existing) {
+              await putDocument('User', { ...existing, photoUrl: localUrl })
+            }
           } catch { /* ok */ }
-        } else {
-          try {
-            const fd = new FormData()
-            fd.append('file', pendingPhoto)
-            await client.post(`/users/${localId}/photo`, fd, {
-              headers: { 'Content-Type': 'multipart/form-data' },
-            })
-          } catch {
-            toast.warning("La photo sera synchronisée plus tard")
-          }
         }
         setPendingPhoto(null)
       }
@@ -367,7 +362,7 @@ export function UserFormPage() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto max-w-3xl space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Informations personnelles</CardTitle>

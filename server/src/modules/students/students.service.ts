@@ -48,7 +48,8 @@ export class StudentsService {
     let counter = 1;
     if (lastStudent) {
       const parts = lastStudent.registrationNumber.split('-');
-      counter = parseInt(parts[2], 10) + 1;
+      const lastNum = parseInt(parts[parts.length - 1], 10);
+      counter = isNaN(lastNum) ? 1 : lastNum + 1;
     }
 
     return `${prefix}${String(counter).padStart(5, '0')}`;

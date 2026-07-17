@@ -238,7 +238,7 @@ export function FinanceDashboardPage() {
                   recentPayments.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">
-                        {p.student ? `${p.student.firstName} ${p.student.lastName}` : p.studentId}
+                         {p.student ? `${p.student.firstName ? `${p.student.firstName} ` : ''}${p.student.lastName}` : p.studentId}
                       </TableCell>
                       <TableCell>{p.paidAmount.toLocaleString('fr-FR')} Ar</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -267,7 +267,7 @@ export function FinanceDashboardPage() {
               <Alert key={p.id} variant="destructive">
                 <ExclamationTriangleIcon className="h-4 w-4" />
                 <AlertTitle>
-                  {p.student ? `${p.student.firstName} ${p.student.lastName}` : p.studentId}
+                   {p.student ? `${p.student.firstName ? `${p.student.firstName} ` : ''}${p.student.lastName}` : p.studentId}
                 </AlertTitle>
                 <AlertDescription>
                   {p.amount.toLocaleString('fr-FR')} Ar - Échu le{' '}

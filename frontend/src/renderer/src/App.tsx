@@ -5,6 +5,7 @@ import { Toaster } from '../../components/ui/sonner'
 import { AppRouter } from '../../router'
 import { TitleBar } from '../../components/layout/TitleBar'
 import { UNAUTHORIZED_EVENT } from '../../api/client'
+import { useAuthStore } from '../../stores/auth-store'
 import './global.css'
 
 const queryClient = new QueryClient({
@@ -29,6 +30,16 @@ function AuthListener(): null {
   return null
 }
 
+function HydrateAuth(): null {
+  const hydrate = useAuthStore((s) => s.hydrate)
+
+  useEffect(() => {
+    hydrate()
+  }, [hydrate])
+
+  return null
+}
+
 function App(): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
@@ -38,6 +49,7 @@ function App(): JSX.Element {
           <div className="flex-1 overflow-hidden">
             <AppRouter />
             <AuthListener />
+            <HydrateAuth />
           </div>
         </div>
         <Toaster position="top-right" richColors />

@@ -32,6 +32,7 @@ interface ComboboxProps {
   emptyText?: string
   disabled?: boolean
   className?: string
+  allowCustom?: boolean
 }
 
 export function Combobox({
@@ -43,8 +44,10 @@ export function Combobox({
   emptyText = 'Aucun résultat',
   disabled = false,
   className,
+  allowCustom = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState('')
 
   const options = React.useMemo(
     () => rawOptions.filter((o) => o.value != null && o.value !== ''),
@@ -52,6 +55,8 @@ export function Combobox({
   )
 
   const selectedLabel = options.find((o) => o.value === value)?.label
+
+  const noMatch = allowCustom && search && !options.some((o) => o.value.toLowerCase() === search.toLowerCase())
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
@@ -69,9 +74,8 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (
                 <CommandItem
@@ -81,6 +85,7 @@ export function Combobox({
                   onSelect={() => {
                     onValueChange(opt.value === value ? '' : opt.value)
                     setOpen(false)
+                    setSearch('')
                   }}
                 >
                   <Check
@@ -93,6 +98,23 @@ export function Combobox({
                 </CommandItem>
               ))}
             </CommandGroup>
+            <CommandEmpty>
+              {allowCustom && search ? (
+                <CommandItem
+                  value={search}
+                  onSelect={() => {
+                    onValueChange(search)
+                    setOpen(false)
+                    setSearch('')
+                  }}
+                  className="justify-center text-primary"
+                >
+                  + Utiliser &ldquo;{search}&rdquo;
+                </CommandItem>
+              ) : (
+                <span>{emptyText}</span>
+              )}
+            </CommandEmpty>
           </CommandList>
         </Command>
       </PopoverContent>

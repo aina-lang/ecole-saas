@@ -16,4 +16,8 @@ export class CreateAttendanceDto {
   @IsOptional()
   @IsString()
   justification?: string;
+
+  @IsOptional()
+  @IsString()
+  classId?: string;
 }

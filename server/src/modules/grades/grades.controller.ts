@@ -18,14 +18,12 @@ export class GradesController {
     @Query('studentId') studentId?: string,
     @Query('subjectId') subjectId?: string,
     @Query('classId') classId?: string,
-    @Query('semester') semester?: string,
     @Query('periodId') periodId?: string,
   ) {
     return this.gradesService.findAll(tenantId, {
       studentId,
       subjectId,
       classId,
-      semester: semester ? parseInt(semester, 10) : undefined,
       periodId,
     });
   }

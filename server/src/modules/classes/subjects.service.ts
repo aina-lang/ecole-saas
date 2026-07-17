@@ -12,9 +12,8 @@ export class SubjectsService {
 
   async findAll(tenantId: string) {
     return this.prisma.subject.findMany({
-      where: { tenantId },
+      where: { tenantId, deletedAt: null },
       include: {
-        class: { select: { id: true, name: true } },
         teachers: {
           include: { user: { select: { id: true, firstName: true, lastName: true } } },
         },
@@ -25,9 +24,8 @@ export class SubjectsService {
 
   async findById(id: string, tenantId: string) {
     const subject = await this.prisma.subject.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId, deletedAt: null },
       include: {
-        class: { select: { id: true, name: true } },
         teachers: {
           include: { user: { select: { id: true, firstName: true, lastName: true } } },
         },
@@ -43,13 +41,6 @@ export class SubjectsService {
     });
     if (existing) throw new ConflictException('Cette matière existe déjà pour ce niveau');
 
-    if (dto.classId) {
-      const cls = await this.prisma.class.findFirst({
-        where: { id: dto.classId, tenantId },
-      });
-      if (!cls) throw new NotFoundException('Classe non trouvée');
-    }
-
     const subject = await this.prisma.subject.create({
       data: {
         tenantId,
@@ -57,7 +48,6 @@ export class SubjectsService {
         code: dto.code,
         level: dto.level,
         coefficient: dto.coefficient ?? 1.0,
-        classId: dto.classId,
       },
     });
 
@@ -77,7 +67,7 @@ export class SubjectsService {
   }
 
   async update(id: string, tenantId: string, dto: Partial<CreateSubjectDto>, userId?: string) {
-    const subject = await this.prisma.subject.findFirst({ where: { id, tenantId } });
+    const subject = await this.prisma.subject.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!subject) throw new NotFoundException('Matière non trouvée');
 
     if (dto.name) {
@@ -87,13 +77,6 @@ export class SubjectsService {
       if (existing) throw new ConflictException('Cette matière existe déjà pour ce niveau');
     }
 
-    if (dto.classId) {
-      const cls = await this.prisma.class.findFirst({
-        where: { id: dto.classId, tenantId },
-      });
-      if (!cls) throw new NotFoundException('Classe non trouvée');
-    }
-
     const updated = await this.prisma.subject.update({
       where: { id },
       data: {
@@ -101,7 +84,6 @@ export class SubjectsService {
         code: dto.code,
         level: dto.level,
         coefficient: dto.coefficient,
-        classId: dto.classId,
       },
     });
 
@@ -122,10 +104,13 @@ export class SubjectsService {
   }
 
   async remove(id: string, tenantId: string, userId?: string) {
-    const subject = await this.prisma.subject.findFirst({ where: { id, tenantId } });
+    const subject = await this.prisma.subject.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!subject) throw new NotFoundException('Matière non trouvée');
 
-    await this.prisma.subject.delete({ where: { id } });
+    const updated = await this.prisma.subject.update({
+      where: { id },
+      data: { deletedAt: new Date(), updatedBy: userId },
+    });
 
     await this.auditService.log({
       tenantId,
@@ -134,12 +119,38 @@ export class SubjectsService {
       entityType: 'Subject',
       entityId: id,
       oldValue: subject,
+      newValue: { deletedAt: updated.deletedAt },
     });
 
-    // Propager la suppression vers CouchDB (deletedAt → _deleted)
-    this.prisma.notifyWrite('Subject', { id: subject.id, tenantId, deletedAt: new Date() });
+    this.prisma.notifyWrite('Subject', updated);
 
     return { message: 'Matière supprimée' };
+  }
+
+  async restore(id: string, tenantId: string, userId?: string) {
+    const subject = await this.prisma.subject.findFirst({
+      where: { id, tenantId, deletedAt: { not: null } },
+    });
+    if (!subject) throw new NotFoundException('Matière non trouvée ou non supprimée');
+
+    const updated = await this.prisma.subject.update({
+      where: { id },
+      data: { deletedAt: null, updatedBy: userId },
+    });
+
+    await this.auditService.log({
+      tenantId,
+      userId,
+      action: 'RESTORE',
+      entityType: 'Subject',
+      entityId: id,
+      oldValue: { deletedAt: subject.deletedAt },
+      newValue: { deletedAt: null },
+    });
+
+    this.prisma.notifyWrite('Subject', updated);
+
+    return updated;
   }
 
   async assignTeacher(subjectId: string, teacherId: string, tenantId: string, userId?: string) {
@@ -196,8 +207,16 @@ export class SubjectsService {
   }
 
   async findByClass(classId: string, tenantId: string) {
+    const slotSubjects = await this.prisma.timetableSlot.findMany({
+      where: { classId, tenantId },
+      select: { subjectId: true },
+      distinct: ['subjectId'],
+    });
+    const subjectIds = slotSubjects.map((s) => s.subjectId);
+    if (subjectIds.length === 0) return [];
+
     return this.prisma.subject.findMany({
-      where: { tenantId, classId },
+      where: { id: { in: subjectIds }, tenantId, deletedAt: null },
       orderBy: { name: 'asc' },
     });
   }
