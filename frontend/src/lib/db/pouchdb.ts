@@ -17,6 +17,8 @@ export type EntityType =
   | 'TeacherPayment'
   | 'TeacherAttendance'
   | 'StudentDocument'
+  | 'AuditLog'
+  | 'Level'
 
 const DB_PREFIX = 'ecole_saas_'
 let couchDBUrl = 'http://localhost:5984'
@@ -67,7 +69,8 @@ function getDbName(entityType: EntityType): string {
 }
 
 function getRemoteDbName(entityType: EntityType): string {
-  return `ecole-saas-${entityType.toLowerCase()}`
+  const tid = currentTenantId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `ecole-saas-${tid}-${entityType.toLowerCase()}`
 }
 
 function getAuthPart(): string {
@@ -218,6 +221,7 @@ const ALL_ENTITY_TYPES: EntityType[] = [
   'Student', 'User', 'Teacher', 'Subject', 'Class', 'Grade',
   'Attendance', 'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
   'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
+  'StudentDocument', 'AuditLog', 'Level',
 ]
 
 /**
@@ -281,5 +285,100 @@ export async function saveCustomDocName(name: string): Promise<void> {
     await db.put(doc)
   } finally {
     db.close()
+  }
+}
+
+const FEE_NAMES_LOCAL_ID = '_local/fee_names'
+
+export interface CustomFeeItem {
+  name: string
+  amount: number
+}
+
+export async function loadCustomFeeNames(): Promise<CustomFeeItem[]> {
+  const db = createDatabase('FeeStructure')
+  try {
+    const doc = await db.get(FEE_NAMES_LOCAL_ID)
+    return (doc as any).items ?? []
+  } catch {
+    return []
+  } finally {
+    db.close()
+  }
+}
+
+export async function saveCustomFeeItem(item: CustomFeeItem): Promise<void> {
+  const db = createDatabase('FeeStructure')
+  try {
+    let doc: any
+    try {
+      doc = await db.get(FEE_NAMES_LOCAL_ID)
+      const exists = (doc.items ?? []).some((i: CustomFeeItem) => i.name === item.name)
+      if (exists) { db.close(); return }
+      doc.items = [...(doc.items ?? []), item]
+    } catch {
+      doc = { _id: FEE_NAMES_LOCAL_ID, items: [item] }
+    }
+    await db.put(doc)
+  } finally {
+    db.close()
+  }
+}
+
+// ─── Migration ponctuelle : ancienne base 'Fee' → 'FeeStructure' ──────────────
+// Avant correction, les grilles tarifaires créées offline atterrissaient dans
+// une base locale `ecole_saas_<tenant>_fee` qui n'existait dans aucun typage et
+// ne synchronisait jamais avec le serveur (qui utilise 'FeeStructure'). Cette
+// migration ponctuelle rapatrie les données locales existantes dans la vraie
+// base avant qu'elle ne commence à synchroniser, pour ne pas perdre de données
+// déjà saisies par un utilisateur avant ce correctif.
+const LEGACY_FEE_MIGRATION_PREFIX = 'ecole_saas_fee_migration_done_'
+
+export async function migrateLegacyFeeDatabase(): Promise<void> {
+  const tid = currentTenantId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const flagKey = `${LEGACY_FEE_MIGRATION_PREFIX}${tid}`
+  if (localStorage.getItem(flagKey)) return
+
+  const legacyDb = new PouchDB(`${DB_PREFIX}${tid}_fee`, { adapter: 'idb' })
+  try {
+    const info = await legacyDb.info()
+    if (info.doc_count > 0) {
+      const { rows } = await legacyDb.allDocs({ include_docs: true })
+      const docs = rows
+        .map((r: any) => r.doc)
+        .filter((d: any) => d && !d._id.startsWith('_local/'))
+        .map((d: any) => {
+          const { _rev, ...rest } = d
+          return rest
+        })
+      if (docs.length > 0) {
+        const target = createDatabase('FeeStructure')
+        try {
+          await target.bulkDocs(docs)
+          console.log(`[PouchDB] Migration 'Fee' → 'FeeStructure' : ${docs.length} document(s) rapatrié(s)`)
+        } finally {
+          target.close()
+        }
+      }
+    }
+
+    try {
+      const localNames = await legacyDb.get(FEE_NAMES_LOCAL_ID)
+      const { _rev, ...rest } = localNames as any
+      const target = createDatabase('FeeStructure')
+      try {
+        await target.put(rest)
+      } finally {
+        target.close()
+      }
+    } catch {
+      // Pas de noms personnalisés hérités — rien à migrer.
+    }
+
+    await legacyDb.destroy()
+  } catch {
+    // Aucune ancienne base 'Fee' pour ce tenant — rien à faire.
+  } finally {
+    localStorage.setItem(flagKey, '1')
   }
 }

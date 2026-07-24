@@ -12,6 +12,10 @@ export class CreateClassDto {
 
   @IsOptional()
   @IsString()
+  levelId?: string;
+
+  @IsOptional()
+  @IsString()
   room?: string;
 
   @IsOptional()

@@ -45,7 +45,7 @@ async function fetchDashboard(): Promise<DashboardData> {
   const [payments, students, fees] = await Promise.all([
     queryEntities<Payment>('Payment'),
     queryEntities<Student>('Student'),
-    queryEntities('Fee')
+    queryEntities('FeeStructure')
   ])
 
   const totalCollected = payments

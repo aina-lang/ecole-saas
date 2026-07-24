@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { Link } from 'react-router-dom'
 import { Edit, Trash2, Plus, RotateCw } from 'lucide-react'
 
 import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
-import { deleteEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
+import { deleteEntity, saveEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
 import type { Grade, PaginatedResponse, Subject, Student } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatSubjectLabel } from '@/lib/subject'
@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { GradeAveragingConfig } from './GradeAveragingConfig'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import {
   AlertDialog,
@@ -40,6 +42,21 @@ import {
   PaginationPrevious
 } from '@/components/ui/pagination'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { TrashIcon } from '@radix-ui/react-icons'
 
 interface GradeWithDetails extends Grade {
@@ -56,15 +73,7 @@ interface ClassOption {
 
 interface SubjectOption extends Subject {}
 
-const evaluationTypeLabels: Record<string, string> = {
-  exam: 'Examen',
-  test: 'Test',
-  homework: 'Devoir',
-  oral: 'Oral',
-  project: 'Projet',
-  controle: 'Contrôle',
-  examen_blanc: 'Examen blanc'
-}
+import { evalTypeToLabel } from '@/lib/evaluation-types'
 
 const evaluationTypeVariants: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> =
   {
@@ -80,6 +89,7 @@ const evaluationTypeVariants: Record<string, 'default' | 'secondary' | 'outline'
 export function GradeListPage() {
   const queryClient = useQueryClient()
 
+  const [activeTab, setActiveTab] = useState('notes')
   const [classId, setClassId] = useState<string>('')
   const [subjectId, setSubjectId] = useState<string>('')
   const [periodId, setPeriodId] = useState<string>('')
@@ -87,6 +97,7 @@ export function GradeListPage() {
   const [sortBy, setSortBy] = useState<string>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [detailGrade, setDetailGrade] = useState<GradeWithDetails | null>(null)
   const limit = 10
 
   const { data: classes } = useLocalQuery<ClassOption>('Class')
@@ -151,6 +162,39 @@ export function GradeListPage() {
     }
   })
 
+  const [editGrade, setEditGrade] = useState<GradeWithDetails | null>(null)
+  const [editSubjectId, setEditSubjectId] = useState('')
+  const [editValue, setEditValue] = useState('')
+  const [editMaxValue, setEditMaxValue] = useState('20')
+  const [editCoeff, setEditCoeff] = useState('1')
+  const [editEvalType, setEditEvalType] = useState('')
+  const [editComment, setEditComment] = useState('')
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editGrade) return
+      await saveEntity('Grade', {
+        id: editGrade.id,
+        studentId: editGrade.studentId,
+        subjectId: editSubjectId,
+        classId: editGrade.classId,
+        academicYearId: editGrade.academicYearId,
+        value: parseFloat(editValue),
+        maxValue: parseFloat(editMaxValue),
+        coefficient: parseFloat(editCoeff),
+        evaluationType: editEvalType,
+        comment: editComment || undefined,
+        periodId: editGrade.periodId,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['grades'] })
+      toast.success('Note mise à jour')
+      setEditGrade(null)
+    },
+    onError: () => toast.error("Erreur lors de la mise à jour"),
+  })
+
   const grades = gradesResponse?.data ?? []
   const total = gradesResponse?.total ?? 0
   const totalPages = Math.ceil(total / limit)
@@ -188,6 +232,14 @@ export function GradeListPage() {
           </Button>
         </div>
       </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="config">Configuration</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="notes" className="space-y-6 mt-4">
 
       <Card>
         <CardHeader>
@@ -307,7 +359,7 @@ export function GradeListPage() {
                   const g = grade as GradeWithDetails
                   return (
                     <Badge variant={evaluationTypeVariants[g.evaluationType] ?? 'outline'}>
-                      {evaluationTypeLabels[g.evaluationType] ?? g.evaluationType}
+                      {evalTypeToLabel(g.evaluationType)}
                     </Badge>
                   )
                 },
@@ -318,7 +370,8 @@ export function GradeListPage() {
                 sortable: true,
                 render: (grade) => {
                   const g = grade as GradeWithDetails
-                  return g.period?.label ?? '-'
+                  const periodLabel = periods.find((p) => p.value === g.periodId)?.label
+                  return periodLabel ?? '-'
                 },
               },
               {
@@ -357,7 +410,7 @@ export function GradeListPage() {
             }}
             onRowClick={(grade) => {
               const g = grade as GradeWithDetails
-              if (g.id) window.location.href = `/grades/entry?edit=${g.id}`
+              setDetailGrade(g)
             }}
             onBulkDelete={(ids) => {
               Promise.all(ids.map(id => deleteEntity('Grade', id)))
@@ -375,10 +428,16 @@ export function GradeListPage() {
               const g = grade as GradeWithDetails
               return (
                 <>
-                  <Button variant="ghost" size="icon" asChild>
-                    <Link to={`/grades/entry?edit=${g.id}`}>
-                      <Edit className="h-4 w-4" />
-                    </Link>
+                  <Button variant="ghost" size="icon" onClick={() => {
+                    setEditGrade(g)
+                    setEditSubjectId(g.subjectId)
+                    setEditValue(String(g.value))
+                    setEditMaxValue(String(g.maxValue))
+                    setEditCoeff(String(g.coefficient))
+                    setEditEvalType(g.evaluationType)
+                    setEditComment(g.comment ?? '')
+                  }}>
+                    <Edit className="h-4 w-4" />
                   </Button>
                   <ConfirmDialog
                     open={deleteId === g.id}
@@ -406,6 +465,118 @@ export function GradeListPage() {
           />
         </CardContent>
       </Card>
+
+      <Dialog open={!!editGrade} onOpenChange={(o) => { if (!o) setEditGrade(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier la note</DialogTitle>
+          </DialogHeader>
+          {editGrade && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                {editGrade.student?.lastName} {editGrade.student?.firstName}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Matière</Label>
+                <Combobox
+                  value={editSubjectId}
+                  onValueChange={setEditSubjectId}
+                  placeholder="Sélectionner"
+                  searchPlaceholder="Rechercher..."
+                  options={(subjects ?? []).map((s) => ({ value: s.id, label: formatSubjectLabel(s) }))}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Note</Label>
+                  <Input type="number" min="0" step="0.5" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>/ Max</Label>
+                  <Input type="number" min="1" value={editMaxValue} onChange={(e) => setEditMaxValue(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Coefficient</Label>
+                  <Input type="number" min="0.5" step="0.5" value={editCoeff} onChange={(e) => setEditCoeff(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Type</Label>
+                <Select value={editEvalType} onValueChange={setEditEvalType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(['exam', 'test', 'homework', 'oral', 'project', 'controle', 'examen_blanc'] as const).map((t) => (
+                      <SelectItem key={t} value={t}>{evalTypeToLabel(t)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Commentaire</Label>
+                <Input value={editComment} onChange={(e) => setEditComment(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setEditGrade(null)}>Annuler</Button>
+                <Button onClick={() => editMutation.mutate()} disabled={editMutation.isPending}>
+                  {editMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detailGrade} onOpenChange={(o) => { if (!o) setDetailGrade(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Détails de la note</DialogTitle>
+          </DialogHeader>
+          {detailGrade && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Élève</span>
+                <span className="font-medium">{detailGrade.student?.lastName} {detailGrade.student?.firstName}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Matière</span>
+                <span className="font-medium">{formatSubjectLabel(detailGrade.subject)}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Note</span>
+                <span className="font-medium">{detailGrade.value} / {detailGrade.maxValue}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Coefficient</span>
+                <span className="font-medium">{detailGrade.coefficient}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Type</span>
+                <span className="font-medium">{evalTypeToLabel(detailGrade.evaluationType)}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Période</span>
+                <span className="font-medium">{periods.find(p => p.id === detailGrade.periodId)?.label ?? detailGrade.periodId}</span>
+              </div>
+              {detailGrade.comment && (
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground">Commentaire</span>
+                  <span className="font-medium">{detailGrade.comment}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-muted-foreground">Créé le</span>
+                <span className="font-medium">{detailGrade.createdAt ? format(new Date(detailGrade.createdAt), 'dd/MM/yyyy HH:mm', { locale: fr }) : '-'}</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+        </TabsContent>
+
+        <TabsContent value="config" className="mt-4">
+          <GradeAveragingConfig />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

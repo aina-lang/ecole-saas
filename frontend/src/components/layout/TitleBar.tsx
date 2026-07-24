@@ -42,8 +42,8 @@ export function TitleBar() {
   useEffect(() => {
     const update = async () => {
       try {
-        if ((window as any).electron?.window?.isMaximized) {
-          const max = await (window as any).electron.window.isMaximized()
+        if ((window as any).api?.window?.isMaximized) {
+          const max = await (window as any).api.window.isMaximized()
           setIsMaximized(max)
         }
       } catch {}
@@ -51,16 +51,21 @@ export function TitleBar() {
     update()
   }, [])
 
-  const isElectron = typeof window !== 'undefined' && !!(window as any).electron?.window
+  // Les contrôles de fenêtre (minimize/maximize/close) sont exposés sous
+  // window.api.window (voir preload/index.ts) — PAS window.electron, qui est
+  // l'objet générique @electron-toolkit/preload (ipcRenderer/webFrame/process
+  // uniquement, sans contrôles de fenêtre custom). Avec window.electron, ce
+  // composant renvoyait toujours null : la barre ne s'affichait jamais.
+  const isElectron = typeof window !== 'undefined' && !!(window as any).api?.window
 
   if (!isElectron) return null
 
-  const handleMinimize = () => (window as any).electron.window.minimize()
+  const handleMinimize = () => (window as any).api.window.minimize()
   const handleMaximize = () => {
-    (window as any).electron.window.toggleMaximize()
-    ;(window as any).electron.window.isMaximized().then(setIsMaximized)
+    (window as any).api.window.toggleMaximize()
+    ;(window as any).api.window.isMaximized().then(setIsMaximized)
   }
-  const handleClose = () => (window as any).electron.window.close()
+  const handleClose = () => (window as any).api.window.close()
 
   return (
     <div

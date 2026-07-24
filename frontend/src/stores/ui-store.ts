@@ -3,7 +3,6 @@ import { create } from 'zustand'
 interface Tenant {
   name: string
   logoUrl: string
-  primaryColor: string
 }
 
 interface UIState {
@@ -20,8 +19,7 @@ export const useUIStore = create<UIState>((set) => ({
   currentTheme: 'light',
   tenant: {
     name: 'École SaaS',
-    logoUrl: '',
-    primaryColor: '#3b82f6'
+    logoUrl: ''
   },
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),

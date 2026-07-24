@@ -25,7 +25,7 @@ export class SyncService {
     if (operation === 'DELETE') {
       doc._deleted = true;
     }
-    await this.couchdb.writeDocument(entityType, doc);
+    await this.couchdb.writeDocument(tenantId, entityType, doc);
   }
 
   async registerDevice(tenantId: string, deviceId: string, deviceName: string, userId?: string) {
@@ -55,14 +55,14 @@ export class SyncService {
       });
     } else if (resolution.resolution === 'USE_CLIENT') {
       const payload = resolution.payload || (syncLog.payload as Record<string, any>);
-      await this.couchdb.writeDocument(syncLog.entityType, { _id: syncLog.entityId, ...payload });
+      await this.couchdb.writeDocument(tenantId, syncLog.entityType, { _id: syncLog.entityId, ...payload });
       await this.prisma.syncLog.update({
         where: { id: conflictId },
         data: { status: 'SYNCED', conflictData: Prisma.DbNull, serverVersion: (syncLog.serverVersion ?? 0) + 1 },
       });
     } else if (resolution.resolution === 'USE_MERGE') {
       if (!resolution.mergedPayload) throw new BadRequestException('mergedPayload required for USE_MERGE');
-      await this.couchdb.writeDocument(syncLog.entityType, { _id: syncLog.entityId, ...resolution.mergedPayload });
+      await this.couchdb.writeDocument(tenantId, syncLog.entityType, { _id: syncLog.entityId, ...resolution.mergedPayload });
       await this.prisma.syncLog.update({
         where: { id: conflictId },
         data: { status: 'SYNCED', conflictData: Prisma.DbNull, serverVersion: (syncLog.serverVersion ?? 0) + 1 },

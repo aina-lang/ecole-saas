@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ReloadIcon, CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons'
+import { ReloadIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
 
 import {
@@ -19,6 +19,9 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
+import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
+import { performSync } from '@/lib/db/sync-manager'
+import { getTenantSetting, setTenantSetting } from '@/lib/tenant-settings'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -35,7 +38,6 @@ import { cn } from '@/lib/utils'
 interface SchoolSettings {
   schoolName: string
   logoUrl: string | null
-  primaryColor: string
 }
 
 interface AcademicYear {
@@ -48,18 +50,6 @@ interface AcademicYear {
   holidays: { id: string; name: string; startDate: string; endDate: string }[]
 }
 
-interface SyncDevice {
-  id: string
-  deviceName: string
-  deviceType: string
-  lastSyncAt: string | null
-  isOnline: boolean
-}
-
-interface SecuritySettings {
-  twoFactorEnabled: boolean
-}
-
 interface PaymentConfig {
   monthlyTuition: number
   annualFee: number
@@ -68,6 +58,14 @@ interface PaymentConfig {
 
 type PeriodSystem = 'TRIMESTER' | 'SEMESTER' | 'BIMESTER'
 
+const paymentSchema = z.object({
+  monthlyTuition: z.coerce.number().min(0, 'Montant invalide'),
+  annualFee: z.coerce.number().min(0, 'Montant invalide'),
+  dueDay: z.coerce.number().int().min(1, 'Jour invalide').max(28, 'Maximum 28'),
+})
+
+type PaymentValues = z.infer<typeof paymentSchema>
+
 const periodSystemLabels: Record<PeriodSystem, string> = {
   TRIMESTER: 'Trimestre (3 périodes)',
   SEMESTER: 'Semestre (2 périodes)',
@@ -75,8 +73,7 @@ const periodSystemLabels: Record<PeriodSystem, string> = {
 }
 
 const generalSchema = z.object({
-  schoolName: z.string().min(1, 'Le nom est requis'),
-  primaryColor: z.string().min(1, 'La couleur est requise')
+  schoolName: z.string().min(1, 'Le nom est requis')
 })
 
 type GeneralValues = z.infer<typeof generalSchema>
@@ -107,6 +104,35 @@ export const SettingsPage = () => {
   const [savingAcademic, setSavingAcademic] = useState(false)
   const [savingSecurity, setSavingSecurity] = useState(false)
   const [savingPayment, setSavingPayment] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingLogo(true)
+    try {
+      const api = (window as any).api
+      if (!api?.file) { toast.error('Upload non disponible'); return }
+      const buffer = await file.arrayBuffer()
+      const result = await api.file.save({
+        buffer, entityType: 'School', entityId: 'logo',
+        fieldName: 'logo', originalName: file.name, mimeType: file.type,
+      })
+      const localUrl = await api.file.getUrl((result as any).local_path)
+      if (localUrl) {
+        const raw = await getTenantSetting('school')
+        const school = raw ? JSON.parse(raw) : {}
+        await setTenantSetting('school', JSON.stringify({ ...school, logoUrl: localUrl }))
+        queryClient.invalidateQueries({ queryKey: ['settings-school'] })
+        toast.success('Logo mis à jour')
+      }
+    } catch {
+      toast.error("Erreur lors de l'upload du logo")
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
 
   const handleRefresh = () => {
     queryClient.invalidateQueries()
@@ -116,7 +142,7 @@ export const SettingsPage = () => {
     queryKey: ['settings-school'],
     queryFn: async () => {
       try {
-        const raw = await (window as any).api?.settings?.get?.('school')
+        const raw = await getTenantSetting('school')
         return raw ? JSON.parse(raw) as SchoolSettings : null
       } catch { return null }
     }
@@ -126,46 +152,16 @@ export const SettingsPage = () => {
     queryKey: ['settings-academic'],
     queryFn: async () => {
       try {
-        const raw = await (window as any).api?.settings?.get?.('academic_year')
+        const raw = await getTenantSetting('academic_year')
         return raw ? JSON.parse(raw) as AcademicYear : null
       } catch { return null }
-    }
-  })
-
-  const { data: syncDevices, isLoading: loadingDevices } = useQuery({
-    queryKey: ['settings-sync-devices'],
-    queryFn: async (): Promise<SyncDevice[]> => {
-      try {
-        const devices = await (window as any).api?.sync?.getDevices?.()
-        return Array.isArray(devices) ? devices : []
-      } catch { return [] }
-    }
-  })
-
-  const { data: syncInfo, isLoading: loadingSyncInfo } = useQuery({
-    queryKey: ['settings-sync-info'],
-    queryFn: async (): Promise<{ lastSyncAt: string | null; pendingCount: number; online: boolean }> => {
-      try {
-        const info = await (window as any).api?.sync?.getStatus?.()
-        return info ?? { lastSyncAt: null, pendingCount: 0, online: navigator.onLine }
-      } catch { return { lastSyncAt: null, pendingCount: 0, online: navigator.onLine } }
-    }
-  })
-
-  const { data: securityData, isLoading: loadingSecurity } = useQuery({
-    queryKey: ['settings-security'],
-    queryFn: async () => {
-      try {
-        const raw = await (window as any).api?.settings?.get?.('security')
-        return raw ? JSON.parse(raw) as SecuritySettings : { twoFactorEnabled: false }
-      } catch { return { twoFactorEnabled: false } }
     }
   })
 
   const { data: periodSystem, isLoading: loadingPeriodSystem } = useQuery({
     queryKey: ['settings-period-system'],
     queryFn: async () => {
-      const raw = await (window as any).api?.settings?.get?.('period_system')
+      const raw = await getTenantSetting('period_system')
       return (raw || 'TRIMESTER') as PeriodSystem
     }
   })
@@ -173,16 +169,21 @@ export const SettingsPage = () => {
   const { data: paymentConfig, isLoading: loadingPayment } = useQuery({
     queryKey: ['settings-payment'],
     queryFn: async () => {
-      const raw = await (window as any).api?.settings?.get?.('payment_config')
+      const raw = await getTenantSetting('payment_config')
       return JSON.parse(raw || '{}') as PaymentConfig
     }
   })
 
-  const isLoading = loadingSchool || loadingAcademic || loadingDevices || loadingSyncInfo || loadingSecurity || loadingPeriodSystem || loadingPayment
+  const isLoading = loadingSchool || loadingAcademic || loadingPayment
+
+  const paymentForm = useForm<PaymentValues>({
+    resolver: zodResolver(paymentSchema),
+    defaultValues: { monthlyTuition: 0, annualFee: 0, dueDay: 15 },
+  })
 
   const generalForm = useForm<GeneralValues>({
     resolver: zodResolver(generalSchema),
-    defaultValues: { schoolName: '', primaryColor: '#2563eb' }
+    defaultValues: { schoolName: '' }
   })
 
   const academicForm = useForm<AcademicYearValues>({
@@ -196,10 +197,19 @@ export const SettingsPage = () => {
   })
 
   useEffect(() => {
+    if (paymentConfig) {
+      paymentForm.reset({
+        monthlyTuition: paymentConfig.monthlyTuition || 0,
+        annualFee: paymentConfig.annualFee || 0,
+        dueDay: paymentConfig.dueDay || 15,
+      })
+    }
+  }, [paymentConfig, paymentForm])
+
+  useEffect(() => {
     if (schoolData) {
       generalForm.reset({
-        schoolName: schoolData.schoolName,
-        primaryColor: schoolData.primaryColor
+        schoolName: schoolData.schoolName
       })
     }
   }, [schoolData, generalForm])
@@ -217,7 +227,9 @@ export const SettingsPage = () => {
   async function handleSaveGeneral(values: GeneralValues) {
     setSavingGeneral(true)
     try {
-      await (window as any).api?.settings?.set?.('school', JSON.stringify(values))
+      const raw = await getTenantSetting('school')
+      const existing = raw ? JSON.parse(raw) : {}
+      await setTenantSetting('school', JSON.stringify({ ...existing, ...values }))
       queryClient.invalidateQueries({ queryKey: ['settings-school'] })
       toast.success('Paramètres généraux enregistrés')
     } catch {
@@ -230,7 +242,18 @@ export const SettingsPage = () => {
   async function handleSaveAcademic(values: AcademicYearValues) {
     setSavingAcademic(true)
     try {
-      await (window as any).api?.settings?.set?.('academic_year', JSON.stringify(values))
+      await setTenantSetting('academic_year', JSON.stringify(values))
+      const existingDoc = (await queryEntities<any>('AcademicYear' as any))?.find((y: any) => y.isCurrent)
+      const academicYear = {
+        id: existingDoc?.id || crypto.randomUUID(),
+        _id: existingDoc?._id,
+        _rev: existingDoc?._rev,
+        label: values.name,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        isCurrent: true,
+      }
+      await saveEntity('AcademicYear' as any, academicYear)
       queryClient.invalidateQueries({ queryKey: ['settings-academic'] })
       toast.success('Année scolaire mise à jour')
     } catch {
@@ -241,15 +264,15 @@ export const SettingsPage = () => {
   }
 
   async function handleSavePeriodSystem(system: PeriodSystem) {
-    await (window as any).api?.settings?.set?.('period_system', system)
+    await setTenantSetting('period_system', system)
     queryClient.invalidateQueries({ queryKey: ['settings-period-system'] })
     toast.success('Système de périodes mis à jour')
   }
 
-  async function handleSavePaymentConfig(values: PaymentConfig) {
+  async function handleSavePaymentConfig(values: PaymentValues) {
     setSavingPayment(true)
     try {
-      await (window as any).api?.settings?.set?.('payment_config', JSON.stringify(values))
+      await setTenantSetting('payment_config', JSON.stringify(values))
       queryClient.invalidateQueries({ queryKey: ['settings-payment'] })
       toast.success('Configuration des paiements enregistrée')
     } catch {
@@ -261,21 +284,11 @@ export const SettingsPage = () => {
 
   async function handleForceSync() {
     try {
-      await (window as any).api?.sync?.forceSync?.()
+      await performSync()
       queryClient.invalidateQueries({ queryKey: ['settings-sync-info'] })
       toast.success('Synchronisation lancée')
     } catch {
       toast.error('Erreur lors de la synchronisation')
-    }
-  }
-
-  async function handleToggle2fa(enabled: boolean) {
-    try {
-      await (window as any).api?.settings?.set?.('security', JSON.stringify({ twoFactorEnabled: enabled }))
-      queryClient.invalidateQueries({ queryKey: ['settings-security'] })
-      toast.success(enabled ? '2FA activée' : '2FA désactivée')
-    } catch {
-      toast.error('Erreur lors de la modification')
     }
   }
 
@@ -316,8 +329,6 @@ export const SettingsPage = () => {
         <TabsList>
           <TabsTrigger value="general">Général</TabsTrigger>
           <TabsTrigger value="academic">Année scolaire</TabsTrigger>
-          <TabsTrigger value="payment">Paiements</TabsTrigger>
-          <TabsTrigger value="sync">Synchronisation</TabsTrigger>
           <TabsTrigger value="security">Sécurité</TabsTrigger>
         </TabsList>
 
@@ -346,38 +357,25 @@ export const SettingsPage = () => {
                   <div className="space-y-2">
                     <Label>Logo de l'établissement</Label>
                     <div className="flex items-center gap-4">
-                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed text-muted-foreground text-sm">
+                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed text-muted-foreground text-sm overflow-hidden">
                         {schoolData?.logoUrl ? (
                           <img src={schoolData.logoUrl} alt="Logo" className="h-full w-full rounded-lg object-contain" />
                         ) : (
                           'Aucun logo'
                         )}
                       </div>
-                      <Button variant="outline" type="button" disabled>
-                        Télécharger
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                      />
+                      <Button variant="outline" type="button" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                        {uploadingLogo ? 'Upload...' : 'Télécharger'}
                       </Button>
                     </div>
                   </div>
-                  <FormField
-                    control={generalForm.control}
-                    name="primaryColor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Couleur principale</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="color"
-                              className="h-9 w-16 rounded-md border border-input bg-transparent px-1"
-                              {...field}
-                            />
-                            <span className="font-mono text-sm text-muted-foreground">{field.value}</span>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </form>
               </Form>
             </CardContent>
@@ -472,67 +470,6 @@ export const SettingsPage = () => {
                 </Select>
               </div>
 
-              <Separator />
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <Label>Périodes</Label>
-                  <Button variant="outline" size="sm" disabled>+ Ajouter</Button>
-                </div>
-                {academicData?.periods?.length ? (
-                  <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Période</TableHead>
-                          <TableHead>Début</TableHead>
-                          <TableHead>Fin</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {academicData.periods.map((p) => (
-                          <TableRow key={p.id}>
-                            <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell>{format(new Date(p.startDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                            <TableCell>{format(new Date(p.endDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aucune période définie</p>
-                )}
-              </div>
-
-              <Separator />
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <Label>Congés</Label>
-                  <Button variant="outline" size="sm" disabled>+ Ajouter</Button>
-                </div>
-                {academicData?.holidays?.length ? (
-                  <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Congé</TableHead>
-                          <TableHead>Début</TableHead>
-                          <TableHead>Fin</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {academicData.holidays.map((h) => (
-                          <TableRow key={h.id}>
-                            <TableCell className="font-medium">{h.name}</TableCell>
-                            <TableCell>{format(new Date(h.startDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                            <TableCell>{format(new Date(h.endDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aucun congé défini</p>
-                )}
-              </div>
             </CardContent>
             <CardFooter className="border-t px-6 py-4">
               <Button type="submit" form="academic-form" disabled={savingAcademic}>
@@ -544,155 +481,9 @@ export const SettingsPage = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="payment" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Configuration des paiements</CardTitle>
-              <CardDescription>Définir les montants d'écolage mensuel et des frais annuels</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form id="payment-form" onSubmit={(e) => { e.preventDefault(); handleSavePaymentConfig({ monthlyTuition: Number((e.target as any).monthlyTuition.value) || 0, annualFee: Number((e.target as any).annualFee.value) || 0, dueDay: Number((e.target as any).dueDay.value) || 15 }) }} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="monthlyTuition">Écolage mensuel (Ar)</Label>
-                  <Input
-                    id="monthlyTuition"
-                    name="monthlyTuition"
-                    type="number"
-                    min="0"
-                    step="100"
-                    defaultValue={paymentConfig?.monthlyTuition || 0}
-                    placeholder="Ex: 25000"
-                  />
-                  <p className="text-sm text-muted-foreground">Montant mensuel par élève</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="annualFee">Frais scolaires annuels (Ar)</Label>
-                  <Input
-                    id="annualFee"
-                    name="annualFee"
-                    type="number"
-                    min="0"
-                    step="1000"
-                    defaultValue={paymentConfig?.annualFee || 0}
-                    placeholder="Ex: 150000"
-                  />
-                  <p className="text-sm text-muted-foreground">Frais d'inscription ou frais fixes par année</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dueDay">Jour d'échéance</Label>
-                  <Input
-                    id="dueDay"
-                    name="dueDay"
-                    type="number"
-                    min="1"
-                    max="28"
-                    defaultValue={paymentConfig?.dueDay || 15}
-                  />
-                  <p className="text-sm text-muted-foreground">Jour du mois pour les échéances de paiement</p>
-                </div>
-              </form>
-            </CardContent>
-            <CardFooter className="border-t px-6 py-4">
-              <Button type="submit" form="payment-form" disabled={savingPayment}>
-                {savingPayment ? (
-                  <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
-                ) : 'Enregistrer'}
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="sync" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>État de la synchronisation</CardTitle>
-              <CardDescription>Appareils connectés et statut de synchronisation</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className={`h-3 w-3 rounded-full ${syncInfo?.online ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="font-medium">{syncInfo?.online ? 'En ligne' : 'Hors ligne'}</span>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Dernière synchronisation : {syncInfo?.lastSyncAt
-                    ? format(new Date(syncInfo.lastSyncAt), 'dd/MM/yyyy HH:mm', { locale: fr })
-                    : 'Jamais'}
-                </div>
-                <Badge variant="outline">{syncInfo?.pendingCount ?? 0} en attente</Badge>
-              </div>
-
-              <Separator />
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <Label>Appareils connectés</Label>
-                  <Button onClick={handleForceSync}>
-                    <ReloadIcon className="mr-2 h-4 w-4" />
-                    Forcer la synchronisation
-                  </Button>
-                </div>
-                {syncDevices?.length ? (
-                  <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Appareil</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Statut</TableHead>
-                          <TableHead>Dernière synchronisation</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {syncDevices.map((device) => (
-                          <TableRow key={device.id}>
-                            <TableCell className="font-medium">{device.deviceName}</TableCell>
-                            <TableCell className="text-muted-foreground">{device.deviceType}</TableCell>
-                            <TableCell>
-                              {device.isOnline ? (
-                                <span className="flex items-center gap-1 text-green-600"><CheckCircledIcon className="h-4 w-4" /> En ligne</span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-red-600"><CrossCircledIcon className="h-4 w-4" /> Hors ligne</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {device.lastSyncAt
-                                ? format(new Date(device.lastSyncAt), 'dd/MM/yyyy HH:mm', { locale: fr })
-                                : 'Jamais'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aucun appareil connecté</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="security" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Authentification à deux facteurs (2FA)</CardTitle>
-              <CardDescription>Renforcez la sécurité de votre compte</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Authentification à deux facteurs</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Activez une couche de sécurité supplémentaire pour votre compte
-                  </p>
-                </div>
-                <Switch
-                  checked={securityData?.twoFactorEnabled ?? false}
-                  onCheckedChange={handleToggle2fa}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>Changer le mot de passe</CardTitle>

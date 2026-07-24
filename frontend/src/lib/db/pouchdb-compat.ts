@@ -7,10 +7,63 @@ import {
   type EntityType,
 } from './pouchdb'
 import { getTenantId } from './token-cache'
+import { isReadOnly } from '../billing-status'
 
 /** Résout le tenantId courant depuis la mémoire (token-cache) ou localStorage. */
 function getCurrentTenantId(): string | null {
   return getTenantId() ?? localStorage.getItem('tenantId') ?? null
+}
+
+const READ_ONLY_MESSAGE =
+  "Abonnement expiré — mode lecture seule. Régularisez votre abonnement dans Paramètres > Abonnement pour continuer à modifier vos données."
+
+function assertWritable(): void {
+  if (isReadOnly()) {
+    throw new Error(READ_ONLY_MESSAGE)
+  }
+}
+
+function getCurrentUser(): { id: string; name: string; email: string } | null {
+  try {
+    const raw = localStorage.getItem('auth-user')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+export async function logAudit(params: {
+  action: string
+  entityType: string
+  entityId?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: any
+}) {
+  const user = getCurrentUser()
+  const tenantId = getCurrentTenantId()
+  if (!tenantId) return
+
+  const doc = {
+    id: crypto.randomUUID(),
+    tenantId,
+    userId: user?.id || null,
+    userName: user?.name || null,
+    userEmail: user?.email || null,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId || null,
+    timestamp: new Date().toISOString(),
+    oldValue: params.oldValue || null,
+    newValue: params.newValue || null,
+    metadata: params.metadata || null,
+  }
+
+  try {
+    await saveEntity('AuditLog', doc)
+  } catch (err) {
+    console.warn('[Audit] Failed to log:', err)
+  }
 }
 
 /**
@@ -134,11 +187,10 @@ export async function getEntityById<T = any>(entityType: EntityType, id: string)
   return doc as T | null
 }
 
-export async function saveEntity(entityType: EntityType, data: any): Promise<any> {
+export async function saveEntity(entityType: EntityType, data: any, retries = 3): Promise<any> {
+  if (entityType !== 'AuditLog') assertWritable()
   const id = data._id || data.id || crypto.randomUUID()
 
-  // FIXE CRITIQUE : garantir que tenantId est toujours présent dans le document.
-  // Sans lui, le sync-worker serveur jette le doc silencieusement (processChange:61).
   const tenantId = data.tenantId || getCurrentTenantId()
   if (!tenantId) {
     console.warn(`[PouchDB] saveEntity(${entityType}, ${id}): tenantId manquant — le document ne sera pas synchronisé avec PostgreSQL`)
@@ -146,27 +198,69 @@ export async function saveEntity(entityType: EntityType, data: any): Promise<any
 
   const db = createDatabase(entityType)
   let existingRev: string | undefined
+  let existingDoc: any
   try {
-    const existing = await db.get(id)
-    existingRev = existing._rev
+    existingDoc = await db.get(id)
+    existingRev = existingDoc._rev
   } catch { }
   db.close()
 
-  // tenantId forcé dans le doc, qu'il vienne du payload ou du store
   const doc: any = { ...data, _id: id, tenantId }
   if (existingRev) doc._rev = existingRev
+
+  const action = existingRev ? 'UPDATE' : 'CREATE'
   let response: any
-  try {
-    response = await putDocument(entityType, doc)
-  } catch (err) {
-    console.error(`saveEntity(${entityType}, ${id}) putDocument error:`, err)
-    throw err
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      response = await putDocument(entityType, doc)
+      break
+    } catch (err: any) {
+      if (err.status === 409 && attempt < retries) {
+        const fresh = await getDocument(entityType, id)
+        doc._rev = (fresh as any)?._rev
+        doc.tenantId = tenantId
+        continue
+      }
+      console.error(`saveEntity(${entityType}, ${id}) putDocument error:`, err)
+      throw err
+    }
+  }
+
+  if (entityType !== 'AuditLog') {
+    logAudit({
+      action,
+      entityType,
+      entityId: id,
+      oldValue: existingRev ? existingDoc : null,
+      newValue: data,
+    }).catch(() => {})
   }
 
   return { ...doc, _rev: response.rev }
 }
 
 export async function deleteEntity(entityType: EntityType, id: string): Promise<boolean> {
-  await deleteDocument(entityType, id)
-  return true
+  assertWritable()
+  const db = createDatabase(entityType)
+  try {
+    let doc: any
+    try {
+      doc = await db.get(id)
+    } catch {
+      logAudit({ action: 'DELETE', entityType, entityId: id }).catch(() => {})
+      return true
+    }
+    const tombstone = {
+      ...doc,
+      _deleted: true,
+      tenantId: doc.tenantId || getCurrentTenantId(),
+      deletedAt: new Date().toISOString(),
+    }
+    await db.put(tombstone)
+    logAudit({ action: 'DELETE', entityType, entityId: id, oldValue: doc }).catch(() => {})
+    return true
+  } finally {
+    db.close()
+  }
 }

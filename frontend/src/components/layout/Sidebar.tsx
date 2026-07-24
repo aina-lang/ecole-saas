@@ -8,7 +8,9 @@ import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { getTenantSetting } from '@/lib/tenant-settings'
 
 export function Sidebar() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -18,6 +20,18 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
   const [logoutOpen, setLogoutOpen] = useState(false)
+
+  const { data: schoolData } = useQuery({
+    queryKey: ['settings-school'],
+    queryFn: async () => {
+      const raw = await getTenantSetting('school')
+      return raw ? JSON.parse(raw) as { schoolName?: string; primaryColor?: string; logoUrl?: string } : null
+    },
+  })
+
+  const schoolName = schoolData?.schoolName || tenant.name || 'École SaaS'
+  const logoUrl = schoolData?.logoUrl || tenant.logoUrl || ''
+  const initials = schoolName.charAt(0).toUpperCase()
 
   const userInitials = user ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() : '?'
 
@@ -30,16 +44,16 @@ export function Sidebar() {
     >
       <div className="flex h-14 items-center justify-between gap-2 border-b px-4">
         <div className="flex items-center gap-2 overflow-hidden">
-          {tenant.logoUrl ? (
-            <img src={tenant.logoUrl} alt={tenant.name} className="h-8 w-8 rounded shrink-0" />
+          {logoUrl ? (
+            <img src={logoUrl} alt={schoolName} className="h-8 w-8 rounded shrink-0" />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold shrink-0">
-              {tenant.name ? tenant.name.charAt(0) : 'E'}
+              {initials || 'E'}
             </div>
           )}
           {sidebarOpen && (
             <span className="truncate text-sm font-semibold animate-in fade-in duration-300">
-              {tenant.name || 'École SaaS'}
+              {schoolName}
             </span>
           )}
         </div>

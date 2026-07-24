@@ -23,6 +23,14 @@ export class CreateTeacherContractDto {
   @Min(0)
   fixedAmount?: number;
 
+  @IsOptional()
+  @IsString()
+  cnapsNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  ostieNumber?: string;
+
   @IsDateString()
   startDate: string;
 
@@ -54,6 +62,14 @@ export class UpdateTeacherContractDto {
   @IsNumber()
   @Min(0)
   fixedAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  cnapsNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  ostieNumber?: string;
 
   @IsOptional()
   @IsDateString()

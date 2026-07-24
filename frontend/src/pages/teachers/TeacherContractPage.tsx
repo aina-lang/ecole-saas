@@ -33,6 +33,11 @@ const contractSchema = z.object({
   hourlyRate: z.coerce.number().min(0).optional().or(z.literal('')),
   monthlySalary: z.coerce.number().min(0).optional().or(z.literal('')),
   fixedAmount: z.coerce.number().min(0).optional().or(z.literal('')),
+  // Identifiants obligatoires pour un contrat de travail légal à Madagascar —
+  // pas de format strict imposé (les numéros CNaPS/OSTIE varient selon
+  // l'ancienneté d'affiliation), simple champ texte.
+  cnapsNumber: z.string().optional().or(z.literal('')),
+  ostieNumber: z.string().optional().or(z.literal('')),
   startDate: z.string().min(1, 'Date de début requise'),
   endDate: z.string().optional().or(z.literal('')),
   isActive: z.boolean().optional()
@@ -85,6 +90,8 @@ export function TeacherContractPage() {
       hourlyRate: '',
       monthlySalary: '',
       fixedAmount: '',
+      cnapsNumber: '',
+      ostieNumber: '',
       startDate: '',
       endDate: '',
       isActive: true
@@ -99,6 +106,8 @@ export function TeacherContractPage() {
         contractType: values.contractType,
         startDate: values.startDate,
         endDate: values.endDate || null,
+        cnapsNumber: values.cnapsNumber || null,
+        ostieNumber: values.ostieNumber || null,
         salary: Number(values.hourlyRate || values.monthlySalary || values.fixedAmount || 0),
         hoursPerWeek: values.contractType === 'HOURLY' ? Number(values.hourlyRate) : 0,
         status: values.isActive !== false ? 'ACTIVE' : 'INACTIVE',
@@ -296,6 +305,34 @@ export function TeacherContractPage() {
                   )}
                 />
               )}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="cnapsNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>N° CNaPS</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: 123456789" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ostieNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>N° OSTIE</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: 987654321" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}

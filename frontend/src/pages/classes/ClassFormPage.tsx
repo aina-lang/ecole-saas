@@ -5,10 +5,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { getEntityById, saveEntity } from '@/lib/db/pouchdb-compat'
+import { getEntityById, saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { LEVELS } from '@/lib/levels'
-import type { Class, Teacher } from '@/types'
+import type { Class, Teacher, Level } from '@/types'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +48,14 @@ export function ClassFormPage() {
   })
 
   const { data: teachers } = useLocalQuery<Teacher>('Teacher')
+
+  const { data: levels } = useQuery({
+    queryKey: ['levels'],
+    queryFn: async () => {
+      const items = await queryEntities<Level>('Level')
+      return items ?? []
+    }
+  })
 
   const form = useForm<ClassFormValues>({
     resolver: zodResolver(classFormSchema),
@@ -170,7 +177,7 @@ export function ClassFormPage() {
                     <FormLabel>Niveau *</FormLabel>
                     <FormControl>
                       <Combobox
-                        options={LEVELS.map((lvl) => ({ value: lvl, label: lvl }))}
+                        options={(levels ?? []).map((lvl) => ({ value: lvl.name, label: lvl.name }))}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner un niveau"

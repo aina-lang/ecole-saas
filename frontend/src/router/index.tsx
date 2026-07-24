@@ -17,8 +17,8 @@ import { SubjectsPage } from '@/pages/subjects/SubjectsPage'
 import { TimetablePage } from '@/pages/timetable/TimetablePage'
 import { AttendanceRoutes } from '@/pages/attendance/AttendanceRoutes'
 import { CommunicationRoutes } from '@/pages/communications/CommunicationRoutes'
-import { FinanceRoutes } from '@/pages/finances/FinanceRoutes'
 import { AdminRoutes } from '@/pages/administration/AdminRoutes'
+import { FinanceRoutes } from '@/pages/finances/FinanceRoutes'
 import { TeacherRoutes } from '@/pages/teachers/TeacherRoutes'
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 
@@ -69,9 +69,9 @@ export function AppRouter() {
         <Route path="timetable" element={<TimetablePage />} />
         <Route path="attendance/*" element={<AttendanceRoutes />} />
         <Route path="communications/*" element={<CommunicationRoutes />} />
-        <Route path="finances/*" element={<FinanceRoutes />} />
         <Route path="teachers/*" element={<TeacherRoutes />} />
         <Route path="administration/*" element={<AdminRoutes />} />
+        <Route path="finances/*" element={<FinanceRoutes />} />
         <Route path="sync" element={<SyncPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,1 +1,0 @@
--- Empty migration to baseline the database

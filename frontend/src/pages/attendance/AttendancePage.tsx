@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { CalendarIcon, Check, X, Ban, Users, RotateCw } from 'lucide-react'
+import { CalendarIcon, Check, X, Ban, Users, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
@@ -15,8 +15,16 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+} from '@/components/ui/pagination'
 
-type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'EXCUSED'
+type AttendanceStatus = 'present' | 'absent' | 'excused'
 
 type StatusFilter = 'ALL' | AttendanceStatus | 'UNMARKED'
 
@@ -36,21 +44,21 @@ const STATUS_CONFIG: Record<
   AttendanceStatus,
   { label: string; color: string; bg: string; border: string; icon: React.ReactNode }
 > = {
-  PRESENT: {
+  present: {
     label: 'Présent',
     color: 'text-green-700',
     bg: 'bg-green-100',
     border: 'border-green-500',
     icon: <Check className="h-4 w-4" />
   },
-  ABSENT: {
+  absent: {
     label: 'Absent',
     color: 'text-red-700',
     bg: 'bg-red-100',
     border: 'border-red-500',
     icon: <X className="h-4 w-4" />
   },
-  EXCUSED: {
+  excused: {
     label: 'Excusé',
     color: 'text-blue-700',
     bg: 'bg-blue-100',
@@ -59,15 +67,19 @@ const STATUS_CONFIG: Record<
   }
 }
 
+const PAGE_SIZE = 50
+
 export function AttendancePage() {
   const [date, setDate] = useState<Date>(new Date())
   const [classId, setClassId] = useState<string>('')
   const [entries, setEntries] = useState<StudentAttendanceEntry[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
+  const [page, setPage] = useState(1)
   const queryClient = useQueryClient()
   const { data: classes } = useLocalQuery<ClassOption>('Class')
   const today = new Date()
+  const dateStr = format(date, 'yyyy-MM-dd')
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
@@ -79,10 +91,10 @@ export function AttendancePage() {
   })
 
   const { data: existingAttendance } = useQuery({
-    queryKey: ['attendance', classId, format(date, 'yyyy-MM-dd')],
+    queryKey: ['attendance', classId, dateStr],
     queryFn: async () => {
       if (!classId) return []
-      return queryEntities('Attendance', { classId, date: format(date, 'yyyy-MM-dd') })
+      return queryEntities('Attendance', { classId, date: dateStr })
     },
     enabled: !!classId
   })
@@ -107,6 +119,7 @@ export function AttendancePage() {
         status: existingMap.get(s.id) ?? null
       }))
     )
+    setPage(1)
   }, [students, existingAttendance])
 
   const filteredEntries = entries.filter((entry) => {
@@ -121,13 +134,24 @@ export function AttendancePage() {
     return true
   })
 
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const paginatedEntries = filteredEntries.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   const totalStudents = entries.length
-  const presentCount = entries.filter((e) => e.status === 'PRESENT').length
-  const absentCount = entries.filter((e) => e.status === 'ABSENT').length
-  const excusedCount = entries.filter((e) => e.status === 'EXCUSED').length
+  const presentCount = entries.filter((e) => e.status === 'present').length
+  const absentCount = entries.filter((e) => e.status === 'absent').length
+  const excusedCount = entries.filter((e) => e.status === 'excused').length
   const markedCount = presentCount + absentCount + excusedCount
 
   const isLoading = loadingStudents
+
+  const handleRefresh = () => {
+    if (classId) {
+      queryClient.invalidateQueries({ queryKey: ['students', classId] })
+      queryClient.invalidateQueries({ queryKey: ['attendance', classId, dateStr] })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -138,15 +162,7 @@ export function AttendancePage() {
             Consultez la liste des présences par classe et par jour.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ['students'] })
-            queryClient.invalidateQueries({ queryKey: ['attendance'] })
-          }}
-          disabled={isLoading}
-        >
+        <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
           <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
         </Button>
       </div>
@@ -189,9 +205,9 @@ export function AttendancePage() {
             placeholder="Tous"
             options={[
               { value: 'ALL', label: 'Tous' },
-              { value: 'PRESENT', label: 'Présent' },
-              { value: 'ABSENT', label: 'Absent' },
-              { value: 'EXCUSED', label: 'Excusé' },
+              { value: 'present', label: 'Présent' },
+              { value: 'absent', label: 'Absent' },
+              { value: 'excused', label: 'Excusé' },
               { value: 'UNMARKED', label: 'Non marqué' }
             ]}
           />
@@ -235,43 +251,74 @@ export function AttendancePage() {
               Aucun résultat pour cette recherche ou ce filtre.
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredEntries.map((entry) => {
-                const config = entry.status ? STATUS_CONFIG[entry.status] : null
-                return (
-                  <div
-                    key={entry.studentId}
-                    className={cn(
-                      'flex flex-col gap-2 rounded-lg border p-3',
-                      config ? config.bg + ' ' + config.border : 'bg-card'
-                    )}
-                  >
-                    <span className="text-sm font-medium truncate">{entry.studentName}</span>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {entry.registrationNumber}
-                    </span>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+                {paginatedEntries.map((entry) => {
+                  const config = entry.status ? STATUS_CONFIG[entry.status] : null
+                  return (
                     <div
+                      key={entry.studentId}
                       className={cn(
-                        'flex items-center gap-1.5 text-xs font-medium',
-                        config ? config.color : 'text-muted-foreground'
+                        'flex flex-col gap-2 rounded-lg border p-3',
+                        config ? config.bg + ' ' + config.border : 'bg-card'
                       )}
                     >
-                      {config ? (
-                        <>
-                          {config.icon}
-                          {config.label}
-                        </>
-                      ) : (
-                        <>
-                          <Users className="h-4 w-4" />
-                          Non marqué
-                        </>
-                      )}
+                      <span className="text-sm font-medium truncate">{entry.studentName}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {entry.registrationNumber}
+                      </span>
+                      <div
+                        className={cn(
+                          'flex items-center gap-1.5 text-xs font-medium',
+                          config ? config.color : 'text-muted-foreground'
+                        )}
+                      >
+                        {config ? (
+                          <>
+                            {config.icon}
+                            {config.label}
+                          </>
+                        ) : (
+                          <>
+                            <Users className="h-4 w-4" />
+                            Non marqué
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className={cn(safePage <= 1 && 'pointer-events-none opacity-50')}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <PaginationItem key={p}>
+                        <PaginationLink
+                          isActive={safePage === p}
+                          onClick={() => setPage(p)}
+                          className="cursor-pointer"
+                        >
+                          {p}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className={cn(safePage >= totalPages && 'pointer-events-none opacity-50')}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

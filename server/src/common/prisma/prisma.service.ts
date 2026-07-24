@@ -9,12 +9,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 export const SYNCABLE_MODELS = new Set([
   'Student', 'Grade', 'Attendance', 'Class', 'Subject', 'Teacher',
   'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
-  'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
+  'TeacherContract', 'TeacherPayment', 'TeacherAttendance', 'AuditLog', 'Level',
 ]);
 
 /** Interface minimale pour éviter une dépendance circulaire avec CouchDbService */
 export interface ICouchDbWriter {
-  writeDocument(entityType: string, doc: any): Promise<{ id: string; rev: string }>;
+  writeDocument(tenantId: string, entityType: string, doc: any): Promise<{ id: string; rev: string }>;
 }
 
 @Injectable()
@@ -105,7 +105,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     // Fire-and-forget : ne pas bloquer la réponse API
     this.couchDbWriter
-      .writeDocument(model, couchDoc)
+      .writeDocument(doc.tenantId, model, couchDoc)
       .catch((err: Error) =>
         this.logger.warn(`[notifyWrite] CouchDB write failed for ${model}/${doc.id}: ${err.message}`)
       );

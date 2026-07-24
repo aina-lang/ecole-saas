@@ -20,4 +20,16 @@ export default () => ({
     user: process.env.COUCHDB_USER || '',
     pass: process.env.COUCHDB_PASS || '',
   },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY || '',
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+    // Abonnement = une licence unique, pas de paliers.
+    licensePriceId: process.env.STRIPE_PRICE_LICENSE || '',
+  },
+  app: {
+    // Sert aux redirections success/cancel de Stripe Checkout et au lien du
+    // portail de facturation — l'app Electron ouvre ces URL dans le
+    // navigateur système (voir setWindowOpenHandler dans main/index.ts).
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  },
 });

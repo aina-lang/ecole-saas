@@ -8,6 +8,8 @@ import {
 } from './pouchdb-compat'
 import { offlineSave, offlineDelete } from './offline-queue'
 import type { EntityType } from './pouchdb'
+import { useSyncStore } from '@/stores/sync-store'
+import { getTenantSetting } from '@/lib/tenant-settings'
 
 export interface QueryResult<T> {
   data: T[] | null
@@ -142,9 +144,9 @@ export function usePeriods() {
     let cancelled = false
     async function load() {
       try {
-        const rawSystem = await window.api?.settings?.get?.('period_system')
+        const rawSystem = await getTenantSetting('period_system')
         const system = rawSystem || 'TRIMESTER'
-        const rawAcademic = await window.api?.settings?.get?.('academic_year')
+        const rawAcademic = await getTenantSetting('academic_year')
         const academic = rawAcademic ? JSON.parse(rawAcademic) : null
 
         if (cancelled) return
@@ -212,27 +214,28 @@ export function useStaticData() {
   return { loading }
 }
 
+// Invalide le cache React Query quand le moteur de sync réel (PouchDB↔CouchDB,
+// voir sync-manager.ts) reçoit du nouveau contenu ou repasse en ligne. Ceci
+// s'appuyait auparavant sur des événements IPC (`sync:progress`/`sync:status-changed`)
+// que le process main n'a jamais émis — l'invalidation ne se déclenchait donc
+// jamais. Le moteur de sync tourne entièrement dans le renderer (voir
+// SyncLifecycle dans App.tsx) ; on s'abonne directement à son store zustand.
 export function useSyncInvalidation() {
   const queryClient = useQueryClient()
+  const lastSyncAt = useSyncStore((s) => s.lastSyncAt)
+  const isOnline = useSyncStore((s) => s.isOnline)
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.api?.sync) return
-
-    const unsubscribeProgress = window.api.sync.onProgress((_stats: any) => {
+    if (lastSyncAt) {
       queryClient.invalidateQueries()
-    })
-
-    const unsubscribeStatus = window.api.sync.onStatusChanged((status: any) => {
-      if (status.isOnline) {
-        queryClient.invalidateQueries()
-      }
-    })
-
-    return () => {
-      unsubscribeProgress?.()
-      unsubscribeStatus?.()
     }
-  }, [queryClient])
+  }, [lastSyncAt, queryClient])
+
+  useEffect(() => {
+    if (isOnline) {
+      queryClient.invalidateQueries()
+    }
+  }, [isOnline, queryClient])
 }
 
 export async function saveRemoteDirect(entityType: string, data: any): Promise<any> {

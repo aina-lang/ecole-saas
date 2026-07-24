@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -20,12 +20,12 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { ArrowLeftIcon, ReloadIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
+import { PhotoUpload } from '@/components/ui/photo-upload'
 
 const parentSchema = z.object({
   firstName: z.string().optional().or(z.literal('')),
   lastName: z.string().min(1, 'Nom requis'),
   email: z.string().email('Email invalide').optional().or(z.literal('')),
-  isActive: z.boolean(),
 })
 
 type ParentFormValues = z.infer<typeof parentSchema>
@@ -36,6 +36,47 @@ export function ParentEditPage() {
   const queryClient = useQueryClient()
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [editPhones, setEditPhones] = useState<string[]>([''])
+  const studentIdsInitialized = useRef(false)
+
+  const photoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!id) return { url: '' }
+      const api = window.api
+      if (api?.file) {
+        const buffer = await file.arrayBuffer()
+        const result = await api.file.save({
+          buffer, entityType: 'User', entityId: id,
+          fieldName: 'photo_url', originalName: file.name, mimeType: file.type,
+        })
+        const localUrl = await api.file.getUrl((result as any).local_path)
+        const existing = await getEntityById<any>('User', id)
+        if (existing) {
+          await saveEntity('User', { ...existing, photoUrl: localUrl })
+        }
+        return { url: localUrl || '' }
+      }
+      return { url: '' }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parent', id] })
+      queryClient.invalidateQueries({ queryKey: ['parents'] })
+    },
+  })
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) return null
+      const existing = await getEntityById<any>('User', id)
+      if (existing) {
+        await saveEntity('User', { ...existing, photoUrl: null })
+      }
+      return { success: true }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parent', id] })
+      queryClient.invalidateQueries({ queryKey: ['parents'] })
+    },
+  })
 
   const { data: parent, isLoading: loadingParent } = useQuery({
     queryKey: ['parent', id],
@@ -59,7 +100,6 @@ export function ParentEditPage() {
       firstName: '',
       lastName: '',
       email: '',
-      isActive: true,
     },
   })
 
@@ -70,15 +110,20 @@ export function ParentEditPage() {
         firstName: parent.firstName || '',
         lastName: parent.lastName || '',
         email: parent.email || '',
-        isActive: parent.isActive ?? true,
       })
       setEditPhones(phones.length ? phones : [''])
-      const linked = (allStudents ?? []).filter((s) =>
-        (s as any).parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
+    }
+  }, [parent, form])
+
+  useEffect(() => {
+    if (parent && allStudents && !studentIdsInitialized.current) {
+      studentIdsInitialized.current = true
+      const linked = allStudents.filter((s) =>
+        s.parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
       )
       setSelectedStudentIds(linked.map((s) => s.id))
     }
-  }, [parent, allStudents, id, form])
+  }, [parent, allStudents, id])
 
   const updateMutation = useMutation({
     mutationFn: async (values: ParentFormValues) => {
@@ -93,7 +138,6 @@ export function ParentEditPage() {
         phone: phones[0] || null,
         phones: phones.length > 0 ? phones.map((v, i) => ({ value: v, sortOrder: i })) : undefined,
         role: 'PARENT',
-        isActive: values.isActive,
       })
       const currentlyLinked = (allStudents ?? []).filter((s) =>
         (s as any).parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
@@ -198,12 +242,21 @@ export function ParentEditPage() {
                       <FormLabel>Nom *</FormLabel>
                       <FormControl>
                         <Input placeholder="Nom" {...field} />
+
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+
+              <PhotoUpload
+                src={parent?.photoUrl}
+                firstName={form.watch('firstName')}
+                lastName={form.watch('lastName')}
+                onUpload={(file) => photoMutation.mutateAsync(file)}
+                onDelete={() => deletePhotoMutation.mutateAsync()}
+              />
 
               <FormField
                 control={form.control}
@@ -263,27 +316,6 @@ export function ParentEditPage() {
                   </Button>
                 )}
               </div>
-
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut</FormLabel>
-                    <FormControl>
-                      <Combobox
-                        options={[
-                          { value: 'true', label: 'Actif' },
-                          { value: 'false', label: 'Inactif' },
-                        ]}
-                        value={String(field.value)}
-                        onValueChange={(v) => field.onChange(v === 'true')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Élèves liés</label>

@@ -1,24 +1,28 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Pencil1Icon, PlusIcon, CheckCircledIcon, CircleIcon } from '@radix-ui/react-icons'
-import client from '@/api/client'
-import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
-import type { ApiResponse, PaginatedResponse } from '@/types'
+import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { queryEntities, saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
+import { loadCustomFeeNames, saveCustomFeeItem } from '@/lib/db/pouchdb'
+import type { FeeStructure as FeeType, Level } from '@/types'
+import type { CustomFeeItem } from '@/lib/db/pouchdb'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Combobox } from '@/components/ui/combobox'
+import { DataTable } from '@/components/ui/data-table'
+import type { SortDirection, ColumnDef } from '@/components/ui/data-table'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
 } from '@/components/ui/dialog'
 import {
   Form,
@@ -28,81 +32,94 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
-
-interface FeeStructure {
-  id: string
-  label: string
-  amount: number
-  dueDay: number
-  description?: string
-  isActive: boolean
-  createdAt: string
-}
 
 const feeSchema = z.object({
-  label: z.string().min(1, 'Le libellé est requis'),
+  label: z.string().optional(),
   amount: z.coerce.number().positive('Le montant doit être positif'),
   dueDay: z.coerce
     .number()
     .min(1, 'Le jour doit être entre 1 et 28')
     .max(28, 'Le jour doit être entre 1 et 28'),
-  description: z.string().optional()
+  description: z.string().optional(),
+  levelId: z.string().optional(),
+  feeType: z.enum(['TUITION', 'ANNUAL', 'OTHER']),
 })
 
 type FeeValues = z.infer<typeof feeSchema>
 
+const FEE_TYPE_LABELS: Record<string, string> = {
+  TUITION: 'Écolage',
+  ANNUAL: 'Frais annuels',
+  OTHER: 'Autre',
+}
+
 export function FeeStructurePage() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingFee, setEditingFee] = useState<FeeStructure | null>(null)
+  const [editingFee, setEditingFee] = useState<FeeType | null>(null)
 
   const { data: fees, isLoading } = useQuery({
     queryKey: ['fees'],
     queryFn: async () => {
-      const items = await queryEntities<FeeStructure>('Fee')
+      const items = await queryEntities<FeeType>('FeeStructure')
       return items ?? []
     }
   })
 
+  const { data: levels } = useQuery({
+    queryKey: ['levels'],
+    queryFn: async () => {
+      const items = await queryEntities<Level>('Level')
+      return items ?? []
+    }
+  })
+
+  const [customLabel, setCustomLabel] = useState('')
+  const [customFeeItems, setCustomFeeItems] = useState<CustomFeeItem[]>([])
+  const [sortBy, setSortBy] = useState<string>('')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadCustomFeeNames().then(setCustomFeeItems)
+  }, [])
+
   const form = useForm<FeeValues>({
     resolver: zodResolver(feeSchema),
-    defaultValues: { label: '', amount: 0, dueDay: 5, description: '' }
+    defaultValues: { label: '', amount: 0, dueDay: 5, description: '', levelId: '', feeType: 'TUITION' }
   })
 
   const createMutation = useMutation({
     mutationFn: async (values: FeeValues) => {
-      await saveEntity('Fee', {
+      await saveEntity('FeeStructure', {
         id: crypto.randomUUID(),
         ...values,
+        levelId: values.levelId || null,
         isActive: true,
-        isMandatory: false,
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fees'] })
-      toast.success('Frais créé avec succès (mode hors-ligne)')
+      toast.success('Frais créé')
       setDialogOpen(false)
       form.reset()
     },
-    onError: () => toast.error('Erreur lors de la création des frais')
+    onError: () => toast.error('Erreur lors de la création')
   })
 
   const updateMutation = useMutation({
     mutationFn: async (values: { id: string; data: Partial<FeeValues> }) => {
-      await saveEntity('Fee', { id: values.id, ...values.data })
+      await saveEntity('FeeStructure', {
+        id: values.id,
+        ...values.data,
+        levelId: values.data.levelId || null,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fees'] })
-      toast.success('Frais mis à jour (mode hors-ligne)')
+      toast.success('Frais mis à jour')
       setEditingFee(null)
       setDialogOpen(false)
       form.reset()
@@ -112,44 +129,128 @@ export function FeeStructurePage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      await saveEntity('Fee', { id, isActive })
+      await saveEntity('FeeStructure', { id, isActive })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fees'] })
     }
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteEntity('FeeStructure', id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fees'] })
+      toast.success('Frais supprimé')
+      setDeleteId(null)
+    },
+    onError: () => toast.error('Erreur lors de la suppression'),
+  })
+
   function openCreateDialog() {
     setEditingFee(null)
-    form.reset({ label: '', amount: 0, dueDay: 5, description: '' })
+    setCustomLabel('')
+    form.reset({ amount: 0, dueDay: 5, description: '', levelId: '', feeType: 'TUITION' })
     setDialogOpen(true)
   }
 
-  function openEditDialog(fee: FeeStructure) {
+  function openEditDialog(fee: FeeType) {
     setEditingFee(fee)
+    setCustomLabel(fee.feeType === 'OTHER' ? fee.label : '')
     form.reset({
-      label: fee.label,
       amount: fee.amount,
       dueDay: fee.dueDay,
-      description: fee.description ?? ''
+      description: fee.description ?? '',
+      levelId: fee.levelId ?? '',
+      feeType: fee.feeType ?? 'TUITION',
     })
     setDialogOpen(true)
   }
 
   function onSubmit(values: FeeValues) {
+    const label = values.feeType === 'OTHER'
+      ? customLabel || 'Autre'
+      : FEE_TYPE_LABELS[values.feeType] || values.feeType
+    const payload = { ...values, label }
     if (editingFee) {
-      updateMutation.mutate({ id: editingFee.id, data: values })
+      updateMutation.mutate({ id: editingFee.id, data: payload })
     } else {
-      createMutation.mutate(values)
+      if (values.feeType === 'OTHER' && customLabel && !customFeeItems.some((i) => i.name === customLabel)) {
+        saveCustomFeeItem({ name: customLabel, amount: values.amount }).then(() => {
+          loadCustomFeeNames().then(setCustomFeeItems)
+        })
+      }
+      createMutation.mutate(payload)
     }
   }
+
+  const levelOptions = (levels ?? []).map((l) => ({ value: l.id, label: l.name }))
+
+  const levelMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const l of levels ?? []) map[l.id] = l.name
+    return map
+  }, [levels])
+
+  const filtered = useMemo(() => {
+    let items = fees ?? []
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      items = items.filter((f) => f.label.toLowerCase().includes(q))
+    }
+    if (sortBy) {
+      items = [...items].sort((a, b) => {
+        const aVal = a[sortBy as keyof FeeType] ?? ''
+        const bVal = b[sortBy as keyof FeeType] ?? ''
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+    return items
+  }, [fees, search, sortBy, sortDirection])
+
+  const limit = 20
+  const total = filtered.length
+  const paginated = filtered.slice((page - 1) * limit, page * limit)
+
+  const columns = [
+    { key: 'label', label: 'Type de frais', sortable: true, filterable: true },
+    {
+      key: 'level',
+      label: 'Niveau',
+      sortable: true,
+      render: (fee: FeeType) => levelMap[fee.levelId ?? ''] || <span className="text-muted-foreground">Tous</span>,
+    },
+    {
+      key: 'amount',
+      label: 'Montant',
+      sortable: true,
+      render: (fee: FeeType) => `${fee.amount.toLocaleString('fr-FR')} Ar`,
+    },
+    {
+      key: 'isActive',
+      label: 'Statut',
+      sortable: true,
+      render: (fee: FeeType) => (
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={fee.isActive}
+            onCheckedChange={(checked) => toggleMutation.mutate({ id: fee.id, isActive: checked })}
+          />
+          <Badge variant={fee.isActive ? 'default' : 'secondary'}>
+            {fee.isActive ? 'Actif' : 'Inactif'}
+          </Badge>
+        </div>
+      ),
+    },
+  ] satisfies ColumnDef<FeeType>[]
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Structure des frais</h2>
-          <p className="text-muted-foreground">Définir et gérer les frais de scolarité.</p>
+          <p className="text-muted-foreground">Définir les frais par niveau (écolage, frais annuels).</p>
         </div>
         <Button className="gap-2" onClick={openCreateDialog}>
           <PlusIcon className="h-4 w-4" />
@@ -157,66 +258,48 @@ export function FeeStructurePage() {
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Libellé</TableHead>
-                <TableHead>Montant</TableHead>
-                <TableHead>Jour d'échéance</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
-              ) : fees.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Aucun frais défini
-                  </TableCell>
-                </TableRow>
-              ) : (
-                fees.map((fee) => (
-                  <TableRow key={fee.id}>
-                    <TableCell className="font-medium">{fee.label}</TableCell>
-                    <TableCell>{fee.amount.toLocaleString('fr-FR')} Ar</TableCell>
-                    <TableCell>Le {fee.dueDay} de chaque mois</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                      {fee.description || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={fee.isActive}
-                          onCheckedChange={(checked) =>
-                            toggleMutation.mutate({ id: fee.id, isActive: checked })
-                          }
-                        />
-                        <Badge variant={fee.isActive ? 'default' : 'secondary'}>
-                          {fee.isActive ? 'Actif' : 'Inactif'}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(fee)}>
-                        <Pencil1Icon className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={paginated}
+        total={total}
+        page={page}
+        limit={limit}
+        onPageChange={setPage}
+        onSortChange={(key, dir) => { setSortBy(key); setSortDirection(dir); setPage(1) }}
+        sortKey={sortBy}
+        sortDirection={sortDirection}
+        filters={{ label: search }}
+        onFilterChange={(key, value) => { setSearch(value); setPage(1) }}
+        onBulkDelete={(ids) => {
+          Promise.all(ids.map((id) => deleteEntity('FeeStructure', id)))
+            .then(() => {
+              queryClient.invalidateQueries({ queryKey: ['fees'] })
+              toast.success(`${ids.length} frais supprimé(s)`)
+            })
+            .catch(() => toast.error('Erreur lors de la suppression'))
+        }}
+        getRowId={(fee) => fee.id}
+        isLoading={isLoading}
+        emptyMessage="Aucun frais défini"
+        bulkDeleteLabel="frais"
+        renderRowActions={(fee) => (
+          <>
+            <Button variant="ghost" size="icon" onClick={() => openEditDialog(fee)}>
+              <Pencil1Icon className="h-4 w-4" />
+            </Button>
+            <ConfirmDialog
+              open={deleteId === fee.id}
+              onOpenChange={(open) => !open && setDeleteId(null)}
+              onConfirm={() => deleteMutation.mutate(fee.id)}
+              title="Supprimer le frais"
+              description="Êtes-vous sûr ? Cette action est irréversible."
+            />
+            <Button variant="ghost" size="icon" onClick={() => setDeleteId(fee.id)}>
+              <TrashIcon className="h-4 w-4 text-destructive" />
+            </Button>
+          </>
+        )}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -227,17 +310,85 @@ export function FeeStructurePage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="label"
+                name="feeType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Libellé</FormLabel>
+                    <FormLabel>Type de frais</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Frais de scolarité annuels" {...field} />
+                      <Combobox
+                        options={[
+                          { value: 'TUITION', label: 'Écolage' },
+                          { value: 'ANNUAL', label: 'Frais annuels' },
+                          { value: '__custom__', label: 'Autre (saisie libre)' },
+                          ...customFeeItems.map((item) => ({
+                            value: `custom_${item.name}`,
+                            label: `${item.name} (${item.amount.toLocaleString()} Ar)`,
+                          })),
+                        ]}
+                        value={
+                          field.value === 'OTHER'
+                            ? (editingFee?.feeType === 'OTHER' && editingFee.label
+                              ? `custom_${editingFee.label}`
+                              : '__custom__')
+                            : field.value
+                        }
+                        onValueChange={(v) => {
+                          if (v === '__custom__') {
+                            field.onChange('OTHER')
+                            setCustomLabel('')
+                          } else if (v.startsWith('custom_')) {
+                            const name = v.slice(7)
+                            const item = customFeeItems.find((i) => i.name === name)
+                            field.onChange('OTHER')
+                            setCustomLabel(name)
+                            if (item) form.setValue('amount', item.amount)
+                          } else {
+                            field.onChange(v)
+                            setCustomLabel('')
+                          }
+                        }}
+                        placeholder="Sélectionner..."
+                        searchPlaceholder="Rechercher..."
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {form.watch('feeType') === 'OTHER' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Nom personnalisé</label>
+                  <Input
+                    placeholder="Ex: Frais de transport, tenue..."
+                    value={customLabel}
+                    onChange={(e) => setCustomLabel(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <FormField
+                control={form.control}
+                name="levelId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Niveau</FormLabel>
+                    <FormControl>
+                      <Combobox
+                        options={[{ value: '__all__', label: 'Tous les niveaux' }, ...levelOptions]}
+                        value={field.value || '__all__'}
+                        onValueChange={(v) => field.onChange(v === '__all__' ? '' : v)}
+                        placeholder="Sélectionner un niveau..."
+                        searchPlaceholder="Rechercher..."
+                        emptyText="Aucun niveau trouvé"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="amount"

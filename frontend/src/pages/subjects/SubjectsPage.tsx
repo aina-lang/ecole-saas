@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -6,8 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { queryEntities, deleteEntity, saveEntity, countEntities } from '@/lib/db/pouchdb-compat'
-import { LEVELS } from '@/lib/levels'
 import { cn } from '@/lib/utils'
+import type { Level } from '@/types'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,7 @@ interface Subject {
   name: string
   code: string | null
   level?: string | null
+  levelId?: string | null
   coefficient: number
 }
 
@@ -75,6 +76,22 @@ export function SubjectsPage() {
     },
   })
 
+  const { data: levels } = useQuery({
+    queryKey: ['levels'],
+    queryFn: () => queryEntities<Level>('Level'),
+  })
+
+  // Seule source de vérité pour les niveaux : les vrais enregistrements Level
+  // (gérés dans Administration > Niveaux). Avant, une liste figée servait de
+  // repli quand aucun Level n'existait encore, ce qui pouvait enregistrer une
+  // matière avec un niveau texte libre jamais relié à un vrai Level (levelId
+  // resté null pour toujours, même après création du Level correspondant).
+  const levelOptions = useMemo(() => {
+    return [...(levels ?? [])]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((l) => ({ value: l.id, label: l.name }))
+  }, [levels])
+
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectSchema),
     defaultValues: { name: '', code: '', coefficient: 1, level: '__none__' }
@@ -91,7 +108,10 @@ export function SubjectsPage() {
     form.reset({
       name: subject.name,
       code: subject.code ?? '',
-      level: subject.level ?? '__none__',
+      // Le Combobox est maintenant indexé par id de Level (pas par nom) —
+      // c'était le bug qui empêchait le niveau existant de s'afficher
+      // pré-sélectionné à l'édition.
+      level: subject.levelId ?? '__none__',
       coefficient: subject.coefficient,
     })
     setOpen(true)
@@ -99,10 +119,13 @@ export function SubjectsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: SubjectFormValues) => {
+      const selectedId = values.level && values.level !== '__none__' ? values.level : undefined
+      const levelEntity = selectedId ? levels?.find((l) => l.id === selectedId) : undefined
       const payload: Record<string, unknown> = {
         name: values.name,
         code: values.code || undefined,
-        level: values.level && values.level !== '__none__' ? values.level : undefined,
+        level: levelEntity?.name,
+        levelId: levelEntity?.id || null,
         coefficient: values.coefficient,
       }
       if (editing) {
@@ -211,7 +234,11 @@ export function SubjectsPage() {
                 key: 'level',
                 label: 'Niveau',
                 sortable: true,
-                render: (subject) => (subject as any).level || '-',
+                render: (subject) => {
+                  const s = subject as any
+                  const lvl = levels?.find((l) => l.id === s.levelId || l.name === s.level)
+                  return lvl?.name ?? s.level ?? '-'
+                },
               },
               {
                 key: 'coefficient',
@@ -323,10 +350,15 @@ export function SubjectsPage() {
                         searchPlaceholder="Rechercher un niveau..."
                         options={[
                           { value: '__none__', label: 'Aucun' },
-                          ...LEVELS.map((lvl) => ({ value: lvl, label: lvl })),
+                          ...levelOptions,
                         ]}
                       />
                     </FormControl>
+                    {levelOptions.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Aucun niveau défini — créez-les d'abord dans Administration &gt; Niveaux.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

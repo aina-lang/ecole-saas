@@ -1,13 +1,15 @@
+import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getEntityById, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { User, Student } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
+import { getPhotoUrl } from '@/api/client'
+import { getInitials } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Pencil2Icon, ArrowLeftIcon } from '@radix-ui/react-icons'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 
 export function ParentDetailPage() {
   const navigate = useNavigate()
@@ -21,16 +23,21 @@ export function ParentDetailPage() {
     },
   })
 
-  const { data: linkedStudents } = useQuery({
-    queryKey: ['parent-students', id],
+  const { data: allStudents, isFetching: fetchingStudents } = useQuery({
+    queryKey: ['students'],
     queryFn: async () => {
-      const all = await queryEntities<Student>('Student')
-      return all.filter((s) =>
-        (s as any).parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
-      )
+      const docs = await queryEntities<Student>('Student')
+      return docs ?? []
     },
-    enabled: !!parent,
+    staleTime: 30_000,
   })
+
+  const linkedStudents = useMemo(() => {
+    if (!allStudents) return undefined
+    return allStudents.filter((s) =>
+      (s as any).parents?.some((p: any) => p.parentId === id || p.parent?.id === id)
+    )
+  }, [allStudents, id])
 
   if (isLoading) {
     return (
@@ -69,9 +76,10 @@ export function ParentDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-6">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-2xl font-medium text-primary">
-              {initials}
-            </div>
+            <Avatar className="h-20 w-20 text-2xl">
+              <AvatarImage src={getPhotoUrl(parent.photoUrl)} alt={`${parent.firstName} ${parent.lastName}`} />
+              <AvatarFallback className="text-2xl font-medium">{initials}</AvatarFallback>
+            </Avatar>
             <div className="flex-1 space-y-1">
               <h3 className="text-2xl font-bold">
                 {parent.firstName} {parent.lastName}
@@ -121,10 +129,12 @@ export function ParentDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Élèves liés ({linkedStudents?.length || 0})</CardTitle>
+          <CardTitle>Élèves liés {linkedStudents ? `(${linkedStudents.length})` : ''}</CardTitle>
         </CardHeader>
         <CardContent>
-          {linkedStudents && linkedStudents.length > 0 ? (
+          {fetchingStudents ? (
+            <p className="text-center text-muted-foreground py-4">Chargement...</p>
+          ) : linkedStudents && linkedStudents.length > 0 ? (
             <div className="space-y-2">
               {linkedStudents.map((student) => {
                 const link = (student as any).parents?.find(

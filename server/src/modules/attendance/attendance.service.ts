@@ -48,10 +48,16 @@ export class AttendanceService {
   }
 
   async create(tenantId: string, dto: CreateAttendanceDto, userId?: string) {
-    const existing = await this.prisma.attendance.findUnique({
-      where: { studentId_date: { studentId: dto.studentId, date: new Date(dto.date) } },
+    const existing = await this.prisma.attendance.findFirst({
+      where: {
+        studentId: dto.studentId,
+        date: new Date(dto.date),
+        halfDay: dto.halfDay ?? null,
+        timetableSlotId: dto.timetableSlotId ?? null,
+        deletedAt: null,
+      },
     });
-    if (existing && !existing.deletedAt) {
+    if (existing) {
       throw new ConflictException('Une présence existe déjà pour cet étudiant à cette date');
     }
 
@@ -67,6 +73,10 @@ export class AttendanceService {
         studentId: dto.studentId,
         classId,
         date: new Date(dto.date),
+        halfDay: dto.halfDay ?? null,
+        timetableSlotId: dto.timetableSlotId ?? null,
+        subjectId: dto.subjectId ?? null,
+        teacherId: dto.teacherId ?? null,
         status: dto.status,
         justification: dto.justification,
         updatedBy: userId,
@@ -161,8 +171,14 @@ export class AttendanceService {
 
     for (const record of dto.records) {
       try {
-        const existing = await this.prisma.attendance.findUnique({
-          where: { studentId_date: { studentId: record.studentId, date: new Date(dto.date) } },
+        const existing = await this.prisma.attendance.findFirst({
+          where: {
+            studentId: record.studentId,
+            date: new Date(dto.date),
+            halfDay: (record as any).halfDay ?? null,
+            timetableSlotId: (record as any).timetableSlotId ?? null,
+            deletedAt: null,
+          },
         });
 
         if (existing && !existing.deletedAt) {

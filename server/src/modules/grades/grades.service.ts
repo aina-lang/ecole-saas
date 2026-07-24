@@ -268,22 +268,22 @@ export class GradesService {
       include: { subject: { select: { id: true, name: true, coefficient: true } } },
     });
 
-    const subjectMap = new Map<string, { subject: any; values: number[]; maxValues: number[]; coefficients: number[] }>();
+    const subjectMap = new Map<string, { subject: any; values: number[]; maxValues: number[]; coeff: number }>();
 
     for (const g of grades) {
       if (!subjectMap.has(g.subjectId)) {
-        subjectMap.set(g.subjectId, { subject: g.subject, values: [], maxValues: [], coefficients: [] });
+        subjectMap.set(g.subjectId, { subject: g.subject, values: [], maxValues: [], coeff: g.subject.coefficient });
       }
       const entry = subjectMap.get(g.subjectId)!;
       entry.values.push(g.value);
       entry.maxValues.push(g.maxValue);
-      entry.coefficients.push(g.coefficient);
     }
 
     const result: SubjectAverage[] = [];
     for (const [, entry] of subjectMap) {
-      const weightedSum = entry.values.reduce((sum, v, i) => sum + (v / entry.maxValues[i]) * 20 * entry.coefficients[i], 0);
-      const totalWeight = entry.coefficients.reduce((a, b) => a + b, 0);
+      const coeff = entry.coeff;
+      const weightedSum = entry.values.reduce((sum, v, i) => sum + (v / entry.maxValues[i]) * 20 * coeff, 0);
+      const totalWeight = coeff * entry.values.length;
       result.push({
         subject: entry.subject,
         average: totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : 0,
@@ -302,8 +302,8 @@ export class GradesService {
 
     if (grades.length === 0) return { average: 0, count: 0 };
 
-    const weightedSum = grades.reduce((sum, g) => sum + (g.value / g.maxValue) * 20 * g.coefficient, 0);
-    const totalWeight = grades.reduce((sum, g) => sum + g.coefficient, 0);
+    const weightedSum = grades.reduce((sum, g) => sum + (g.value / g.maxValue) * 20 * g.subject.coefficient, 0);
+    const totalWeight = grades.reduce((sum, g) => sum + g.subject.coefficient, 0);
 
     const bySubject = await this.calculateAveragesBySubject(studentId, tenantId);
 
@@ -318,12 +318,13 @@ export class GradesService {
   async calculateGeneralAverage(studentId: string, tenantId: string) {
     const grades = await this.prisma.grade.findMany({
       where: { studentId, tenantId, deletedAt: null },
+      include: { subject: { select: { coefficient: true } } },
     });
 
     if (grades.length === 0) return { average: 0, count: 0 };
 
-    const weightedSum = grades.reduce((sum, g) => sum + (g.value / g.maxValue) * 20 * g.coefficient, 0);
-    const totalWeight = grades.reduce((sum, g) => sum + g.coefficient, 0);
+    const weightedSum = grades.reduce((sum, g) => sum + (g.value / g.maxValue) * 20 * g.subject.coefficient, 0);
+    const totalWeight = grades.reduce((sum, g) => sum + g.subject.coefficient, 0);
 
     return {
       average: totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : 0,

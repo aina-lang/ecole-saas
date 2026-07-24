@@ -81,14 +81,14 @@ export function UserManagementPage() {
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['admin-users', search, roleFilter, page],
     queryFn: async () => {
-      const offset = (page - 1) * limit
-      const params: Record<string, string | number> = { limit, offset }
+      const params: Record<string, string | number> = {}
       if (search) params.search = search
       if (roleFilter !== 'all') params.role = roleFilter
-      const [data, total] = await Promise.all([
-        queryEntities<UserWithMeta>('User', params),
-        countEntities<UserWithMeta>('User', params),
-      ])
+      const allUsers = await queryEntities<UserWithMeta>('User', params)
+      const filtered = allUsers.filter((u) => u.role !== 'PARENT' && u.role !== 'TEACHER')
+      const total = filtered.length
+      const offset = (page - 1) * limit
+      const data = filtered.slice(offset, offset + limit)
       return { data, total } as PaginatedResponse<UserWithMeta>
     }
   })
@@ -166,9 +166,7 @@ export function UserManagementPage() {
               options={[
                 { value: 'all', label: 'Tous les rôles' },
                 { value: 'ADMIN', label: 'Administrateur' },
-                { value: 'TEACHER', label: 'Enseignant' },
                 { value: 'SECRETARY', label: 'Secrétaire' },
-                { value: 'PARENT', label: 'Parent' }
               ]}
               value={roleFilter}
               onValueChange={(v) => { setRoleFilter(v); setPage(1) }}

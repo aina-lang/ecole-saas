@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Save, ArrowLeft } from 'lucide-react'
 
 import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
-import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
-import type { Student, Subject } from '@/types'
+import { saveEntity, queryEntities, getEntityById } from '@/lib/db/pouchdb-compat'
+import type { Student, Subject, Grade } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
+import { EVALUATION_TYPES, EVALUATION_TYPE_LABELS } from '@/lib/evaluation-types'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,8 @@ interface StudentGradeEntry {
 export function GradeEntryPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
 
   const [classId, setClassId] = useState<string>('')
   const [subjectId, setSubjectId] = useState<string>('')
@@ -51,6 +54,7 @@ export function GradeEntryPage() {
   const [periodId, setPeriodId] = useState<string>('')
   const [entries, setEntries] = useState<StudentGradeEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [editLoaded, setEditLoaded] = useState(false)
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
 
@@ -82,6 +86,32 @@ export function GradeEntryPage() {
   useEffect(() => {
     setSubjectId('')
   }, [classId])
+
+  useEffect(() => {
+    if (!editId || editLoaded) return
+    ;(async () => {
+      try {
+        const grade = await getEntityById<Grade>('Grade', editId)
+        if (!grade) { toast.error('Note introuvable'); return }
+        const student = await getEntityById<Student>('Student', grade.studentId)
+        setClassId(grade.classId ?? '')
+        setSubjectId(grade.subjectId)
+        setEvaluationType(grade.evaluationType)
+        setMaxValue(String(grade.maxValue))
+        setCoefficient(String(grade.coefficient))
+        setPeriodId(grade.periodId ?? '')
+        setEntries([{
+          studentId: grade.studentId,
+          studentName: student ? `${student.lastName} ${student.firstName ?? ''}` : grade.studentId,
+          value: String(grade.value),
+          comment: grade.comment ?? '',
+        }])
+        setEditLoaded(true)
+      } catch {
+        toast.error('Erreur lors du chargement de la note')
+      }
+    })()
+  }, [editId, editLoaded])
 
   const { data: students, isLoading: loadingStudents } = useQuery<Student[]>({
     queryKey: ['students', classId],
@@ -181,6 +211,13 @@ export function GradeEntryPage() {
     if (!validate()) return
     setSubmitting(true)
 
+    let academicYearId: string | undefined
+    try {
+      const years = await queryEntities<any>('AcademicYear' as any)
+      const current = years?.find((y: any) => y.isCurrent)
+      academicYearId = current?.id || undefined
+    } catch { /* silent */ }
+
     const gradeEntries = entries
       .filter((e) => e.value !== '')
       .map((e) => ({
@@ -193,16 +230,23 @@ export function GradeEntryPage() {
         evaluationType: evaluationType,
         periodId: periodId || undefined,
         comment: e.comment || undefined,
+        academicYearId,
         createdAt: new Date().toISOString()
       }))
 
     try {
-      for (const entry of gradeEntries) {
-        await saveEntity('Grade', entry)
+      if (editId) {
+        await saveEntity('Grade', { id: editId, ...gradeEntries[0] })
+        toast.success('Note mise à jour')
+        navigate('/grades')
+      } else {
+        for (const entry of gradeEntries) {
+          await saveEntity('Grade', entry)
+        }
+        toast.success(`${gradeEntries.length} note(s) enregistrée(s) avec succès`)
+        queryClient.invalidateQueries({ queryKey: ['grades'] })
+        setEntries((prev) => prev.map((e) => ({ ...e, value: '', comment: '' })))
       }
-      toast.success(`${gradeEntries.length} note(s) enregistrée(s) avec succès`)
-      queryClient.invalidateQueries({ queryKey: ['grades'] })
-      setEntries((prev) => prev.map((e) => ({ ...e, value: '', comment: '' })))
     } catch {
       toast.error("Erreur lors de l'enregistrement des notes")
     } finally {
@@ -261,15 +305,10 @@ export function GradeEntryPage() {
                 value={evaluationType}
                 onValueChange={setEvaluationType}
                 placeholder="Sélectionner"
-                options={[
-                  { value: 'exam', label: 'Examen' },
-                  { value: 'test', label: 'Test' },
-                  { value: 'homework', label: 'Devoir' },
-                  { value: 'oral', label: 'Oral' },
-                  { value: 'project', label: 'Projet' },
-                  { value: 'controle', label: 'Contrôle' },
-                  { value: 'examen_blanc', label: 'Examen blanc' }
-                ]}
+                options={EVALUATION_TYPES.map((t) => ({
+                  value: t,
+                  label: EVALUATION_TYPE_LABELS[t],
+                }))}
               />
             </div>
             <div className="space-y-1.5">
@@ -288,8 +327,7 @@ export function GradeEntryPage() {
                 min="0.5"
                 step="0.5"
                 value={coefficient}
-                readOnly
-                className="bg-muted"
+                onChange={(e) => setCoefficient(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">

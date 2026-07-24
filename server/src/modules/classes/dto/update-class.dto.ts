@@ -12,6 +12,10 @@ export class UpdateClassDto {
 
   @IsOptional()
   @IsString()
+  levelId?: string;
+
+  @IsOptional()
+  @IsString()
   room?: string;
 
   @IsOptional()

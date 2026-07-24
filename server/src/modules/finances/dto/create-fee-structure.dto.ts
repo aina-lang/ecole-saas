@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsBoolean, Min, IsEnum } from 'class-validator';
+
+export enum FeeTypeDto {
+  TUITION = 'TUITION',
+  ANNUAL = 'ANNUAL',
+  OTHER = 'OTHER',
+}
 
 export class CreateFeeStructureDto {
   @IsString()
@@ -22,4 +28,12 @@ export class CreateFeeStructureDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  levelId?: string;
+
+  @IsOptional()
+  @IsEnum(FeeTypeDto)
+  feeType?: FeeTypeDto;
 }

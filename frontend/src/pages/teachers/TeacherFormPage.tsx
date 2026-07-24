@@ -42,6 +42,8 @@ export function TeacherFormPage() {
       setLastName(t.user?.lastName ?? t.user_lastName ?? '')
       setEmail(t.user?.email ?? t.user_email ?? '')
       setSpecialty(t.specialty ?? '')
+      if (t.classIds) setSelectedClassIds(t.classIds)
+      if (t.subjectIds) setSelectedSubjectIds(t.subjectIds)
       const tPhones: string[] = []
       for (let i = 0; i < 3; i++) {
         const v = t[`user_phone_${i}`]
@@ -60,6 +62,8 @@ export function TeacherFormPage() {
         await saveEntity('Teacher', {
           id: existingTeacher.id,
           specialty,
+          classIds: selectedClassIds,
+          subjectIds: selectedSubjectIds,
           user_firstName: firstName,
           user_lastName: lastName,
           user_email: email || null,

@@ -8,11 +8,10 @@ import type { Teacher } from '@/types'
 
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Combobox } from '@/components/ui/combobox'
+import { Card, CardContent } from '@/components/ui/card'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import { Badge } from '@/components/ui/badge'
-import { CalendarIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { ReloadIcon } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 
 const statusColors: Record<string, string> = {
@@ -31,7 +30,6 @@ const statusLabels: Record<string, string> = {
 
 export function TeacherAttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [refreshKey, setRefreshKey] = useState(0)
   const queryClient = useQueryClient()
   const today = new Date().toISOString().split('T')[0]
 
@@ -44,42 +42,94 @@ export function TeacherAttendancePage() {
   })
 
   const { data: attendances, isLoading: isLoadingAttendances } = useQuery({
-    queryKey: ['teacher-attendance', date, refreshKey],
-    queryFn: () => queryEntities('TeacherAttendance', { date })
+    queryKey: ['teacher-attendance', date],
+    queryFn: () => queryEntities('TeacherAttendance', { date }),
   })
 
   const isLoading = isLoadingTeachers || isLoadingAttendances
 
   const handleRefresh = () => {
     refetchTeachers()
-    queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] })
+    queryClient.invalidateQueries({ queryKey: ['teacher-attendance', date] })
   }
 
   const attendanceMap = new Map((attendances ?? []).map((a: any) => [a.teacherId, a]))
 
-  const bulkMutation = useMutation({
-    mutationFn: async (records: { teacherId: string; status: string; justification?: string }[]) => {
-      for (const r of records) {
-        await saveEntity('TeacherAttendance', {
-          id: crypto.randomUUID(),
-          teacherId: r.teacherId,
-          date,
-          status: r.status,
-          justification: r.justification || null,
-        })
-      }
+  const saveMutation = useMutation({
+    mutationFn: async (record: { teacherId: string; status: string }) => {
+      const existing = attendanceMap.get(record.teacherId)
+      await saveEntity('TeacherAttendance', {
+        id: existing?.id || crypto.randomUUID(),
+        teacherId: record.teacherId,
+        date,
+        status: record.status,
+        justification: null,
+      })
     },
     onSuccess: () => {
-      setRefreshKey((k) => k + 1)
-      queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] })
-      toast.success('Présences enregistrées (mode hors-ligne)')
+      queryClient.invalidateQueries({ queryKey: ['teacher-attendance', date] })
+      toast.success('Présence enregistrée')
     },
-    onError: () => toast.error("Erreur lors de l'enregistrement")
+    onError: () => toast.error("Erreur lors de l'enregistrement"),
   })
 
   function setStatus(teacherId: string, status: string) {
-    bulkMutation.mutate([{ teacherId, status }])
+    saveMutation.mutate({ teacherId, status })
   }
+
+  const columns: ColumnDef<any>[] = [
+    {
+      key: 'name',
+      label: 'Enseignant',
+      render: (row) => {
+        const first = row.user?.firstName ?? row.user_firstName ?? ''
+        const last = row.user?.lastName ?? row.user_lastName ?? ''
+        return `${first} ${last}`.trim() || 'Sans nom'
+      },
+      className: 'font-medium',
+    },
+    {
+      key: 'specialty',
+      label: 'Spécialité',
+      render: (row) => row.specialty || '-',
+    },
+    {
+      key: 'status',
+      label: 'Statut',
+      render: (row) => {
+        const att = attendanceMap.get(row.id)
+        return att ? (
+          <Badge className={statusColors[att.status] || ''} variant="secondary">
+            {statusLabels[att.status] || att.status}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground text-sm">Non marqué</span>
+        )
+      },
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => {
+        const att = attendanceMap.get(row.id)
+        return (
+          <div className="flex gap-1">
+            {['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].map((status) => (
+              <Button
+                key={status}
+                size="sm"
+                variant={att?.status === status ? 'default' : 'outline'}
+                onClick={() => setStatus(row.id, status)}
+                disabled={saveMutation.isPending}
+              >
+                {statusLabels[status]}
+              </Button>
+            ))}
+          </div>
+        )
+      },
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -89,12 +139,7 @@ export function TeacherAttendancePage() {
           <p className="text-muted-foreground">Marquer la présence des professeurs</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
             <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
           </Button>
           <DatePicker
@@ -114,81 +159,18 @@ export function TeacherAttendancePage() {
       <Card>
         <CardContent className="p-0">
           <DataTable
-            columns={[
-              {
-                key: 'name',
-                label: 'Enseignant',
-                render: (row) => {
-                  const t = row as any
-                  const first = t.user?.firstName ?? t.user_firstName ?? ''
-                  const last = t.user?.lastName ?? t.user_lastName ?? ''
-                  return `${first} ${last}`.trim() || 'Sans nom'
-                },
-                className: 'font-medium',
-              },
-              {
-                key: 'specialty',
-                label: 'Spécialité',
-                render: (row) => (row as any).specialty || '-',
-              },
-              {
-                key: 'status',
-                label: 'Statut',
-                render: (row) => {
-                  const att = attendanceMap.get((row as any).id)
-                  return att ? (
-                    <Badge className={statusColors[att.status] || ''} variant="secondary">
-                      {statusLabels[att.status] || att.status}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">Non marqué</span>
-                  )
-                },
-              },
-              {
-                key: 'actions',
-                label: 'Actions',
-                render: (row) => {
-                  const att = attendanceMap.get((row as any).id)
-                  return (
-                    <div className="flex gap-1">
-                      {['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].map((status) => (
-                        <Button
-                          key={status}
-                          size="sm"
-                          variant={att?.status === status ? 'default' : 'outline'}
-                          onClick={() => setStatus((row as any).id, status)}
-                          disabled={bulkMutation.isPending}
-                        >
-                          {statusLabels[status]}
-                        </Button>
-                      ))}
-                    </div>
-                  )
-                },
-              },
-            ]}
+            columns={columns}
             data={teachers ?? []}
             total={(teachers ?? []).length}
             page={1}
             limit={100}
             onPageChange={() => {}}
-            getRowId={(row) => (row as any).id}
+            getRowId={(row) => row.id}
             isLoading={isLoading}
             emptyMessage="Aucun enseignant"
           />
         </CardContent>
       </Card>
-
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          onClick={() => queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] })}
-        >
-          <ReloadIcon className="mr-2 h-4 w-4" />
-          Actualiser
-        </Button>
-      </div>
     </div>
   )
 }

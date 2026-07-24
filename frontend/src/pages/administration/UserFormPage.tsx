@@ -75,6 +75,23 @@ function MultiSelect({
   )
 }
 
+// À la création, ce formulaire générique ne doit servir qu'à créer des comptes
+// de staff (Admin/Secrétaire) : les enseignants et parents ont chacun leur
+// propre formulaire dédié (TeacherFormPage, ParentFormPage) avec leurs champs
+// spécifiques — les proposer ici aussi ne faisait que dupliquer ces flux.
+// En modification, on garde tous les rôles pour ne pas casser l'édition d'un
+// compte enseignant/parent existant créé via son propre formulaire.
+const CREATE_ROLE_OPTIONS = [
+  { value: 'ADMIN', label: 'Administrateur' },
+  { value: 'SECRETARY', label: 'Secrétaire' },
+]
+const ALL_ROLE_OPTIONS = [
+  { value: 'ADMIN', label: 'Administrateur' },
+  { value: 'TEACHER', label: 'Enseignant' },
+  { value: 'SECRETARY', label: 'Secrétaire' },
+  { value: 'PARENT', label: 'Parent' },
+]
+
 const userFormSchema = z.object({
   email: z.string().email('Adresse email invalide').optional().or(z.literal('')),
   firstName: z.string().optional().or(z.literal('')),
@@ -117,7 +134,7 @@ export function UserFormPage() {
       email: '',
       firstName: '',
       lastName: '',
-      role: 'TEACHER',
+      role: 'ADMIN',
       password: isEditing ? '' : defaultPassword,
       specialty: ''
     }
@@ -151,7 +168,7 @@ export function UserFormPage() {
           originalName: file.name,
           mimeType: file.type,
         })
-        const localUrl = await api.file.getUrl(result.localPath)
+        const localUrl = await api.file.getUrl((result as any).local_path)
         const existing = await getDocument('User', id)
         if (existing) {
           await putDocument('User', { ...existing, photoUrl: localUrl })
@@ -270,7 +287,7 @@ export function UserFormPage() {
               originalName: pendingPhoto.name,
               mimeType: pendingPhoto.type,
             })
-            const localUrl = await api.file.getUrl(result.localPath)
+            const localUrl = await api.file.getUrl((result as any).local_path)
             const existing = await getDocument('User', localId)
             if (existing) {
               await putDocument('User', { ...existing, photoUrl: localUrl })
@@ -418,17 +435,22 @@ export function UserFormPage() {
               <FormField
                 control={form.control}
                 name="role"
-                render={({ field }) => (
+                render={({ field }) => {
+                  // Enseignant/Parent ne sont plus proposés à la sélection (ils ont
+                  // leurs propres formulaires dédiés) — mais si on édite un compte
+                  // existant qui a déjà ce rôle, on le garde affichable pour ne pas
+                  // vider silencieusement le sélecteur.
+                  const currentRoleOption = ALL_ROLE_OPTIONS.find((o) => o.value === field.value)
+                  const roleOptions =
+                    currentRoleOption && !CREATE_ROLE_OPTIONS.some((o) => o.value === field.value)
+                      ? [...CREATE_ROLE_OPTIONS, currentRoleOption]
+                      : CREATE_ROLE_OPTIONS
+                  return (
                   <FormItem>
                     <FormLabel>Rôle *</FormLabel>
                     <FormControl>
                       <Combobox
-                        options={[
-                          { value: 'ADMIN', label: 'Administrateur' },
-                          { value: 'TEACHER', label: 'Enseignant' },
-                          { value: 'SECRETARY', label: 'Secrétaire' },
-                          { value: 'PARENT', label: 'Parent' },
-                        ]}
+                        options={roleOptions}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner un rôle"
@@ -436,7 +458,8 @@ export function UserFormPage() {
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
+                  )
+                }}
               />
               <div className="space-y-2">
                 <FormLabel>Téléphone (max 3)</FormLabel>

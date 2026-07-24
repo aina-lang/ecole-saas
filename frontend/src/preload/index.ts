@@ -13,19 +13,6 @@ const api = {
       ipcRenderer.invoke('local:set-setting', key, value),
     getAll: () => ipcRenderer.invoke('local:get-all-settings'),
   },
-  sync: {
-    getStatus: () => ipcRenderer.invoke('sync:status'),
-    forceSync: () => ipcRenderer.invoke('sync:force'),
-    getCouchDBConfig: () => ipcRenderer.invoke('sync:get-couchdb-config'),
-    onStatusChanged: (callback: (status: any) => void) => {
-      ipcRenderer.on('sync:status-changed', (_event, data) => callback(data))
-      return () => ipcRenderer.removeAllListeners('sync:status-changed')
-    },
-    onProgress: (callback: (progress: any) => void) => {
-      ipcRenderer.on('sync:progress', (_event, data) => callback(data))
-      return () => ipcRenderer.removeAllListeners('sync:progress')
-    },
-  },
   auth: {
     setToken: (token: string) => ipcRenderer.invoke('auth:set-token', token),
     getToken: () => ipcRenderer.invoke('auth:get-token'),
@@ -49,6 +36,10 @@ const api = {
     toggleMaximize: () => ipcRenderer.send('window:toggle-maximize'),
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  },
+  documents: {
+    print: (html: string, defaultName: string) =>
+      ipcRenderer.invoke('documents:print', { html, defaultName }),
   },
 }
 

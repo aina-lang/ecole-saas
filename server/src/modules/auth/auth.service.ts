@@ -30,12 +30,20 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.adminPassword, 12);
 
+    // Essai gratuit de 14 jours avec les limites du plan STARTER — pas
+    // d'abonnement Stripe tant que l'admin n'a pas payé depuis /billing.
+    // Passé trialEndsAt, le cron BillingService.expireOverdueTrials() bascule
+    // le tenant en PAST_DUE (lecture seule) s'il n'a toujours pas payé.
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
     const result = await this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: {
           name: dto.schoolName,
           plan: 'STARTER',
-          status: 'ACTIVE',
+          status: 'TRIAL',
+          trialEndsAt,
           maxStudents: 200,
           maxTeachers: 30,
           maxStorageMb: 1000,

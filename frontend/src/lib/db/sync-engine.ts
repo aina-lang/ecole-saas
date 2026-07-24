@@ -3,13 +3,12 @@ import { useSyncStore } from '@/stores/sync-store'
 import { createDatabase, createRemoteDatabase, createSync, type EntityType } from './pouchdb'
 
 const SYNC_DEVICE_ID_KEY = 'sync_device_id'
+const SYNC_META_PREFIX = 'ecole_saas_sync_seq_'
 
-/** Résout et assainit le tenantId courant (source : localStorage). */
 function getTenantId(): string {
   return localStorage.getItem('tenantId')?.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default'
 }
 
-/** Construit la clé de la Map activeSyncs en incluant le tenantId. */
 function getSyncKey(entityType: EntityType): string {
   return `${getTenantId()}:${entityType}`
 }
@@ -23,15 +22,79 @@ export interface SyncResult {
   error?: string
 }
 
+// Doit rester alignée avec SYNCABLE_MODELS (server/src/common/prisma/prisma.service.ts)
+// et ENTITIES (server/src/modules/sync/sync-worker.service.ts) : ce sont trois listes
+// dupliquées faute de package partagé entre frontend et server — toute entité ajoutée
+// ici doit l'être aux deux endroits côté serveur, sinon elle se synchronise dans un sens
+// mais pas dans l'autre.
 const SYNC_ENTITY_TYPES: EntityType[] = [
-  // Entités de base — synchronisées depuis le début
   'Student', 'Grade', 'Attendance', 'Class', 'Subject', 'Teacher',
-  // FIXE : entités manquantes — le sync-worker serveur les surveille mais le frontend ne les répliquait pas
   'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
   'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
+  'AuditLog', 'Level',
 ]
 
 const activeSyncs = new Map<string, PouchDB.Replication.Sync>()
+const remainingConflicts = new Map<string, number>()
+
+function pushConflictCount(): void {
+  let total = 0
+  for (const n of remainingConflicts.values()) total += n
+  useSyncStore.getState().setConflicts(total)
+}
+
+/**
+ * Résout les conflits de réplication PouchDB (révisions concurrentes créées
+ * par deux appareils modifiant le même document hors ligne) de façon
+ * déterministe : la révision dont `updatedAt`/`deletedAt` est la plus récente
+ * gagne, plutôt que le choix arbitraire (hash de révision) par défaut de
+ * PouchDB. Les révisions perdantes sont purgées de l'arbre.
+ *
+ * Limite connue : ceci reste un "dernier écrit gagne" au niveau du document
+ * entier (pas de fusion champ par champ). Deux modifications concurrentes sur
+ * des champs différents du même document ne sont pas fusionnées — la version
+ * la plus récente écrase entièrement l'autre. Une vraie fusion nécessiterait
+ * un mécanisme CRDT/3-way merge, hors de portée ici.
+ */
+async function resolveEntityConflicts(entityType: EntityType): Promise<number> {
+  const db = createDatabase(entityType)
+  let unresolved = 0
+  try {
+    const { rows } = await db.allDocs({ include_docs: true, conflicts: true })
+    for (const row of rows as any[]) {
+      const doc = row.doc
+      if (!doc?._conflicts?.length) continue
+
+      const losingRevs: string[] = doc._conflicts
+      const candidates = await Promise.all(
+        losingRevs.map((rev) => db.get(doc._id, { rev }).catch(() => null)),
+      )
+      const versions = [doc, ...candidates.filter(Boolean)] as any[]
+      const timeOf = (v: any) => new Date(v.updatedAt || v.deletedAt || v.createdAt || 0).getTime()
+
+      if (versions.every((v) => !Number.isFinite(timeOf(v)) || timeOf(v) === 0)) {
+        // Aucune des versions n'a de timestamp exploitable — on ne peut pas
+        // choisir un gagnant significatif. On garde le comportement PouchDB
+        // par défaut mais on purge quand même l'arbre pour ne pas le laisser
+        // grossir indéfiniment, et on le compte comme "non résolu de façon fiable".
+        unresolved++
+      } else {
+        const winner = versions.reduce((best, cur) => (timeOf(cur) > timeOf(best) ? cur : best))
+        if (winner._rev !== doc._rev) {
+          const { _rev, ...rest } = winner
+          await db.put({ ...rest, _id: doc._id, _rev: doc._rev })
+        }
+      }
+
+      await Promise.all(
+        losingRevs.map((rev) => db.remove(doc._id, rev).catch(() => {})),
+      )
+    }
+  } finally {
+    db.close()
+  }
+  return unresolved
+}
 
 function getDeviceId(): string {
   let id = localStorage.getItem(SYNC_DEVICE_ID_KEY)
@@ -45,6 +108,16 @@ function getDeviceId(): string {
 function getMetaDb(): PouchDB.Database {
   const tid = getTenantId()
   return new PouchDB(`ecole_saas_${tid}_sync_meta`, { adapter: 'idb' })
+}
+
+// Écrit le dernier update_seq local effectivement poussé/à jour vers CouchDB.
+// C'est cette valeur que getPendingOperations() compare à info().update_seq
+// pour savoir combien de changements locaux n'ont pas encore été envoyés.
+// Avant ce correctif, cette clé n'était jamais écrite : le compteur "en
+// attente" affichait toujours l'intégralité de l'historique local.
+function setLastPushedSeq(entityType: EntityType, seq: number | string): void {
+  const key = `${SYNC_META_PREFIX}${getTenantId()}_${entityType}`
+  localStorage.setItem(key, String(seq))
 }
 
 async function setLastSyncTimestamp(entityType: string, timestamp: string): Promise<void> {
@@ -79,14 +152,32 @@ export async function startEntitySync(entityType: EntityType): Promise<PouchDB.R
   sync.on('change', (change) => {
     if (change.direction === 'push' && change.change?.docs_written) {
       store.setEntityStatus(entityType, { syncing: false })
+      const seq = (change.change as any)?.last_seq
+      if (seq !== undefined) setLastPushedSeq(entityType, seq)
     }
     if (change.direction === 'pull' && change.change?.docs_read) {
       store.setLastSync(new Date().toISOString())
     }
   })
 
-  sync.on('paused', () => {
+  sync.on('paused', async () => {
     store.setSyncing(false)
+    // La réplication est à jour (rattrapée) : c'est le bon moment pour
+    // détecter et résoudre les conflits éventuellement créés par ce cycle.
+    try {
+      const unresolved = await resolveEntityConflicts(entityType)
+      remainingConflicts.set(entityType, unresolved)
+      pushConflictCount()
+    } catch (err) {
+      console.error(`[Sync] Résolution des conflits (${entityType}) échouée:`, err)
+    }
+    const db = createDatabase(entityType)
+    try {
+      const info = await db.info()
+      setLastPushedSeq(entityType, info.update_seq as any)
+    } catch { /* ignoré */ } finally {
+      db.close()
+    }
   })
 
   sync.on('active', () => {
@@ -99,7 +190,15 @@ export async function startEntitySync(entityType: EntityType): Promise<PouchDB.R
 
   sync.on('error', (err) => {
     console.error(`[Sync] ${entityType} replication error:`, err)
+    const msg = String(err?.message || err || '')
+    if (!msg.includes('conflict') && !msg.includes('409')) {
+      store.setError(`Erreur de synchronisation (${entityType}): ${msg.slice(0, 120)}`)
+    }
     activeSyncs.delete(key)
+  })
+
+  sync.on('denied', (err) => {
+    console.warn(`[Sync] ${entityType} replication denied:`, err)
   })
 
   activeSyncs.set(key, sync)
@@ -147,7 +246,13 @@ export async function syncEntityNow(entityType: EntityType): Promise<{
 
     const timestamp = new Date().toISOString()
     await setLastSyncTimestamp(entityType, timestamp)
+    const info = await local.info()
+    setLastPushedSeq(entityType, info.update_seq as any)
     useSyncStore.getState().setLastSync(timestamp)
+
+    const unresolved = await resolveEntityConflicts(entityType)
+    remainingConflicts.set(entityType, unresolved)
+    pushConflictCount()
 
     return {
       docsRead: pullResult.docs_read,
@@ -201,9 +306,41 @@ export async function syncAllNow(): Promise<SyncResult[]> {
 }
 
 export async function getPendingOperations(): Promise<any[]> {
+  const store = useSyncStore.getState()
   const tenantPrefix = `${getTenantId()}:`
   const replicating = Array.from(activeSyncs.keys())
-  return replicating
     .filter((key) => key.startsWith(tenantPrefix))
-    .map((key) => ({ entityType: key.slice(tenantPrefix.length), status: 'replicating' }))
+    .map((key) => key.slice(tenantPrefix.length)) as EntityType[]
+
+  const local = createDatabase('FeeStructure')
+  local.close()
+
+  const pending: any[] = []
+
+  for (const entityType of replicating) {
+    try {
+      const db = createDatabase(entityType)
+      const info = await db.info()
+      const lastSeqKey = `${SYNC_META_PREFIX}${getTenantId()}_${entityType}`
+      const lastPushedSeq = parseInt(localStorage.getItem(lastSeqKey) || '0', 10)
+      const diff = info.update_seq - lastPushedSeq
+      if (diff > 0) {
+        pending.push({
+          entityType,
+          status: 'pending',
+          count: diff,
+          _localSeq: info.update_seq,
+        })
+      }
+      db.close()
+    } catch {
+      pending.push({ entityType, status: 'unknown' })
+    }
+  }
+
+  if (pending.length > 0) {
+    store.setPendingCount(pending.reduce((sum, p) => sum + (p.count || 0), 0))
+  }
+
+  return pending
 }

@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import { getEntityById, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Class, Student, Subject, Teacher } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
+import { printPdf } from '@/lib/print-pdf'
+import { getSchoolSettings } from '@/lib/school-settings'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,8 +31,9 @@ import {
 import { Combobox } from '@/components/ui/combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Pencil2Icon, ArrowLeftIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { StudentPhoto } from '@/components/ui/student-photo'
 
-async function generateBulletinHtml(classId: string): Promise<string> {
+async function generateBulletinHtml(classId: string, schoolName: string, logoDataUrl: string): Promise<string> {
   const [classData, students, grades, subjects] = await Promise.all([
     getEntityById<any>('Class', classId),
     queryEntities<any>('Student', { classId }),
@@ -46,20 +49,27 @@ async function generateBulletinHtml(classId: string): Promise<string> {
   const subjectMap: Record<string, any> = {}
   for (const s of subjects) subjectMap[s.id] = s
 
+  const logoHtml = logoDataUrl
+    ? `<img src="${logoDataUrl}" alt="Logo" style="height:60px;width:auto;display:block;margin:0 auto 8px" />`
+    : ''
+
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulletins - ${classData?.name || ''}</title>
 <style>
   @page { margin: 15mm; }
   body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; color: #333; }
+  .school-header { text-align: center; margin-bottom: 16px; }
+  .school-header h1 { margin: 0; color: #1a365d; font-size: 22px; }
   .bulletin { page-break-after: always; max-width: 800px; margin: 0 auto 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
-  h1 { text-align: center; color: #1a365d; font-size: 22px; margin-bottom: 5px; }
-  .school { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+  .bulletin h2 { text-align: center; color: #2d3748; font-size: 18px; margin: 16px 0 4px; }
+  .class-info { text-align: center; color: #666; font-size: 14px; margin-bottom: 16px; }
   .student-info { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: #f7fafc; border-radius: 6px; }
   table { width: 100%; border-collapse: collapse; margin: 15px 0; }
   th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
   th { background: #edf2f7; font-weight: 600; color: #2d3748; }
   .footer { text-align: center; color: #a0aec0; font-size: 11px; margin-top: 30px; }
   .average { text-align: right; font-weight: bold; font-size: 16px; margin-top: 15px; padding: 10px; background: #ebf8ff; border-radius: 6px; }
-</style></head><body>`
+</style></head><body>
+<div class="school-header">${logoHtml}<h1>${schoolName}</h1></div>`
 
   for (const student of (students ?? [])) {
     const studentGrades = gradeMap[student.id] || []
@@ -69,8 +79,8 @@ async function generateBulletinHtml(classId: string): Promise<string> {
       : '—'
 
     html += `<div class="bulletin">
-      <h1>Bulletin de Notes</h1>
-      <div class="school">${classData?.name || ''} — Année scolaire ${new Date().getFullYear()}/${new Date().getFullYear() + 1}</div>
+      <h2>Bulletin de Notes</h2>
+      <div class="class-info">${classData?.name || ''} — Année scolaire ${new Date().getFullYear()}/${new Date().getFullYear() + 1}</div>
       <div class="student-info">
         <div><strong>Élève :</strong> ${student.firstName || ''} ${student.lastName || ''}</div>
         <div><strong>Matricule :</strong> ${student.registrationNumber || '—'}</div>
@@ -91,7 +101,7 @@ async function generateBulletinHtml(classId: string): Promise<string> {
 
     html += `</tbody></table>
       <div class="average">Moyenne générale : <strong>${avg}/20</strong></div>
-      <div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} · École SaaS</div>
+      <div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} · ${schoolName}</div>
     </div>`
   }
 
@@ -190,15 +200,19 @@ export function ClassDetailPage() {
 
   const generateBulletinsMutation = useMutation({
     mutationFn: async () => {
-      const html = await generateBulletinHtml(id!)
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
-      const url = window.URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      window.URL.revokeObjectURL(url)
+      const school = await getSchoolSettings()
+      const html = await generateBulletinHtml(id!, school.schoolName, school.logoDataUrl)
+      const ok = await printPdf(html, `Bulletins - ${classData?.name || ''}.pdf`)
+      if (!ok) {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
+        const url = window.URL.createObjectURL(blob)
+        window.open(url, '_blank')
+        window.URL.revokeObjectURL(url)
+      }
       return true
     },
     onSuccess: () => {
-      toast.success('Bulletins générés (consultez le nouvel onglet)')
+      toast.success('Bulletins générés avec succès')
     },
     onError: () => toast.error('Erreur lors de la génération des bulletins')
   })
@@ -342,6 +356,7 @@ export function ClassDetailPage() {
                         aria-label="Tout sélectionner"
                       />
                     </TableHead>
+                    <TableHead className="w-12">Photo</TableHead>
                     <TableHead>Matricule</TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>Prénom</TableHead>
@@ -357,6 +372,15 @@ export function ClassDetailPage() {
                             checked={selectedRowIds.has(student.id)}
                             onCheckedChange={() => toggleSelectOne(student.id)}
                             aria-label={`Sélectionner ${student.firstName ? `${student.firstName} ` : ''}${student.lastName}`}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <StudentPhoto
+                            src={(student as any).photoUrl}
+                            alt={student.firstName || ''}
+                            initials={`${(student.firstName?.[0] || '').toUpperCase()}${(student.lastName?.[0] || '').toUpperCase()}`}
+                            className="h-9 w-9"
+                            entityId={student.id}
                           />
                         </TableCell>
                         <TableCell className="font-medium">{student.registrationNumber}</TableCell>

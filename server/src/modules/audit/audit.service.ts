@@ -17,7 +17,7 @@ export class AuditService {
     ipAddress?: string;
     userAgent?: string;
   }) {
-    return this.prisma.auditLog.create({
+    const log = await this.prisma.auditLog.create({
       data: {
         tenantId: params.tenantId,
         userId: params.userId,
@@ -31,6 +31,10 @@ export class AuditService {
         userAgent: params.userAgent,
       },
     });
+    // Propage vers CouchDB pour que les clients PouchDB voient aussi les actions
+    // effectuées côté serveur (pas seulement leurs propres logs générés offline).
+    this.prisma.notifyWrite('AuditLog', log);
+    return log;
   }
 
   async findByTenant(tenantId: string, page = 1, limit = 50) {

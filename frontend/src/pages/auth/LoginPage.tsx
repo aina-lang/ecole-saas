@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,12 +29,21 @@ export function LoginPage() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const lockedSession = useAuthStore((s) => s.lockedSession)
   const [error, setError] = useState<string | null>(null)
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' }
+    defaultValues: { email: lockedSession?.email ?? '', password: '' }
   })
+
+  // hydrate() résout de façon asynchrone après le premier rendu : si une session
+  // verrouillée apparaît ensuite, on préremplit l'email pour l'écran de déverrouillage.
+  useEffect(() => {
+    if (lockedSession?.email) {
+      form.setValue('email', lockedSession.email)
+    }
+  }, [lockedSession, form])
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
@@ -52,7 +61,14 @@ export function LoginPage() {
   }
 
   return (
-    <AuthShell title="Connexion" subtitle="Connectez-vous à votre espace de gestion scolaire">
+    <AuthShell
+      title={lockedSession ? 'Session verrouillée' : 'Connexion'}
+      subtitle={
+        lockedSession
+          ? `Entrez le mot de passe de ${lockedSession.email} pour déverrouiller`
+          : 'Connectez-vous à votre espace de gestion scolaire'
+      }
+    >
       <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField

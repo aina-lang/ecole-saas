@@ -6,13 +6,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
+import { saveEntity, queryEntities, getEntityById } from '@/lib/db/pouchdb-compat'
 import type { Student } from '@/types'
 import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PasswordInput } from '@/components/ui/password-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -24,12 +23,12 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { PlusIcon, Cross2Icon, ArrowLeftIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { PhotoUpload } from '@/components/ui/photo-upload'
 
 const parentSchema = z.object({
   firstName: z.string().optional().or(z.literal('')),
   lastName: z.string().min(1, 'Nom requis'),
   email: z.string().email('Email invalide').optional().or(z.literal('')),
-  password: z.string().optional().or(z.literal('')),
 })
 
 type ParentFormValues = z.infer<typeof parentSchema>
@@ -37,9 +36,9 @@ type ParentFormValues = z.infer<typeof parentSchema>
 export function ParentFormPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [showPassword, setShowPassword] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [npPhones, setNpPhones] = useState<string[]>([''])
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
 
   const { data: students } = useLocalQuery<Student>('Student')
 
@@ -49,7 +48,6 @@ export function ParentFormPage() {
       firstName: '',
       lastName: '',
       email: '',
-      password: '',
     },
   })
 
@@ -69,7 +67,6 @@ export function ParentFormPage() {
         role: 'PARENT',
         tenantId,
         isActive: true,
-        passwordHash: values.password || Math.random().toString(36).slice(2, 10) + 'A1!',
       })
 
       for (const studentId of selectedStudentIds) {
@@ -88,6 +85,27 @@ export function ParentFormPage() {
           ],
         })
       }
+
+      if (pendingPhoto) {
+        const api = window.api
+        if (api?.file) {
+          const buffer = await pendingPhoto.arrayBuffer()
+          const result = await api.file.save({
+            buffer, entityType: 'User', entityId: userId,
+            fieldName: 'photo_url', originalName: pendingPhoto.name, mimeType: pendingPhoto.type,
+          })
+          const localUrl = await api.file.getUrl((result as any).local_path)
+          if (localUrl) {
+            const existing = await getEntityById<any>('User', userId)
+            if (existing) {
+              await saveEntity('User', { ...existing, photoUrl: localUrl })
+            }
+          }
+        }
+        setPendingPhoto(null)
+      }
+
+      return userId
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parents'] })
@@ -149,6 +167,17 @@ export function ParentFormPage() {
                 />
               </div>
 
+              <PhotoUpload
+                src={null}
+                firstName={form.watch('firstName')}
+                lastName={form.watch('lastName')}
+                onUpload={async (file) => {
+                  setPendingPhoto(file)
+                  return { url: '' }
+                }}
+                onDelete={undefined}
+              />
+
               <FormField
                 control={form.control}
                 name="email"
@@ -207,35 +236,6 @@ export function ParentFormPage() {
                   </Button>
                 )}
               </div>
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mot de passe</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <PasswordInput
-                          placeholder="••••••••"
-                          {...field}
-                          className="pr-20"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? 'Masquer' : 'Afficher'}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Élèves à lier (optionnel)</label>

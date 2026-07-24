@@ -22,7 +22,10 @@ import { SyncModule } from './modules/sync/sync.module';
 import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module';
 import { TeacherContractsModule } from './modules/teacher-contracts/teacher-contracts.module';
 import { TeacherPaymentsModule } from './modules/teacher-payments/teacher-payments.module';
+import { LevelsModule } from './modules/levels/levels.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { SubscriptionGuard } from './common/guards/subscription.guard';
 import envConfig from './config/env.config';
 
 @Module({
@@ -50,9 +53,12 @@ import envConfig from './config/env.config';
     TeacherContractsModule,
     TeacherPaymentsModule,
     DocumentsModule,
+    LevelsModule,
+    BillingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: SubscriptionGuard },
   ],
 })
 export class AppModule {}

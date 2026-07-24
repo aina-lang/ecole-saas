@@ -1,5 +1,5 @@
-import { IsString, IsNotEmpty, IsIn, IsOptional, IsDateString } from 'class-validator';
-import { AttendanceStatus } from '@prisma/client';
+import { IsString, IsNotEmpty, IsIn, IsOptional, IsDateString, IsEnum } from 'class-validator';
+import { AttendanceStatus, HalfDay } from '@prisma/client';
 
 export class CreateAttendanceDto {
   @IsString()
@@ -12,6 +12,22 @@ export class CreateAttendanceDto {
   @IsString()
   @IsIn(Object.values(AttendanceStatus))
   status: AttendanceStatus;
+
+  @IsOptional()
+  @IsEnum(HalfDay)
+  halfDay?: HalfDay;
+
+  @IsOptional()
+  @IsString()
+  timetableSlotId?: string;
+
+  @IsOptional()
+  @IsString()
+  subjectId?: string;
+
+  @IsOptional()
+  @IsString()
+  teacherId?: string;
 
   @IsOptional()
   @IsString()

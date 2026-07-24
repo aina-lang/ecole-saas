@@ -6,6 +6,7 @@ import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities, deleteEntity } from '@/lib/db/pouchdb-compat'
 import type { User, Student } from '@/types'
 import { getInitials, cn } from '@/lib/utils'
+import { getPhotoUrl } from '@/api/client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
   PlusIcon,
   Pencil2Icon,
@@ -121,9 +123,10 @@ export function ParentsPage() {
                   const p = parent as any
                   const initials = getInitials(p.firstName || '', p.lastName || '')
                   return (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                      {initials}
-                    </div>
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={getPhotoUrl(p.photoUrl)} alt={`${p.firstName || ''} ${p.lastName || ''}`} />
+                      <AvatarFallback className="text-sm font-medium">{initials}</AvatarFallback>
+                    </Avatar>
                   )
                 },
               },

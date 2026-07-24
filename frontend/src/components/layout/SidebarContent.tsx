@@ -6,7 +6,6 @@ import {
   PersonIcon,
   ReaderIcon,
   ChatBubbleIcon,
-  ValueNoneIcon,
   GearIcon,
   UpdateIcon,
   BookmarkIcon,
@@ -14,6 +13,13 @@ import {
   FileTextIcon,
   BackpackIcon,
   GroupIcon,
+  ValueIcon,
+  RocketIcon,
+  ArchiveIcon,
+  DashboardIcon,
+  ListBulletIcon,
+  StackIcon,
+  LockClosedIcon,
 } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -33,7 +39,10 @@ const menuGroups = [
       { label: 'Élèves', path: '/students', icon: PersonIcon, badgeKey: 'students' },
       { label: 'Parents', path: '/parents', icon: GroupIcon, badgeKey: 'parents' },
       { label: 'Classes', path: '/classes', icon: ReaderIcon, badgeKey: 'classes' },
+      { label: 'Niveaux', path: '/administration/levels', icon: StackIcon },
       { label: 'Enseignants', path: '/teachers', icon: BackpackIcon, badgeKey: 'teachers' },
+      { label: 'Promotions', path: '/administration/promotion/deliberation', icon: PromotionIcon },
+     // { label: 'Messagerie', path: '/communications', icon: ChatBubbleIcon },
     ]
   },
   {
@@ -46,18 +55,20 @@ const menuGroups = [
     ]
   },
   {
-    label: 'Vie scolaire',
+    label: 'Finance',
     items: [
-      { label: 'Communications', path: '/communications', icon: ChatBubbleIcon, badgeKey: 'messages' },
-      { label: 'Finances', path: '/finances', icon: ValueNoneIcon },
+ //     { label: 'Vue d\'ensemble', path: '/finances', icon: DashboardIcon },
+      { label: 'Paiements', path: '/finances/payments', icon: ValueIcon },
+      { label: 'Frais par niveau', path: '/finances/fees', icon: ArchiveIcon },
     ]
   },
   {
     label: 'Paramètres',
     items: [
-      { label: 'Utilisateurs', path: '/administration/users', icon: GearIcon },
+      { label: 'Utilisateurs', path: '/administration/users', icon: LockClosedIcon },
       { label: 'Configuration', path: '/administration/settings', icon: GearIcon },
-      { label: 'Journaux d\'audit', path: '/administration/audit', icon: UpdateIcon },
+    //  { label: 'Journaux d\'audit', path: '/administration/audit', icon: ListBulletIcon },
+      { label: 'Abonnement', path: '/administration/billing', icon: RocketIcon },
       { label: 'Synchronisation', path: '/sync', icon: UpdateIcon },
     ]
   },
@@ -77,6 +88,14 @@ function AttendanceIcon(props: React.SVGProps<SVGSVGElement>) {
       <path d="M3.5 10.5L6.5 13.5L12 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M1 7.5L3.5 10.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M10 2.5L12 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PromotionIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" {...props}>
+      <path d="M7.5 1L10 5.5L15 6.5L11.5 10L12.5 15L7.5 12.5L2.5 15L3.5 10L0 6.5L5 5.5L7.5 1Z" fill="currentColor" fillOpacity="0.3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

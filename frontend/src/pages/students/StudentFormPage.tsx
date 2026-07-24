@@ -243,7 +243,7 @@ export function StudentFormPage() {
             buffer, entityType: 'Student', entityId: localId,
             fieldName: 'photo_url', originalName: pendingPhoto.name, mimeType: pendingPhoto.type,
           })
-          const localUrl = await api.file.getUrl(result.localPath)
+          const localUrl = await api.file.getUrl((result as any).local_path)
           if (localUrl) {
             const existing = await getDocument('Student', localId)
             if (existing) {
@@ -364,7 +364,7 @@ export function StudentFormPage() {
           originalName: file.name,
           mimeType: file.type,
         })
-        const localUrl = await api.file.getUrl(result.localPath)
+        const localUrl = await api.file.getUrl((result as any).local_path)
         const existing = await getDocument('Student', id)
         if (existing) {
           await putDocument('Student', { ...existing, photoUrl: localUrl })

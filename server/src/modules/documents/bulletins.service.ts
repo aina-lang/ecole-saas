@@ -12,6 +12,42 @@ export class BulletinsService {
     private gradesService: GradesService,
   ) {}
 
+  /**
+   * Rang de chaque élève dans sa classe, calculé sur la moyenne générale
+   * (méthode identique à getStudentReport, pour rester cohérent). Convention
+   * "rang par compétition" : deux moyennes égales partagent le même rang, le
+   * suivant saute (1, 2, 2, 4...). Les élèves sans aucune note ne sont pas
+   * classés (une moyenne à 0 les pénaliserait à tort face à un élève noté).
+   */
+  private async computeClassRanks(classId: string, tenantId: string): Promise<Map<string, { rank: number; total: number }>> {
+    const students = await this.prisma.student.findMany({
+      where: { classId, tenantId, deletedAt: null },
+      select: { id: true },
+    });
+
+    const withAverages = await Promise.all(
+      students.map(async (s) => ({
+        studentId: s.id,
+        average: (await this.gradesService.calculateGeneralAverage(s.id, tenantId)).average,
+      })),
+    );
+
+    const ranked = withAverages.filter((s) => s.average > 0).sort((a, b) => b.average - a.average);
+
+    const ranks = new Map<string, { rank: number; total: number }>();
+    let rank = 0;
+    let previousAverage: number | null = null;
+    ranked.forEach((entry, index) => {
+      if (previousAverage === null || entry.average < previousAverage) {
+        rank = index + 1;
+      }
+      previousAverage = entry.average;
+      ranks.set(entry.studentId, { rank, total: ranked.length });
+    });
+
+    return ranks;
+  }
+
   private getStoragePath(tenantId: string, category: string): string {
     return path.join(process.cwd(), 'storage', `tenant_${tenantId}`, category);
   }
@@ -41,11 +77,13 @@ export class BulletinsService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     const settings = tenant?.settings as any
 
+    const ranks = await this.computeClassRanks(classId, tenantId);
+
     const documentUrls: string[] = [];
 
     for (const student of students) {
       const report = await this.gradesService.getStudentReport(student.id, tenantId);
-      const pdfBuffer = await this.renderBulletinPdf(student, report, settings);
+      const pdfBuffer = await this.renderBulletinPdf(student, report, settings, ranks.get(student.id) ?? null);
       
       const fileName = `bulletin-${student.id}-${Date.now()}.pdf`;
       const fileUrl = this.savePdf(tenantId, 'bulletins', fileName, pdfBuffer);
@@ -85,7 +123,11 @@ export class BulletinsService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     const settings = tenant?.settings as any
 
-    const pdfBuffer = await this.renderBulletinPdf(student, report, settings);
+    const rankInfo = student.classId
+      ? (await this.computeClassRanks(student.classId, tenantId)).get(studentId) ?? null
+      : null;
+
+    const pdfBuffer = await this.renderBulletinPdf(student, report, settings, rankInfo);
     
     const fileName = `bulletin-${student.id}-${Date.now()}.pdf`;
     const fileUrl = this.savePdf(tenantId, 'bulletins', fileName, pdfBuffer);
@@ -111,7 +153,12 @@ export class BulletinsService {
     };
   }
 
-  private async renderBulletinPdf(student: any, report: any, settings: any): Promise<Buffer> {
+  private async renderBulletinPdf(
+    student: any,
+    report: any,
+    settings: any,
+    rankInfo: { rank: number; total: number } | null,
+  ): Promise<Buffer> {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
     const chunks: Buffer[] = [];
     
@@ -167,6 +214,7 @@ export class BulletinsService {
       doc.font('Helvetica-Bold');
       doc.text(`Moyenne générale: ${(report.averages?.average || 0).toFixed(2)}`, { continued: false });
       doc.text(`Nombre de notes: ${report.averages?.count || 0}`, { continued: false });
+      doc.text(`Rang: ${rankInfo ? `${rankInfo.rank}/${rankInfo.total}` : 'Non classé'}`, { continued: false });
 
       doc.moveDown(2);
       doc.fontSize(9).font('Helvetica').text('Document généré automatiquement', { align: 'center' });

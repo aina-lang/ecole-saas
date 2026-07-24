@@ -3,24 +3,12 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 interface Api {
   db: {
     sync: (entityType: string, remoteUrl?: string) => Promise<{ ok: boolean; error?: string }>
+    reset: () => Promise<{ success: boolean; error?: string }>
   }
   settings: {
     get: (key: string) => Promise<string | null>
     set: (key: string, value: string) => Promise<{ success: boolean }>
     getAll: () => Promise<Record<string, string>>
-  }
-  sync: {
-    getStatus: () => Promise<{
-      isOnline: boolean
-      pendingCount: number
-      conflictCount: number
-      lastSyncAt: string | null
-      isSyncing: boolean
-    }>
-    forceSync: () => Promise<{ synced: number; conflicts: number; errors: number }>
-    getCouchDBConfig: () => Promise<{ url: string }>
-    onStatusChanged: (callback: (status: any) => void) => () => void
-    onProgress: (callback: (progress: any) => void) => () => void
   }
   auth: {
     setToken: (token: string) => Promise<{ success: boolean }>
@@ -34,7 +22,15 @@ interface Api {
       fieldName: string
       originalName: string
       mimeType: string
-    }) => Promise<{ id: string; localPath: string }>
+    }) => Promise<{
+      id: string
+      entity_type: string
+      entity_id: string
+      field_name: string
+      local_path: string
+      original_name: string
+      mime_type: string
+    }>
     getUrl: (localPath: string) => Promise<string | null>
     getPendingCount: () => Promise<number>
     getEntityPhoto: (entityType: string, entityId: string) => Promise<string | null>
@@ -44,6 +40,9 @@ interface Api {
     toggleMaximize: () => void
     close: () => void
     isMaximized: () => Promise<boolean>
+  }
+  documents: {
+    print: (html: string, defaultName: string) => Promise<{ canceled: boolean; filePath?: string }>
   }
 }
 

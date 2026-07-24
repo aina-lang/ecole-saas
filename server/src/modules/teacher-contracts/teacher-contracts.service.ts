@@ -33,7 +33,7 @@ export class TeacherContractsService {
     const teacher = await this.prisma.teacher.findFirst({ where: { id: dto.teacherId, tenantId } });
     if (!teacher) throw new NotFoundException('Enseignant non trouvé');
 
-    return this.prisma.teacherContract.create({
+    const created = await this.prisma.teacherContract.create({
       data: {
         tenantId,
         teacherId: dto.teacherId,
@@ -41,6 +41,8 @@ export class TeacherContractsService {
         hourlyRate: dto.hourlyRate,
         monthlySalary: dto.monthlySalary,
         fixedAmount: dto.fixedAmount,
+        cnapsNumber: dto.cnapsNumber,
+        ostieNumber: dto.ostieNumber,
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         isActive: dto.isActive ?? true,
@@ -51,6 +53,10 @@ export class TeacherContractsService {
         },
       },
     });
+
+    this.prisma.notifyWrite('TeacherContract', created);
+
+    return created;
   }
 
   async update(id: string, tenantId: string, dto: UpdateTeacherContractDto) {
@@ -64,6 +70,8 @@ export class TeacherContractsService {
         hourlyRate: dto.hourlyRate,
         monthlySalary: dto.monthlySalary,
         fixedAmount: dto.fixedAmount,
+        cnapsNumber: dto.cnapsNumber,
+        ostieNumber: dto.ostieNumber,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         isActive: dto.isActive,

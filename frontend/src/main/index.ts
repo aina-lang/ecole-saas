@@ -1,8 +1,8 @@
-import { app, shell, BrowserWindow, ipcMain, protocol, session } from 'electron'
-import { join, extname } from 'path'
+import { app, shell, BrowserWindow, ipcMain, protocol, session, dialog } from 'electron'
+import { join, extname, dirname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { readFileSync, existsSync, mkdirSync, rmSync } from 'fs'
+import { readFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { getSetting, setSetting, getAllSettings } from './settings'
 import { saveFileLocally, getFileUploadCount, getFileUploadByEntity } from './files'
 import { setAuthToken, getAuthToken } from './auth'
@@ -82,26 +82,8 @@ function setupIPC() {
     return getAllSettings()
   })
 
-  ipcMain.handle('sync:status', async () => {
-    return {
-      isOnline: navigator.onLine,
-      pendingCount: 0,
-      conflictCount: 0,
-      deviceId: 'desktop',
-    }
-  })
-
-  ipcMain.handle('sync:force', async () => {
-    return { synced: 0, conflicts: 0, errors: 0 }
-  })
-
   ipcMain.handle('db:sync', async (_event, entityType, remoteUrl) => {
     return { ok: true, entityType, remoteUrl }
-  })
-
-  ipcMain.handle('sync:get-couchdb-config', async () => {
-    const url = getSetting('couchdb_url') || 'http://localhost:5984'
-    return { url }
   })
 
   ipcMain.handle('auth:set-token', async (_event, token) => {
@@ -147,6 +129,42 @@ function setupIPC() {
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('documents:print', async (_event, { html, defaultName }: { html: string; defaultName: string }) => {
+    const pdfWindow = new BrowserWindow({
+      show: false,
+      width: 800,
+      height: 600,
+      webPreferences: { contextIsolation: true, nodeIntegration: false },
+    })
+
+    try {
+      const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
+      await pdfWindow.loadURL(dataUrl)
+      await new Promise((r) => setTimeout(r, 800))
+
+      const pdfBuffer = await pdfWindow.webContents.printToPDF({
+        printBackground: true,
+        preferCSSPageSize: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      })
+
+      const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+        defaultPath: defaultName.replace(/[^\w\-\. ]/g, '_'),
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+
+      if (canceled || !filePath) return { canceled: true }
+
+      const dir = dirname(filePath)
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      writeFileSync(filePath, pdfBuffer)
+      shell.openPath(filePath)
+      return { canceled: false, filePath }
+    } finally {
+      if (!pdfWindow.isDestroyed()) pdfWindow.destroy()
     }
   })
 

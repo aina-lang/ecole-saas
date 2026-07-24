@@ -5,7 +5,11 @@ import * as express from 'express';
 import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true expose req.rawBody (Buffer) sur toutes les requêtes tout en
+  // continuant à parser req.body en JSON normalement — nécessaire pour
+  // vérifier la signature des webhooks Stripe (BillingWebhookController), qui
+  // exige le corps exact non ré-encodé.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',

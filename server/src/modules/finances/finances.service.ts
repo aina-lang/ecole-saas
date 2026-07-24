@@ -17,6 +17,8 @@ export class FinancesService {
       data: {
         tenantId,
         label: dto.label,
+        feeType: dto.feeType ?? 'TUITION',
+        levelId: dto.levelId ?? null,
         amount: dto.amount,
         dueDay: dto.dueDay ?? 15,
         description: dto.description,
@@ -42,8 +44,11 @@ export class FinancesService {
   async findAllFeeStructures(tenantId: string) {
     return this.prisma.feeStructure.findMany({
       where: { tenantId },
-      include: { _count: { select: { payments: true } } },
-      orderBy: { label: 'asc' },
+      include: {
+        level: { select: { id: true, name: true } },
+        _count: { select: { payments: true } },
+      },
+      orderBy: [{ level: { sortOrder: 'asc' } }, { label: 'asc' }],
     });
   }
 
@@ -70,6 +75,8 @@ export class FinancesService {
       where: { id },
       data: {
         label: dto.label,
+        feeType: dto.feeType,
+        levelId: dto.levelId ?? null,
         amount: dto.amount,
         dueDay: dto.dueDay,
         description: dto.description,
@@ -254,14 +261,17 @@ export class FinancesService {
     if (!payment) throw new NotFoundException('Paiement non trouvé');
     if (payment.status === 'PAID') throw new ConflictException('Ce paiement a déjà été effectué');
 
+    const newPaidAmount = (payment.paidAmount || 0) + paidAmount
+    const newStatus = newPaidAmount >= payment.amount ? 'PAID' as PaymentStatus : 'PARTIAL' as PaymentStatus
+
     const updated = await this.prisma.payment.update({
       where: { id },
       data: {
-        paidAmount,
+        paidAmount: newPaidAmount,
         paymentMethod,
         reference,
         paidAt: new Date(),
-        status: 'PAID' as PaymentStatus,
+        status: newStatus,
       },
     });
 

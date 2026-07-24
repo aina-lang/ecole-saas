@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import PouchDB from 'pouchdb'
 import {
   getAllDocuments,
   getDocument,
+  createDatabase,
   type EntityType,
 } from './pouchdb'
 import { offlineSave, offlineDelete, offlineBulkCreate } from './offline-queue'
@@ -43,7 +43,7 @@ export function usePouchDBQuery<T = any>(entityType: EntityType): QueryResult<T>
     mountedRef.current = true
     fetch()
 
-    const db = new PouchDB(`ecole_saas_${entityType.toLowerCase()}`, { adapter: 'idb' })
+    const db = createDatabase(entityType)
 
     const unsubscribe = db
       .changes({

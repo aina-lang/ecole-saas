@@ -6,6 +6,8 @@ import { AppRouter } from '../../router'
 import { TitleBar } from '../../components/layout/TitleBar'
 import { UNAUTHORIZED_EVENT } from '../../api/client'
 import { useAuthStore } from '../../stores/auth-store'
+import { initSyncEngine, destroySyncEngine } from '../../lib/db/sync-manager'
+import { useSyncInvalidation } from '../../lib/db/hooks'
 import './global.css'
 
 const queryClient = new QueryClient({
@@ -40,6 +42,25 @@ function HydrateAuth(): null {
   return null
 }
 
+// Le moteur de sync PouchDB↔CouchDB ne doit tourner que quand l'app est
+// déverrouillée : avant login/déverrouillage, il n'y a pas de tenant/token
+// valides, et pendant un verrouillage (collègues sur poste partagé), on coupe
+// la réplication comme le reste de l'accès aux données.
+function SyncLifecycle(): null {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  useSyncInvalidation()
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    initSyncEngine()
+    return () => {
+      destroySyncEngine()
+    }
+  }, [isAuthenticated])
+
+  return null
+}
+
 function App(): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
@@ -50,6 +71,7 @@ function App(): JSX.Element {
             <AppRouter />
             <AuthListener />
             <HydrateAuth />
+            <SyncLifecycle />
           </div>
         </div>
         <Toaster position="top-right" richColors />

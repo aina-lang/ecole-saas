@@ -12,6 +12,7 @@ import {
   getPendingCleanups,
   removePendingCleanup,
   setCurrentTenant,
+  migrateLegacyFeeDatabase,
   type EntityType,
 } from './pouchdb'
 import { useSyncStore } from '@/stores/sync-store'
@@ -65,7 +66,7 @@ async function processPendingCleanups(): Promise<void> {
     // On passe les entités les plus critiques en priorité
     const CRITICAL_TYPES: EntityType[] = [
       'Student', 'Grade', 'Attendance', 'Payment',
-      'Teacher', 'Class', 'Subject',
+      'Teacher', 'Class', 'Subject', 'AuditLog',
     ]
 
     try {
@@ -101,6 +102,7 @@ export async function initSyncEngine(): Promise<void> {
   console.log('[Sync] Initializing PouchDB-CouchDB sync engine, online:', navigator.onLine)
 
   await fetchCouchDBConfig()
+  await migrateLegacyFeeDatabase()
 
   onlineListener = async () => {
     store.setOnline(true)

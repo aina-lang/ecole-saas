@@ -18,13 +18,59 @@ function getAuthUrl(): string {
   return COUCH_URL
 }
 
-function dbName(entity: string): string {
-  return `ecole-saas-${entity.toLowerCase()}`
+function dbName(tenantId: string, entity: string): string {
+  const tid = tenantId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `ecole-saas-${tid}-${entity.toLowerCase()}`
 }
 
 function stripMeta(doc: any) {
   const { _id, _rev, _deleted, _revisions, _attachments, ...rest } = doc
   return { id: _id, ...rest }
+}
+
+function connectRelations(data: any): any {
+  const relations: Record<string, string> = {
+    classId: 'class',
+    studentId: 'student',
+    subjectId: 'subject',
+    teacherId: 'teacher',
+    userId: 'user',
+    periodId: 'period',
+    academicYearId: 'academicYear',
+  };
+  for (const [fk, rel] of Object.entries(relations)) {
+    if (data[fk]) {
+      data[rel] = { connect: { id: data[fk] } };
+      delete data[fk];
+    }
+  }
+  return data;
+}
+
+async function resolveTenantId(entity: string, data: any): Promise<string | null> {
+  if (data.tenantId) return data.tenantId;
+  if (entity === 'Grade' && data.studentId) {
+    const student = await (prisma.student as any).findFirst({
+      where: { id: data.studentId },
+      select: { tenantId: true },
+    });
+    if (student?.tenantId) return student.tenantId;
+  }
+  if (entity === 'Attendance' && data.studentId) {
+    const student = await (prisma.student as any).findFirst({
+      where: { id: data.studentId },
+      select: { tenantId: true },
+    });
+    if (student?.tenantId) return student.tenantId;
+  }
+  if (entity === 'Payment' && data.studentId) {
+    const student = await (prisma.student as any).findFirst({
+      where: { id: data.studentId },
+      select: { tenantId: true },
+    });
+    if (student?.tenantId) return student.tenantId;
+  }
+  return null;
 }
 
 const prisma = new PrismaClient()
@@ -44,7 +90,11 @@ const entityModel = (name: string) => {
 async function processChange(entity: string, change: any) {
   if (!change.doc || change.doc._id.startsWith('_design/')) return
   const data = stripMeta(change.doc)
-  const tenantId = data.tenantId || data.tenant_id
+
+  let tenantId = data.tenantId || data.tenant_id
+  if (!tenantId) {
+    tenantId = await resolveTenantId(entity, data)
+  }
   if (!tenantId) return
 
   const model = entityModel(entity)
@@ -78,6 +128,8 @@ async function processChange(entity: string, change: any) {
       return;
     }
 
+    connectRelations(data)
+
     await model.upsert({
       where: { id },
       create: { ...data, id, tenantId },
@@ -88,8 +140,14 @@ async function processChange(entity: string, change: any) {
   }
 }
 
-async function startChangeFeed(entity: string) {
-  const url = `${getAuthUrl()}/${dbName(entity)}`
+const activeFeeds = new Set<string>()
+
+async function startChangeFeed(tenantId: string, entity: string) {
+  const dbStr = dbName(tenantId, entity)
+  if (activeFeeds.has(dbStr)) return
+  activeFeeds.add(dbStr)
+
+  const url = `${getAuthUrl()}/${dbStr}`
   const db = new PouchDB(url)
 
   try {
@@ -101,10 +159,11 @@ async function startChangeFeed(entity: string) {
         headers['Authorization'] = `Basic ${Buffer.from(`${COUCH_USER}:${COUCH_PASS}`).toString('base64')}`
       }
       await fetch(url, { method: 'PUT', headers })
-      console.log(`[sync-worker] Created CouchDB database: ${dbName(entity)}`)
+      console.log(`[sync-worker] Created CouchDB database: ${dbStr}`)
     } catch {
-      console.warn(`[sync-worker] Database ${dbName(entity)} not available, retrying in 10s`)
-      setTimeout(() => startChangeFeed(entity), 10000)
+      console.warn(`[sync-worker] Database ${dbStr} not available, retrying in 10s`)
+      activeFeeds.delete(dbStr)
+      setTimeout(() => startChangeFeed(tenantId, entity), 10000)
       return
     }
   }
@@ -113,11 +172,26 @@ async function startChangeFeed(entity: string) {
 
   feed.on('change', (change) => processChange(entity, change))
   feed.on('error', (err) => {
-    console.error(`[sync-worker] Changes feed error for ${entity}: ${err.message}`)
-    setTimeout(() => startChangeFeed(entity), 5000)
+    console.error(`[sync-worker] Changes feed error for ${dbStr}: ${err.message}`)
+    activeFeeds.delete(dbStr)
+    setTimeout(() => startChangeFeed(tenantId, entity), 5000)
   })
 
-  console.log(`[sync-worker] Watching CouchDB → PostgreSQL: ${dbName(entity)}`)
+  console.log(`[sync-worker] Watching CouchDB → PostgreSQL: ${dbStr}`)
+}
+
+async function pollTenants() {
+  try {
+    const tenants = await prisma.tenant.findMany({ select: { id: true } })
+    for (const tenant of tenants) {
+      for (const entity of ENTITIES) {
+        startChangeFeed(tenant.id, entity)
+      }
+    }
+  } catch (err: any) {
+    console.error(`[sync-worker] Error polling tenants: ${err.message}`)
+  }
+  setTimeout(pollTenants, 30000)
 }
 
 async function main() {
@@ -127,9 +201,7 @@ async function main() {
   await prisma.$connect()
   console.log('[sync-worker] Connected to PostgreSQL')
 
-  for (const entity of ENTITIES) {
-    startChangeFeed(entity)
-  }
+  pollTenants()
 }
 
 main().catch((err) => {

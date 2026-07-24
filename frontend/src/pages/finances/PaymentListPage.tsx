@@ -44,7 +44,9 @@ const statusConfig: Record<
   pending: { label: 'En attente', variant: 'outline' },
   partial: { label: 'Partiel', variant: 'secondary' },
   paid: { label: 'Payé', variant: 'default' },
-  overdue: { label: 'En retard', variant: 'destructive' }
+  overdue: { label: 'En retard', variant: 'destructive' },
+  cancelled: { label: 'Annulé', variant: 'outline' },
+  refunded: { label: 'Remboursé', variant: 'secondary' }
 }
 
 const recordPaymentSchema = z.object({
@@ -90,7 +92,9 @@ export function PaymentListPage() {
   const [sortBy, setSortBy] = useState<string>('')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [paymentDialog, setPaymentDialog] = useState<string | null>(null)
+  const [paymentDialog, setPaymentDialog] = useState<Payment | null>(null)
+  const [page, setPage] = useState(1)
+  const limit = 15
 
   const { data: studentsRaw, loading: loadingStudents } = useLocalQuery<Student>('Student')
   const studentsMap = ((studentsRaw ?? []) as any[]).reduce((map, s) => {
@@ -101,7 +105,7 @@ export function PaymentListPage() {
   }, {} as Record<string, string>)
 
   const { data: paymentsData, isLoading } = useQuery({
-    queryKey: ['payments', search, statusFilter, dateFrom, dateTo, sortBy, sortDirection],
+    queryKey: ['payments', search, statusFilter, dateFrom, dateTo, sortBy, sortDirection, page],
     queryFn: async () => {
       let results = await queryEntities<Payment>('Payment')
 
@@ -134,7 +138,9 @@ export function PaymentListPage() {
       }
 
       const total = results.length
-      return { data: results, total } as { data: Payment[]; total: number }
+      const start = (page - 1) * limit
+      const paged = results.slice(start, start + limit)
+      return { data: paged, total } as { data: Payment[]; total: number }
     },
   })
 
@@ -144,15 +150,19 @@ export function PaymentListPage() {
   })
 
   const recordMutation = useMutation({
-    mutationFn: (values: RecordPaymentValues) =>
-      saveEntity('Payment', {
-        id: paymentDialog,
-        amountPaid: (payment as any).amount,
-        paidAmount: values.amount,
-        method: values.method,
-        transactionId: values.reference || null,
-        paymentDate: new Date().toISOString(),
-      }),
+    mutationFn: (values: RecordPaymentValues) => {
+      if (!paymentDialog) throw new Error('Aucun paiement sélectionné')
+      const totalPaid = (paymentDialog.paidAmount || 0) + values.amount
+      const newStatus = totalPaid >= paymentDialog.amount ? 'paid' : 'partial'
+      return saveEntity('Payment', {
+        ...paymentDialog,
+        paidAmount: totalPaid,
+        paymentMethod: values.method,
+        reference: values.reference || null,
+        paidAt: new Date().toISOString(),
+        status: newStatus,
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments'] })
       toast.success('Paiement enregistré')
@@ -175,6 +185,15 @@ export function PaymentListPage() {
   })
 
   const payments = paymentsData?.data ?? []
+  const total = paymentsData?.total ?? 0
+  const totalPages = Math.ceil(total / limit)
+
+  // reset page when filters change
+  function onFilterChange(key: string, value: string) {
+    if (key === 'search') setSearch(value)
+    else if (key === 'statusFilter') setStatusFilter(value)
+    setPage(1)
+  }
 
   return (
     <div className="space-y-6">
@@ -209,7 +228,7 @@ export function PaymentListPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative w-72">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Rechercher par nom d'élève ou matricule..."
@@ -219,7 +238,7 @@ export function PaymentListPage() {
               />
             </div>
             <Combobox
-              className="w-[150px]"
+              className="w-[200px]"
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v || 'all')}
               placeholder="Statut"
@@ -229,15 +248,19 @@ export function PaymentListPage() {
                 { value: 'partial', label: 'Partiel' },
                 { value: 'paid', label: 'Payé' },
                 { value: 'overdue', label: 'En retard' },
+                { value: 'cancelled', label: 'Annulé' },
+                { value: 'refunded', label: 'Remboursé' },
               ]}
             />
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Du</label>
-              <DatePicker value={dateFrom} onChange={(d) => setDateFrom(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[140px]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Au</label>
-              <DatePicker value={dateTo} onChange={(d) => setDateTo(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[140px]" />
+            <div className="flex items-end gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Du</label>
+                <DatePicker value={dateFrom} onChange={(d) => setDateFrom(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[180px]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Au</label>
+                <DatePicker value={dateTo} onChange={(d) => setDateTo(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[180px]" />
+              </div>
             </div>
           </div>
         </CardContent>
@@ -290,18 +313,19 @@ export function PaymentListPage() {
               },
             ]}
             data={payments}
-            total={payments.length}
-            page={1}
-            limit={100}
-            onPageChange={() => {}}
+            total={total}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
             onSortChange={(key, dir) => {
               setSortBy(key)
               setSortDirection(dir)
+              setPage(1)
             }}
             sortKey={sortBy}
             sortDirection={sortDirection}
             filters={{ search, statusFilter }}
-            onFilterChange={() => {}}
+            onFilterChange={onFilterChange}
             onBulkDelete={(ids) => {
               Promise.all(ids.map((id) => deleteEntity('Payment', id)))
                 .then(() => {
@@ -319,7 +343,7 @@ export function PaymentListPage() {
               return (
                 <>
                   {p.status !== 'paid' && (
-                    <Dialog open={paymentDialog === p.id} onOpenChange={(open) => { setPaymentDialog(open ? p.id : null); if (!open) form.reset() }}>
+                    <Dialog open={paymentDialog?.id === p.id} onOpenChange={(open) => { setPaymentDialog(open ? p : null); if (!open) form.reset() }}>
                       <DialogTrigger asChild>
                         <Button variant="ghost" size="icon" title="Enregistrer un paiement">
                           <PlusIcon className="h-4 w-4" />

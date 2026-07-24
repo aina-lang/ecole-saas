@@ -53,6 +53,7 @@ export class ClassesService {
         tenantId,
         name: dto.name,
         level: dto.level,
+        levelId: dto.levelId ?? null,
         room: dto.room,
         capacity: dto.capacity ?? 30,
         teachers: dto.teacherIds?.length
@@ -90,6 +91,7 @@ export class ClassesService {
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.level !== undefined) data.level = dto.level;
+    if (dto.levelId !== undefined) data.levelId = dto.levelId;
     if (dto.room !== undefined) data.room = dto.room;
     if (dto.capacity !== undefined) data.capacity = dto.capacity;
     if (dto.teacherIds) data.teachers = { set: dto.teacherIds.map((id) => ({ id })) };
