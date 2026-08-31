@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { Check, Infinity as InfinityIcon, Phone, MessageCircle, Mail, Lock, ArrowRight } from 'lucide-react'
+import { Check, Infinity as InfinityIcon, Phone, MessageCircle, Mail, Lock, ArrowRight, Gift } from 'lucide-react'
 import Link from 'next/link'
 import { Reveal } from '@/components/animate'
 import { SectionHeading, ScreenFrame } from '@/components/ui'
-import { PRODUCT, SUPPORT } from '@/lib/site'
+import { PRODUCT, SUPPORT, TRIAL } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Licence',
@@ -38,6 +38,51 @@ export default function LicensePage() {
         </div>
       </section>
 
+      {/* L'essai précède la grille : c'est la première question d'un prospect,
+          et il n'y a rien à payer pour commencer. */}
+      <section className="border-b border-ink-200 bg-white pb-20">
+        <div className="mx-auto max-w-6xl px-5">
+          <Reveal>
+            <div className="grid gap-8 rounded-2xl border border-brand-200 bg-brand-50 p-8 sm:p-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+              <div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-brand-700 text-white">
+                  <Gift className="h-[22px] w-[22px]" />
+                </div>
+                <h2 className="mt-5 text-2xl font-bold tracking-tight text-ink-900">
+                  Commencez par {TRIAL.days} jours gratuits
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-ink-700">
+                  L’essai démarre à la création de votre établissement, sans carte bancaire et
+                  sans engagement. Tous les modules sont ouverts : vous pouvez saisir vos vraies
+                  classes, vos vrais élèves et vos vraies notes, puis décider.
+                </p>
+                <p className="mt-3 text-[15px] leading-relaxed text-ink-700">
+                  Au terme des {TRIAL.days} jours, rien n’est supprimé : l’application passe en
+                  lecture seule et tout redevient modifiable dès l’activation d’une licence.
+                </p>
+              </div>
+
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                {[
+                  ['Durée', `${TRIAL.days} jours`],
+                  ['Élèves', `jusqu’à ${TRIAL.maxStudents}`],
+                  ['Enseignants', `jusqu’à ${TRIAL.maxTeachers}`],
+                  ['Modules', 'tous, sans restriction'],
+                ].map(([k, v]) => (
+                  <div
+                    key={k}
+                    className="flex items-baseline justify-between gap-4 rounded-lg border border-brand-200 bg-white px-4 py-3"
+                  >
+                    <dt className="text-sm text-ink-600">{k}</dt>
+                    <dd className="text-sm font-semibold text-ink-900">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       <section className="bg-ink-50 py-24">
         <div className="mx-auto grid max-w-6xl gap-12 px-5 lg:grid-cols-[1fr_1.1fr] lg:items-start">
           <Reveal>
@@ -52,7 +97,11 @@ export default function LicensePage() {
                 </div>
               </div>
 
-              <ul className="mt-7 space-y-3">
+              <p className="mt-5 text-sm leading-relaxed text-ink-600">
+                Au-delà de l’essai, la licence lève toutes les limites :
+              </p>
+
+              <ul className="mt-5 space-y-3">
                 {INCLUDED.map((line) => (
                   <li key={line} className="flex items-start gap-2.5 text-[15px] text-ink-700">
                     <Check className="mt-0.5 h-[18px] w-[18px] shrink-0 text-brand-700" />

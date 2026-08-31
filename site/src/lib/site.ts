@@ -40,6 +40,18 @@ export const DOWNLOADS = {
   },
 } as const
 
+/**
+ * Essai gratuit ouvert à la création de l'établissement.
+ * Source : server/src/modules/auth/auth.service.ts (plan STARTER, 14 jours)
+ * et license.service.ts (activation d'un code → limites levées).
+ */
+export const TRIAL = {
+  days: 14,
+  maxStudents: 200,
+  maxTeachers: 30,
+  storageMb: 1000,
+} as const
+
 export const REQUIREMENTS = [
   { label: 'Système', value: 'Windows 10 ou Windows 11 (64 ou 32 bits)' },
   { label: 'Mémoire', value: '4 Go de RAM minimum, 8 Go recommandés' },
@@ -137,6 +149,10 @@ export const GALLERY = [
 ] as const
 
 export const FAQ = [
+  {
+    q: 'Y a-t-il un essai gratuit ?',
+    a: "Oui : 14 jours, sans carte bancaire et sans engagement. L'essai démarre à la création de votre établissement et donne accès à tous les modules, dans la limite de 200 élèves et 30 enseignants. Passé ce délai, l'application reste consultable mais la saisie est suspendue jusqu'à l'activation d'une licence, qui lève ces limites.",
+  },
   {
     q: 'Faut-il Internet pour utiliser Sekoliko ?',
     a: "Non. Après la première connexion, l'application fonctionne entièrement hors ligne : saisie des notes, appel, encaissements, impression. Quand le réseau revient, tout se synchronise automatiquement avec le serveur et les autres postes de l'école.",

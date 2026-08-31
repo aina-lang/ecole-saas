@@ -80,7 +80,7 @@ export default function HomePage() {
               </div>
 
               <p className="mt-4 text-[13px] text-ink-500">
-                Windows 10 et 11 · Installation en deux minutes · Essai avant abonnement
+                Windows 10 et 11 · Installation en deux minutes · 14 jours d’essai gratuit
               </p>
             </Reveal>
 
