@@ -132,7 +132,7 @@ export default function LicensePage() {
             </ol>
 
             <div className="mt-10">
-              <ScreenFrame src="licence.png" alt="Écran Licence de Sekoliko" />
+              <ScreenFrame src="licence.webp" alt="Écran Licence de Sekoliko" />
             </div>
           </Reveal>
         </div>

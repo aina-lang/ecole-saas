@@ -88,7 +88,7 @@ export default function HomePage() {
               <Parallax amount={30}>
                 <div className="overflow-hidden rounded-xl border border-ink-700 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.75)]">
                   <ScreenFrame
-                    src="tableau-de-bord-sombre.png"
+                    src="tableau-de-bord-sombre.webp"
                     alt="Tableau de bord Sekoliko"
                     priority
                     className="!rounded-none !border-0 !shadow-none"
@@ -268,7 +268,7 @@ export default function HomePage() {
           </Reveal>
 
           <Reveal from="left" delay={0.1}>
-            <ScreenFrame src="frais.png" alt="Structure des frais par niveau" />
+            <ScreenFrame src="frais.webp" alt="Structure des frais par niveau" />
           </Reveal>
         </div>
       </section>

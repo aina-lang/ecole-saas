@@ -1,0 +1,35 @@
+# Déploiement du site public de téléchargement.
+#
+# `base` pointe sur ce sous-dossier : le dépôt est un monorepo (frontend
+# Electron, server NestJS, mobile, site), et sans cette indication Netlify
+# installerait les dépendances à la racine, où il n'y a pas de package.json.
+#
+# Le site est exporté en statique : pas de runtime Next.js, pas de fonction
+# serverless, pas de démarrage à froid. Le greffon @netlify/plugin-nextjs
+# serait inutile ici et ne doit pas être activé.
+
+[build]
+  base = "site"
+  command = "npm run build"
+  # Export statique (voir next.config.ts). Relatif à `base`, pas à la racine.
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Les captures d'écran ne changent jamais sans changer de nom de fichier :
+# elles peuvent être mises en cache longtemps par le navigateur.
+[[headers]]
+  for = "/screens/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Durcissement de base. Pas de politique CSP stricte ici : la page ne charge
+# aucune ressource tierce, mais Next injecte ses propres styles et scripts en
+# ligne, qu'une CSP mal calibrée casserait silencieusement.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "SAMEORIGIN"

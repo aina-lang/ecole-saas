@@ -56,7 +56,7 @@ export const FEATURES = [
     summary: 'Dossiers complets, photos, matricules automatiques et rattachement aux parents.',
     detail:
       "Chaque élève a une fiche avec sa photo, son matricule, sa classe, ses parents et ses documents. La recherche porte sur le nom, le prénom ou le matricule, et les listes s'exportent en PDF, Word ou Excel.",
-    screen: 'eleves.png',
+    screen: 'eleves.webp',
   },
   {
     id: 'parents',
@@ -65,7 +65,7 @@ export const FEATURES = [
     summary: 'Un compte par famille, plusieurs enfants rattachés, plusieurs numéros par contact.',
     detail:
       "Les parents sont reliés à leurs enfants : depuis une fiche parent on voit toute la fratrie, et depuis un élève on retrouve les contacts à appeler. Les téléphones multiples sont gérés et dédoublonnés.",
-    screen: 'parents.png',
+    screen: 'parents.webp',
   },
   {
     id: 'notes',
@@ -74,7 +74,7 @@ export const FEATURES = [
     summary: 'Devoirs, contrôles et examens avec coefficients, moyennes et bulletins PDF.',
     detail:
       "La saisie se fait par classe et par matière, avec le type d'évaluation et son coefficient. Les moyennes se calculent seules, par période et par année, et les bulletins sortent en PDF prêts à imprimer.",
-    screen: 'notes.png',
+    screen: 'notes.webp',
   },
   {
     id: 'presences',
@@ -83,7 +83,7 @@ export const FEATURES = [
     summary: 'Appel par demi-journée ou par créneau, avec suivi des retards et des justificatifs.',
     detail:
       "L'appel se fait classe par classe et jour par jour, en quelques clics. Les statistiques par élève et par classe montrent d'un coup d'œil qui décroche.",
-    screen: 'presences.png',
+    screen: 'presences.webp',
   },
   {
     id: 'emploi-du-temps',
@@ -92,7 +92,7 @@ export const FEATURES = [
     summary: 'Grille hebdomadaire par classe, avec salles, enseignants et récréations.',
     detail:
       "Chaque classe a sa grille de la semaine, avec la matière, l'enseignant et la salle. Les conflits d'enseignant ou de salle sont signalés, et la grille s'exporte en PDF pour l'affichage.",
-    screen: 'emploi-du-temps.png',
+    screen: 'emploi-du-temps.webp',
   },
   {
     id: 'paiements',
@@ -101,7 +101,7 @@ export const FEATURES = [
     summary: 'Frais par niveau, paiements partiels, reçus et suivi des retards.',
     detail:
       "Les frais se définissent par niveau — droits d'inscription, écolage mensuel. Chaque règlement, même partiel, est enregistré avec son reçu, et le tableau de bord affiche le taux de recouvrement.",
-    screen: 'paiements.png',
+    screen: 'paiements.webp',
   },
   {
     id: 'promotions',
@@ -110,7 +110,7 @@ export const FEATURES = [
     summary: 'Délibération, clôture annuelle, ré-inscriptions et répartition, en quatre étapes.',
     detail:
       "Le passage d'une année à l'autre est guidé : calcul des moyennes et décisions de passage, clôture de l'année, contrôle des dettes à la ré-inscription, puis affectation dans les nouvelles classes.",
-    screen: 'promotions.png',
+    screen: 'promotions.webp',
   },
   {
     id: 'finances',
@@ -119,21 +119,21 @@ export const FEATURES = [
     summary: 'Effectifs, taux de présence, collecte mensuelle et impayés en une page.',
     detail:
       "L'écran d'accueil résume l'établissement : nombre d'élèves et d'enseignants, remplissage des classes, présence du jour, montants collectés, en attente et en retard.",
-    screen: 'tableau-de-bord.png',
+    screen: 'tableau-de-bord.webp',
   },
 ] as const
 
 /** Captures mises en avant dans la galerie de l'accueil. */
 export const GALLERY = [
-  { src: 'tableau-de-bord.png', label: 'Tableau de bord' },
-  { src: 'eleves.png', label: 'Élèves' },
-  { src: 'emploi-du-temps.png', label: 'Emploi du temps' },
-  { src: 'notes.png', label: 'Notes' },
-  { src: 'paiements.png', label: 'Paiements' },
-  { src: 'presences.png', label: 'Présences' },
-  { src: 'parents.png', label: 'Parents' },
-  { src: 'frais.png', label: 'Frais par niveau' },
-  { src: 'tableau-de-bord-sombre.png', label: 'Thème sombre' },
+  { src: 'tableau-de-bord.webp', label: 'Tableau de bord' },
+  { src: 'eleves.webp', label: 'Élèves' },
+  { src: 'emploi-du-temps.webp', label: 'Emploi du temps' },
+  { src: 'notes.webp', label: 'Notes' },
+  { src: 'paiements.webp', label: 'Paiements' },
+  { src: 'presences.webp', label: 'Présences' },
+  { src: 'parents.webp', label: 'Parents' },
+  { src: 'frais.webp', label: 'Frais par niveau' },
+  { src: 'tableau-de-bord-sombre.webp', label: 'Thème sombre' },
 ] as const
 
 export const FAQ = [
