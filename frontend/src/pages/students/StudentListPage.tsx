@@ -5,16 +5,19 @@ import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { deleteEntity, queryEntities, countEntities } from '@/lib/db/pouchdb-compat'
 import type { Student, PaginatedResponse } from '@/types'
-import { formatDate, getInitials, cn } from '@/lib/utils'
+import { getInitials, cn } from '@/lib/utils'
 import { StudentPhoto } from '@/components/ui/student-photo'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader, FilterBar } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
-import { DataTable, ColumnDef } from '@/components/ui/data-table'
+import { DataTable } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportStudentList } from '@/lib/export/exporters'
 import { PlusIcon, Pencil2Icon, MagnifyingGlassIcon, ReloadIcon, TrashIcon } from '@radix-ui/react-icons'
 
 const statusLabels: Record<
@@ -55,7 +58,7 @@ export function StudentListPage() {
       }
       const [data, total] = await Promise.all([
         queryEntities<Student>('Student', params),
-        countEntities<Student>('Student', params),
+        countEntities('Student', params),
       ])
       return { data, total } as PaginatedResponse<Student>
     }
@@ -75,98 +78,88 @@ export function StudentListPage() {
     }
   })
 
-  const totalPages = studentsData ? Math.ceil(studentsData.total / limit) : 0
 
-  function getPageNumbers() {
-    const pages: (number | 'ellipsis')[] = []
-    if (totalPages <= 5) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i)
-    } else {
-      pages.push(1)
-      if (page > 3) pages.push('ellipsis')
-      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
-        pages.push(i)
-      }
-      if (page < totalPages - 2) pages.push('ellipsis')
-      pages.push(totalPages)
-    }
-    return pages
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Élèves</h2>
-          <p className="text-muted-foreground">Gérer les élèves de l'établissement</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['students'] })}
-            disabled={isLoading}
-          >
-            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button onClick={() => navigate('/students/new')}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Ajouter un élève
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Élèves"
+        description="Gérer les élèves de l'établissement"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['students'] })}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            {/* Exporte la sélection courante (recherche, classe, statut), pas
+                seulement la page affichée. */}
+            <ExportMenu
+              size="default"
+              onExport={(format) =>
+                exportStudentList(format, {
+                  search,
+                  classId: classFilter === 'all' ? '' : classFilter,
+                  status: statusFilter === 'all' ? '' : statusFilter,
+                })
+              }
+            />
+            <Button onClick={() => navigate('/students/new')}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Ajouter un élève
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Recherche et filtres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher par nom, prénom ou matricule..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
-                }}
-                className="pl-9"
-              />
-            </div>
-            <Combobox
-              className="w-[180px]"
-              value={classFilter}
-              onValueChange={(v) => {
-                setClassFilter(v || 'all')
-                setPage(1)
-              }}
-              placeholder="Classe"
-              searchPlaceholder="Rechercher une classe..."
-              options={[
-                { value: 'all', label: 'Toutes les classes' },
-                ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
-              ]}
-            />
-            <Combobox
-              className="w-[150px]"
-              value={statusFilter}
-              onValueChange={(v) => {
-                setStatusFilter(v)
-                setPage(1)
-              }}
-              placeholder="Statut"
-              options={[
-                { value: 'all', label: 'Tous les statuts' },
-                { value: 'active', label: 'Actif' },
-                { value: 'inactive', label: 'Inactif' },
-                { value: 'graduated', label: 'Diplômé' },
-                { value: 'suspended', label: 'Suspendu' },
-              ]}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par nom, prénom ou matricule..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="pl-9"
+          />
+        </div>
+        <Combobox
+          className="w-[180px]"
+          value={classFilter}
+          onValueChange={(v) => {
+            setClassFilter(v || 'all')
+            setPage(1)
+          }}
+          placeholder="Classe"
+          searchPlaceholder="Rechercher une classe..."
+          options={[
+            { value: 'all', label: 'Toutes les classes' },
+            ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
+        <Combobox
+          className="w-[150px]"
+          value={statusFilter}
+          onValueChange={(v) => {
+            setStatusFilter(v)
+            setPage(1)
+          }}
+          placeholder="Statut"
+          options={[
+            { value: 'all', label: 'Tous les statuts' },
+            { value: 'active', label: 'Actif' },
+            { value: 'inactive', label: 'Inactif' },
+            { value: 'graduated', label: 'Diplômé' },
+            { value: 'suspended', label: 'Suspendu' },
+          ]}
+        />
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">

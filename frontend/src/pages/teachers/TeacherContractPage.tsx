@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities, saveEntity, enrichTeachers } from '@/lib/db/pouchdb-compat'
@@ -8,7 +8,8 @@ import type { Teacher } from '@/types'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { format } from 'date-fns'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/layout/page'
 import { Combobox } from '@/components/ui/combobox'
 import { DataTable } from '@/components/ui/data-table'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -20,7 +21,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { ReloadIcon } from '@radix-ui/react-icons'
+import { ReloadIcon, PlusIcon } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useForm } from 'react-hook-form'
@@ -54,7 +55,6 @@ const contractTypeLabels: Record<string, string> = {
 export function TeacherContractPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
-  const queryClient = useQueryClient()
 
   const { data: teachersRaw, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
@@ -140,26 +140,28 @@ export function TeacherContractPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Contrats enseignants</h2>
-          <p className="text-muted-foreground">Gérer les contrats des enseignants</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
-            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button onClick={() => { form.reset(); setDialogOpen(true) }}>
-            Nouveau contrat
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Contrats enseignants"
+        description="Gérer les contrats des enseignants"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <Button onClick={() => { form.reset(); setDialogOpen(true) }}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Nouveau contrat
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -305,7 +307,7 @@ export function TeacherContractPage() {
                   )}
                 />
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="cnapsNumber"
@@ -333,7 +335,7 @@ export function TeacherContractPage() {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="startDate"

@@ -1,21 +1,22 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { queryEntities, deleteEntity, countEntities } from '@/lib/db/pouchdb-compat'
+import { queryEntities, deleteEntity } from '@/lib/db/pouchdb-compat'
 import type { Class } from '@/types'
 import { cn } from '@/lib/utils'
 import { MagnifyingGlassIcon } from '@radix-ui/react-icons'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Combobox } from '@/components/ui/combobox'
-import { PlusIcon, PersonIcon, ReaderIcon, ReloadIcon, TrashIcon, Pencil2Icon } from '@radix-ui/react-icons'
+import { PlusIcon, PersonIcon, ReloadIcon, TrashIcon, Pencil2Icon } from '@radix-ui/react-icons'
 import {
   Pagination,
   PaginationContent,
@@ -25,6 +26,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportClassList } from '@/lib/export/exporters'
 
 export function ClassListPage() {
   const navigate = useNavigate()
@@ -39,6 +42,21 @@ export function ClassListPage() {
   const limit = 9
 
   const { data: classesRaw, loading: isLoadingRaw, refetch } = useLocalQuery<Class>('Class')
+  const { data: allStudents } = useQuery({
+    queryKey: ['all-students-for-counts'],
+    queryFn: () => queryEntities<any>('Student'),
+    staleTime: 60_000,
+  })
+
+  const studentCountByClass = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const s of (allStudents ?? [])) {
+      if (s.classId) {
+        map.set(s.classId, (map.get(s.classId) || 0) + 1)
+      }
+    }
+    return map
+  }, [allStudents])
 
   const sortedAndFiltered = (classesRaw ?? []).filter((c) => {
     if (!search.trim()) return true
@@ -103,7 +121,6 @@ export function ClassListPage() {
   }
 
   const allSelected = pageClasses.length > 0 && pageClasses.every((c) => selectedIds.has(c.id))
-  const someSelected = pageClasses.some((c) => selectedIds.has(c.id)) && !allSelected
 
   function getPageNumbers() {
     const pages: (number | 'ellipsis')[] = []
@@ -121,97 +138,98 @@ export function ClassListPage() {
     return pages
   }
 
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Classes</h2>
-          <p className="text-muted-foreground">Gérer les classes de l'établissement</p>
+      <PageHeader
+        title="Classes"
+        description="Gérer les classes de l'établissement"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isLoadingRaw}
+              aria-label="Rafraîchir"
+            >
+              <ReloadIcon className={cn('h-4 w-4', isLoadingRaw && 'animate-spin')} />
+            </Button>
+            <ExportMenu onExport={(format) => exportClassList(format)} size="default" />
+            <Button onClick={() => navigate('/classes/new')}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Ajouter une classe
+            </Button>
+          </>
+        }
+      />
+
+      <FilterBar>
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher une classe..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+          />
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={isLoadingRaw}
-          >
-            <ReloadIcon className={cn('h-4 w-4', isLoadingRaw && 'animate-spin')} />
-          </Button>
-          <Button onClick={() => navigate('/classes/new')}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Ajouter une classe
-          </Button>
+          <span className="text-sm text-muted-foreground">Trier par :</span>
+          <Combobox
+            className="w-[220px]"
+            placeholder="Nom (A-Z)"
+            value={`${sortBy}:${sortDirection}`}
+            onValueChange={(val) => {
+              const [key, dir] = val.split(':')
+              if (key) setSortBy(key)
+              if (dir) setSortDirection(dir as 'asc' | 'desc')
+            }}
+            options={[
+              { value: 'name:asc', label: 'Nom (A-Z)' },
+              { value: 'name:desc', label: 'Nom (Z-A)' },
+              { value: 'level:asc', label: 'Niveau (A-Z)' },
+              { value: 'level:desc', label: 'Niveau (Z-A)' },
+              { value: 'capacity:asc', label: 'Capacité (croissant)' },
+              { value: 'capacity:desc', label: 'Capacité (décroissant)' },
+            ]}
+          />
         </div>
-      </div>
-
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative flex-1 min-w-[200px]">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher une classe..."
-                className="pl-9"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
-                }}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Trier par:</span>
-              <Combobox
-                className="w-[220px]"
-                placeholder="Nom (A-Z)"
-                value={`${sortBy}:${sortDirection}`}
-                onValueChange={(val) => {
-                  const [key, dir] = val.split(':')
-                  if (key) setSortBy(key)
-                  if (dir) setSortDirection(dir as 'asc' | 'desc')
-                }}
-                options={[
-                  { value: 'name:asc', label: 'Nom (A-Z)' },
-                  { value: 'name:desc', label: 'Nom (Z-A)' },
-                  { value: 'level:asc', label: 'Niveau (A-Z)' },
-                  { value: 'level:desc', label: 'Niveau (Z-A)' },
-                  { value: 'capacity:asc', label: 'Capacité (croissant)' },
-                  { value: 'capacity:desc', label: 'Capacité (décroissant)' },
-                ]}
-              />
-            </div>
-            {pageClasses.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleSelectAll}
-              >
-                {allSelected ? 'Désélectionner tout' : 'Tout sélectionner'}
-              </Button>
-            )}
-            {selectedIds.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setBulkDeleteOpen(true)}
-              >
-                <TrashIcon className="mr-2 h-4 w-4" />
-                Supprimer ({selectedIds.size})
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        {pageClasses.length > 0 && (
+          <Button variant="outline" size="sm" onClick={toggleSelectAll}>
+            {allSelected ? 'Désélectionner tout' : 'Tout sélectionner'}
+          </Button>
+        )}
+        {selectedIds.size > 0 && (
+          <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+            <TrashIcon className="mr-2 h-4 w-4" />
+            Supprimer ({selectedIds.size})
+          </Button>
+        )}
+      </FilterBar>
 
       {isLoadingRaw ? (
         <div className="flex h-48 items-center justify-center text-muted-foreground">
           Chargement...
         </div>
       ) : pageClasses.length === 0 ? (
-        <div className="flex h-48 flex-col items-center justify-center gap-4 text-muted-foreground">
-          <p>Aucune classe trouvée</p>
-          <Button onClick={() => navigate('/classes/new')}>Créer la première classe</Button>
-        </div>
+        <Card>
+          <CardContent>
+            <EmptyState
+              title="Aucune classe trouvée"
+              description={search.trim() ? 'Aucune classe ne correspond à votre recherche.' : 'Commencez par créer votre première classe.'}
+              action={
+                <Button onClick={() => navigate('/classes/new')}>
+                  <PlusIcon className="mr-2 h-4 w-4" />
+                  Créer la première classe
+                </Button>
+              }
+            />
+          </CardContent>
+        </Card>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -221,87 +239,114 @@ export function ClassListPage() {
                 <Card
                   key={cls.id}
                   className={cn(
-                    'relative transition-shadow hover:shadow-md',
+                    'group flex flex-col overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md',
                     selected && 'ring-2 ring-primary'
                   )}
                 >
-                  <div className="absolute left-3 top-3 z-10">
-                    <Checkbox
-                      checked={selected}
-                      onCheckedChange={() => toggleSelect(cls.id)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
                   <div
-                    className="cursor-pointer p-6 pt-10"
+                    className="flex flex-1 cursor-pointer flex-col p-5"
                     onClick={() => navigate(`/classes/${cls.id}`)}
                   >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-xl">{cls.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground">{cls.level}</p>
-                        </div>
-                        <Badge variant="outline">{cls.room || 'Salle N/D'}</Badge>
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        className="mt-1"
+                        checked={selected}
+                        onCheckedChange={() => toggleSelect(cls.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Sélectionner ${cls.name}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-lg font-semibold leading-tight">{cls.name}</h3>
+                        <p className="text-sm text-muted-foreground">{cls.level || 'Niveau non défini'}</p>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <PersonIcon className="h-4 w-4" />
-                          <span>
-                            {cls.studentCount || 0} / {cls.capacity}
-                          </span>
+                      {cls.room && (
+                        <Badge variant="outline" className="shrink-0 font-normal text-muted-foreground">
+                          {cls.room}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {(() => {
+                      const count = studentCountByClass.get(cls.id) ?? 0
+                      const capacity = Number(cls.capacity) || 0
+                      const ratio = capacity ? Math.min(count / capacity, 1) : 0
+                      const full = capacity > 0 && count >= capacity
+                      return (
+                        <div className="mt-5">
+                          <div className="flex items-baseline justify-between text-sm">
+                            <span className="flex items-center gap-1.5 text-muted-foreground">
+                              <PersonIcon className="h-4 w-4" />
+                              Effectif
+                            </span>
+                            <span className="font-medium tabular-nums">
+                              {count}
+                              <span className="text-muted-foreground"> / {capacity || '—'}</span>
+                            </span>
+                          </div>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={cn('h-full rounded-full transition-all', full ? 'bg-red-500' : ratio >= 0.9 ? 'bg-amber-500' : 'bg-primary')}
+                              style={{ width: `${ratio * 100}%` }}
+                            />
+                          </div>
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            {capacity === 0
+                              ? 'Capacité non définie'
+                              : full
+                                ? 'Classe complète'
+                                : `${capacity - count} place${capacity - count > 1 ? 's' : ''} disponible${capacity - count > 1 ? 's' : ''}`}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <ReaderIcon className="h-4 w-4" />
-                          <span>Enseignants</span>
-                        </div>
-                      </div>
-                      <div className="mt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigate(`/students/new?classId=${cls.id}`)
-                          }}
-                        >
-                          <PlusIcon className="mr-2 h-4 w-4" />
-                          Ajouter un élève
-                        </Button>
-                      </div>
-                    </CardContent>
+                      )
+                    })()}
                   </div>
-                  <div className="flex items-center justify-end gap-1 border-t p-2">
+
+                  <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2">
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
+                      className="h-8 px-2 text-primary hover:text-primary"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(`/classes/${cls.id}/edit`)
+                        navigate(`/students/new?classId=${cls.id}`)
                       }}
                     >
-                      <Pencil2Icon className="h-4 w-4" />
+                      <PlusIcon className="mr-1.5 h-4 w-4" />
+                      Ajouter un élève
                     </Button>
-                    <ConfirmDialog
-                      open={deleteId === cls.id}
-                      onOpenChange={(open) => !open && setDeleteId(null)}
-                      onConfirm={() => deleteMutation.mutate(cls.id)}
-                      title="Supprimer la classe"
-                      description={`Êtes-vous sûr de vouloir supprimer la classe "${cls.name}" ? Cette action est irréversible.`}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleteId(cls.id)
-                      }}
-                    >
-                      <TrashIcon className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Modifier"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/classes/${cls.id}/edit`)
+                        }}
+                      >
+                        <Pencil2Icon className="h-4 w-4" />
+                      </Button>
+                      <ConfirmDialog
+                        open={deleteId === cls.id}
+                        onOpenChange={(open) => !open && setDeleteId(null)}
+                        onConfirm={() => deleteMutation.mutate(cls.id)}
+                        title="Supprimer la classe"
+                        description={`Êtes-vous sûr de vouloir supprimer la classe "${cls.name}" ? Cette action est irréversible.`}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        aria-label="Supprimer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleteId(cls.id)
+                        }}
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               )

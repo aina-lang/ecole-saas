@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Save, ArrowLeft } from 'lucide-react'
+import { Save } from 'lucide-react'
 
 import { useLocalQuery, usePeriods } from '@/lib/db/hooks'
 import { saveEntity, queryEntities, getEntityById } from '@/lib/db/pouchdb-compat'
@@ -21,8 +21,9 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { PageHeader, FormShell, FormSection, EmptyState } from '@/components/layout/page'
 
 
 interface ClassOption {
@@ -254,171 +255,159 @@ export function GradeEntryPage() {
     }
   }
 
+  const filledCount = entries.filter((e) => e.value !== '').length
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Saisie de notes</h2>
-          <p className="text-muted-foreground">Entrez les notes pour une classe et une matière.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/grades')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour
-          </Button>
-          <Button onClick={handleSubmitAll} disabled={submitting}>
-            <Save className="mr-2 h-4 w-4" />
-            {submitting ? 'Enregistrement...' : 'Tout valider'}
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/grades"
+        title={editId ? 'Modifier une note' : 'Saisie de notes'}
+        description="Entrez les notes pour une classe et une matière."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Paramètres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="space-y-1.5">
-              <Label>Classe</Label>
-              <Combobox
-                value={classId}
-                onValueChange={setClassId}
-                placeholder="Sélectionner"
-                searchPlaceholder="Rechercher une classe..."
-                options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Matière</Label>
-              <Combobox
-                value={subjectId}
-                onValueChange={setSubjectId}
-                placeholder="Sélectionner"
-                searchPlaceholder="Rechercher une matière..."
-                options={(filteredSubjects).map((s) => ({ value: s.id, label: formatSubjectLabel(s) }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Combobox
-                value={evaluationType}
-                onValueChange={setEvaluationType}
-                placeholder="Sélectionner"
-                options={EVALUATION_TYPES.map((t) => ({
-                  value: t,
-                  label: EVALUATION_TYPE_LABELS[t],
-                }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Note max</Label>
-              <Input
-                type="number"
-                min="1"
-                value={maxValue}
-                onChange={(e) => setMaxValue(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Coefficient</Label>
-              <Input
-                type="number"
-                min="0.5"
-                step="0.5"
-                value={coefficient}
-                onChange={(e) => setCoefficient(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Période</Label>
-              <Combobox
-                value={periodId}
-                onValueChange={setPeriodId}
-                placeholder="Sélectionner"
-                disabled={loadingPeriods}
-                options={periods.map((p) => ({ value: p.value, label: p.label }))}
-              />
-            </div>
+      <FormShell
+        hint={entries.length > 0 ? `${filledCount} note(s) saisie(s) sur ${entries.length} élève(s)` : 'Sélectionnez une classe pour commencer'}
+        actions={
+          <>
+            <Button type="button" variant="outline" onClick={() => navigate('/grades')}>
+              Annuler
+            </Button>
+            <Button type="button" onClick={handleSubmitAll} disabled={submitting}>
+              <Save className="mr-2 h-4 w-4" />
+              {submitting ? 'Enregistrement...' : entries.length > 0 ? `Tout valider (${filledCount} notes)` : 'Tout valider'}
+            </Button>
+          </>
+        }
+      >
+        <FormSection title="Paramètres" description="Classe, matière et barème de l'évaluation." columns={3}>
+          <div className="space-y-1.5">
+            <Label>Classe</Label>
+            <Combobox
+              value={classId}
+              onValueChange={setClassId}
+              placeholder="Sélectionner"
+              searchPlaceholder="Rechercher une classe..."
+              options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-1.5">
+            <Label>Matière</Label>
+            <Combobox
+              value={subjectId}
+              onValueChange={setSubjectId}
+              placeholder="Sélectionner"
+              searchPlaceholder="Rechercher une matière..."
+              options={(filteredSubjects).map((s) => ({ value: s.id, label: formatSubjectLabel(s) }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Type</Label>
+            <Combobox
+              value={evaluationType}
+              onValueChange={setEvaluationType}
+              placeholder="Sélectionner"
+              options={EVALUATION_TYPES.map((t) => ({
+                value: t,
+                label: EVALUATION_TYPE_LABELS[t],
+              }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Note max</Label>
+            <Input
+              type="number"
+              min="1"
+              value={maxValue}
+              onChange={(e) => setMaxValue(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Coefficient</Label>
+            <Input
+              type="number"
+              min="0.5"
+              step="0.5"
+              value={coefficient}
+              onChange={(e) => setCoefficient(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Période</Label>
+            <Combobox
+              value={periodId}
+              onValueChange={setPeriodId}
+              placeholder="Sélectionner"
+              disabled={loadingPeriods}
+              options={periods.map((p) => ({ value: p.value, label: p.label }))}
+            />
+          </div>
+        </FormSection>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>Élève</TableHead>
-                <TableHead className="w-40">Note / {maxValue}</TableHead>
-                <TableHead className="w-60">Commentaire</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!classId ? (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                    Sélectionnez une classe pour afficher les élèves.
-                  </TableCell>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>Élève</TableHead>
+                  <TableHead className="w-40">Note / {maxValue}</TableHead>
+                  <TableHead className="w-60">Commentaire</TableHead>
                 </TableRow>
-              ) : loadingStudents ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                    Chargement des élèves...
-                  </TableCell>
-                </TableRow>
-              ) : entries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                    Aucun élève dans cette classe.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                entries.map((entry, index) => (
-                  <TableRow key={entry.studentId}>
-                    <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
-                    <TableCell className="font-medium">{entry.studentName}</TableCell>
-                    <TableCell>
-                      <Input
-                        ref={(el) => setInputRef(entry.studentId, el)}
-                        type="number"
-                        min="0"
-                        max={maxValue}
-                        step="0.25"
-                        placeholder={`0 - ${maxValue}`}
-                        value={entry.value}
-                        onChange={(e) => handleValueChange(entry.studentId, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, index)}
-                        className="h-9 w-28"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="Commentaire (optionnel)"
-                        value={entry.comment}
-                        onChange={(e) => handleCommentChange(entry.studentId, e.target.value)}
-                        className="h-9"
-                      />
+              </TableHeader>
+              <TableBody>
+                {!classId ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="p-0">
+                      <EmptyState title="Aucune classe sélectionnée" description="Sélectionnez une classe pour afficher les élèves." />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {entries.length > 0 && (
-        <div className="flex justify-end">
-          <Button size="lg" onClick={handleSubmitAll} disabled={submitting}>
-            <Save className="mr-2 h-4 w-4" />
-            {submitting
-              ? 'Enregistrement...'
-              : `Tout valider (${entries.filter((e) => e.value !== '').length} notes)`}
-          </Button>
-        </div>
-      )}
+                ) : loadingStudents ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                      Chargement des élèves...
+                    </TableCell>
+                  </TableRow>
+                ) : entries.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="p-0">
+                      <EmptyState title="Aucun élève dans cette classe" />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  entries.map((entry, index) => (
+                    <TableRow key={entry.studentId}>
+                      <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
+                      <TableCell className="font-medium">{entry.studentName}</TableCell>
+                      <TableCell>
+                        <Input
+                          ref={(el) => setInputRef(entry.studentId, el)}
+                          type="number"
+                          min="0"
+                          max={maxValue}
+                          step="0.25"
+                          placeholder={`0 - ${maxValue}`}
+                          value={entry.value}
+                          onChange={(e) => handleValueChange(entry.studentId, e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, index)}
+                          className="h-9 w-28"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          placeholder="Commentaire (optionnel)"
+                          value={entry.comment}
+                          onChange={(e) => handleCommentChange(entry.studentId, e.target.value)}
+                          className="h-9"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </FormShell>
     </div>
   )
 }

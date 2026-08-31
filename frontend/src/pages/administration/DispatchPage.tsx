@@ -1,12 +1,15 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ExternalLink } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Level, Class, StudentEnrollment, Student } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
 import {
   Select,
   SelectTrigger,
@@ -15,11 +18,11 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 
-type EnrichedEnrollment = StudentEnrollment & { student?: Student }
-
 export function DispatchPage() {
   const queryClient = useQueryClient()
   const [selectedLevelId, setSelectedLevelId] = useState<string>('')
+  const navigate = useNavigate()
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [assignments, setAssignments] = useState<Record<string, string>>({})
 
@@ -29,8 +32,14 @@ export function DispatchPage() {
   })
 
   const { data: classes = [] } = useQuery({
-    queryKey: ['classes', selectedLevelId],
-    queryFn: () => queryEntities<Class>('Class', { levelId: selectedLevelId }),
+    queryKey: ['classes', selectedLevelId, levels.length],
+    // Par levelId OU par nom de niveau : les classes créées avant le
+    // référentiel des niveaux ne portent que le nom (« 6ème »).
+    queryFn: async () => {
+      const all = await queryEntities<Class & { level?: string | null; levelId?: string | null; deletedAt?: string | null }>('Class')
+      const lvl = (levels ?? []).find((l) => l.id === selectedLevelId)
+      return all.filter((c) => !c.deletedAt && (c.levelId === selectedLevelId || (!!lvl && c.level === lvl.name)))
+    },
     enabled: !!selectedLevelId,
   })
 
@@ -57,10 +66,6 @@ export function DispatchPage() {
   }, [allEnrollments, selectedLevelId])
 
   const unassigned = useMemo(() => {
-    const assignedClassIds = new Set(Object.values(assignments))
-    const initiallyAssigned = new Set(
-      enrollments.filter((e) => e.classId).map((e) => e.studentId)
-    )
     return enrollments
       .filter((e) => {
         if (e.classId && !(e.studentId in assignments)) return false
@@ -217,35 +222,25 @@ export function DispatchPage() {
     [selectedStudentId]
   )
 
-  const getEffectiveClassId = useCallback(
-    (studentId: string) => {
-      if (studentId in assignments) return assignments[studentId]
-      return enrollments.find((e) => e.studentId === studentId)?.classId
-    },
-    [assignments, enrollments]
-  )
-
   const hasChanges = useMemo(() => {
     return Object.keys(assignments).length > 0
   }, [assignments])
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Répartition des élèves</h2>
-          <p className="text-muted-foreground">
-            Affecter les élèves aux classes après validation financière
-          </p>
-        </div>
-        {hasChanges && (
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Répartition des élèves"
+        description="Affecter les élèves aux classes après validation financière"
+        actions={
+          hasChanges ? (
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="flex items-center gap-4">
+      <FilterBar>
         <div className="w-72">
           <Select value={selectedLevelId} onValueChange={(v) => { setSelectedLevelId(v); setSelectedStudentId(null); setAssignments({}) }}>
             <SelectTrigger>
@@ -263,64 +258,64 @@ export function DispatchPage() {
             {unassigned.length} élève{unassigned.length !== 1 ? 's' : ''} non affecté{unassigned.length !== 1 ? 's' : ''}
           </Badge>
         )}
-      </div>
+      </FilterBar>
 
       {selectedLevelId && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Élèves non affectés</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[600px] px-4 pb-4">
-                  <div className="space-y-2 pt-2">
-                    {unassigned.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        Aucun élève en attente
-                      </p>
-                    )}
-                    {unassigned.map((enrollment) => {
-                      const s = enrollment.student!
-                      const isSelected = selectedStudentId === enrollment.studentId
-                      return (
-                        <Card
-                          key={enrollment.id}
-                          className={`cursor-pointer transition-colors ${
-                            isSelected ? 'ring-2 ring-primary' : 'hover:bg-accent'
-                          }`}
-                          onClick={() => handleStudentClick(enrollment.studentId)}
-                        >
-                          <CardContent className="p-3 flex items-center gap-3">
-                            <span className="text-lg">
-                              {s.gender === 'M' ? '♂' : '♀'}
-                            </span>
-                            <span className="text-sm font-medium truncate">
-                              {s.lastName} {s.firstName}
-                            </span>
-                          </CardContent>
-                        </Card>
-                      )
-                    })}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
+        <div className="space-y-5">
+          {/* File d'attente : en bandeau, élèves sous forme de puces sélectionnables */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Élèves non affectés</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedStudentId
+                      ? `${(studentMap.get(selectedStudentId)?.lastName ?? '')} ${(studentMap.get(selectedStudentId)?.firstName ?? '')} sélectionné — cliquez sur la classe de destination (ou re-cliquez l’élève pour annuler).`
+                      : unassigned.length === 0
+                        ? 'Tous les élèves de ce niveau ont une classe. Cliquez sur un élève dans une classe, puis sur une autre classe pour le déplacer.'
+                        : 'Cliquez sur un élève (en attente ou déjà placé), puis sur une classe pour l’y déplacer.'}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={autoRepartir}
+                  disabled={unassigned.length === 0 || classes.length === 0}
+                >
+                  Auto-répartir
+                </Button>
+              </div>
+              {unassigned.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {unassigned.map((enrollment) => {
+                    const st = enrollment.student!
+                    const isSelected = selectedStudentId === enrollment.studentId
+                    return (
+                      <button
+                        key={enrollment.id}
+                        type="button"
+                        onClick={() => handleStudentClick(enrollment.studentId)}
+                        className={cn(
+                          'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                          isSelected ? 'border-primary bg-primary text-primary-foreground' : 'bg-card hover:bg-muted',
+                        )}
+                      >
+                        <span className={cn('flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold', isSelected ? 'bg-white/20 text-white' : st.gender === 'F' ? 'bg-pink-100 text-pink-700' : 'bg-sky-100 text-sky-700')}>{st.gender === 'M' ? 'G' : 'F'}</span>
+                        {st.lastName} {st.firstName}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          <div className="lg:col-span-3">
-            <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Classes</h3>
-              <Button
-                variant="secondary"
-                onClick={autoRepartir}
-                disabled={unassigned.length === 0 || classes.length === 0}
-              >
-                Auto-répartir
-              </Button>
+              <p className="text-sm text-muted-foreground">{classBuckets.length} classe{classBuckets.length > 1 ? 's' : ''} · {classBuckets.reduce((n, b) => n + b.studentCount, 0)} élèves placés</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {classBuckets.map((bucket) => {
                 const capacity = bucket.class.capacity
                 const count = bucket.studentCount
@@ -339,55 +334,99 @@ export function DispatchPage() {
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base">{bucket.class.name}</CardTitle>
-                        <Badge variant={isFull ? 'destructive' : remaining <= 3 ? 'secondary' : 'outline'}>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'border-transparent tabular-nums',
+                            isFull
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                              : remaining <= 3
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                                : 'bg-muted text-muted-foreground',
+                          )}
+                        >
                           {count}/{capacity}
                         </Badge>
                       </div>
-                      <div className="w-full bg-muted rounded-full h-2 mt-1">
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
                         <div
-                          className="bg-primary h-2 rounded-full transition-all"
+                          className={cn(
+                            'h-full rounded-full transition-all',
+                            isFull ? 'bg-red-500' : remaining <= 3 ? 'bg-amber-500' : 'bg-primary',
+                          )}
                           style={{ width: `${fillPercent}%` }}
                         />
                       </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {isFull ? 'Classe complète' : `${remaining} place${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`}
+                      </p>
                     </CardHeader>
                     <CardContent className="pb-3">
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>♂ {bucket.maleCount}</span>
-                        <span>♀ {bucket.femaleCount}</span>
+                        <span>{bucket.maleCount} garçon{bucket.maleCount > 1 ? 's' : ''}</span>
+                        <span>{bucket.femaleCount} fille{bucket.femaleCount > 1 ? 's' : ''}</span>
                       </div>
-                      {bucket.studentIds.length > 0 && (
-                        <ScrollArea className="h-[200px] mt-2">
-                          <div className="space-y-1">
-                            {bucket.studentIds.map((sid) => {
-                              const student = studentMap.get(sid)
-                              if (!student) return null
-                              const cameFromPool =
-                                assignments[sid] === bucket.class.id &&
-                                !enrollments.find((e) => e.studentId === sid)?.classId
-                              return (
-                                <div
-                                  key={sid}
-                                  className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${
-                                    cameFromPool ? 'bg-green-50 dark:bg-green-950' : ''
-                                  }`}
-                                >
-                                  <span>{student.gender === 'M' ? '♂' : '♀'}</span>
-                                  <span className="truncate">{student.lastName} {student.firstName}</span>
-                                  {cameFromPool && (
-                                    <Badge variant="outline" className="ml-auto text-[10px] py-0 h-5">
-                                      nouveau
-                                    </Badge>
-                                  )}
-                                </div>
-                              )
-                            })}
+                      {bucket.studentIds.length > 0 && (() => {
+                        const isOpen = expanded.has(bucket.class.id)
+                        const LIMIT = 30
+                        const visible = isOpen ? bucket.studentIds : bucket.studentIds.slice(0, LIMIT)
+                        const hidden = bucket.studentIds.length - visible.length
+                        return (
+                          <div className="mt-3 rounded-md border">
+                            <ul className="grid grid-cols-1 sm:grid-cols-2">
+                              {visible.map((sid, idx) => {
+                                const student = studentMap.get(sid)
+                                if (!student) return null
+                                const cameFromPool =
+                                  assignments[sid] === bucket.class.id &&
+                                  !enrollments.find((e) => e.studentId === sid)?.classId
+                                return (
+                                  <li
+                                    key={sid}
+                                    role="button"
+                                    tabIndex={0}
+                                    title="Cliquer pour sélectionner, puis cliquer sur une autre classe pour déplacer"
+                                    onClick={(e) => { e.stopPropagation(); handleStudentClick(sid) }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); handleStudentClick(sid) } }}
+                                    className={cn(
+                                      'group flex cursor-pointer items-center gap-2 border-b px-2.5 py-1.5 text-sm transition-colors hover:bg-muted/60 sm:[&:nth-child(2n)]:border-l',
+                                      cameFromPool && 'bg-primary/5',
+                                      selectedStudentId === sid && 'bg-primary/15 ring-1 ring-inset ring-primary',
+                                    )}
+                                  >
+                                    <span className="w-5 text-right text-[11px] tabular-nums text-muted-foreground">{idx + 1}</span>
+                                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold', student.gender === 'F' ? 'bg-pink-100 text-pink-700' : 'bg-sky-100 text-sky-700')}>{student.gender === 'M' ? 'G' : 'F'}</span>
+                                    <span className="min-w-0 flex-1 truncate" title={`${student.lastName} ${student.firstName}`}>{student.lastName} {student.firstName}</span>
+                                    {cameFromPool && (
+                                      <Badge variant="outline" className="h-5 border-transparent bg-primary/10 py-0 text-[10px] text-primary">nouveau</Badge>
+                                    )}
+                                    <button
+                                      type="button"
+                                      title="Ouvrir la fiche élève"
+                                      aria-label="Ouvrir la fiche élève"
+                                      onClick={(e) => { e.stopPropagation(); navigate(`/students/${sid}`) }}
+                                      className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                            {(hidden > 0 || isOpen) && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const n = new Set(prev); if (n.has(bucket.class.id)) n.delete(bucket.class.id); else n.add(bucket.class.id); return n }) }}
+                                className="w-full border-t px-2.5 py-1.5 text-center text-xs font-medium text-primary hover:bg-muted/60"
+                              >
+                                {isOpen ? 'Réduire' : `Afficher les ${hidden} autres`}
+                              </button>
+                            )}
                           </div>
-                        </ScrollArea>
-                      )}
+                        )
+                      })()}
                       {bucket.studentIds.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-6">
-                          Classe vide
-                        </p>
+                        <EmptyState title="Classe vide" description="Cliquez sur un élève en attente puis sur cette classe pour l'y placer." className="py-5" />
                       )}
                     </CardContent>
                   </Card>
@@ -397,8 +436,11 @@ export function DispatchPage() {
 
             {classes.length === 0 && (
               <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  Aucune classe définie pour ce niveau
+                <CardContent>
+                  <EmptyState
+                    title="Aucune classe"
+                    description="Aucune classe définie pour ce niveau."
+                  />
                 </CardContent>
               </Card>
             )}
@@ -408,8 +450,11 @@ export function DispatchPage() {
 
       {!selectedLevelId && (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Sélectionnez un niveau pour commencer la répartition
+          <CardContent>
+            <EmptyState
+              title="Aucun niveau sélectionné"
+              description="Sélectionnez un niveau pour commencer la répartition."
+            />
           </CardContent>
         </Card>
       )}

@@ -4,6 +4,8 @@ interface EntitySyncStatus {
   lastSyncAt: string | null
   syncing: boolean
   count: number
+  /** Dernière erreur de réplication (effacée dès que la réplication repasse). */
+  error?: string | null
 }
 
 interface SyncState {
@@ -11,11 +13,14 @@ interface SyncState {
   pendingCount: number
   conflictCount: number
   lastSyncAt: string | null
+  /** Dernier échange HTTP avec CouchDB (même sans document) — pour le chien de garde. */
+  lastContactAt: number | null
   isSyncing: boolean
   entityStatus: Record<string, EntitySyncStatus>
   error: string | null
 
   setOnline: (online: boolean) => void
+  touchContact: () => void
   incrementPending: () => void
   decrementPending: () => void
   setPendingCount: (count: number) => void
@@ -42,6 +47,7 @@ export const useSyncStore = create<SyncState>((set) => ({
   pendingCount: 0,
   conflictCount: 0,
   lastSyncAt: null,
+  lastContactAt: null,
   isSyncing: false,
   entityStatus: initialEntityStatus,
   error: null,
@@ -61,6 +67,8 @@ export const useSyncStore = create<SyncState>((set) => ({
   setConflicts: (count: number) => set({ conflictCount: count }),
 
   setSyncing: (syncing: boolean) => set({ isSyncing: syncing }),
+
+  touchContact: () => set({ lastContactAt: Date.now() }),
 
   setLastSync: (timestamp: string) =>
     set({ lastSyncAt: timestamp, error: null }),

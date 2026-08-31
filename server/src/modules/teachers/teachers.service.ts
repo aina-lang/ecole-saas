@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { MailService } from '../../common/mail/mail.service';
+import { generateTemporaryPassword, credentialsMail } from '../../common/mail/temporary-password';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 
@@ -18,10 +20,11 @@ const TEACHER_INCLUDE = {
       },
       isActive: true,
       role: true,
+      photoUrl: true,
     },
   },
   classes: { select: { id: true, name: true } },
-  subjects: { select: { id: true, name: true, code: true } },
+  subjects: { select: { id: true, name: true, code: true, level: true } },
 };
 
 @Injectable()
@@ -29,7 +32,17 @@ export class TeachersService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private mail: MailService,
   ) {}
+
+  async findByUserId(userId: string, tenantId: string) {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, tenantId },
+      include: TEACHER_INCLUDE,
+    });
+    if (!teacher) throw new NotFoundException("Aucune fiche enseignant n'est associée à ce compte");
+    return teacher;
+  }
 
   async findAll(tenantId: string) {
     return this.prisma.teacher.findMany({
@@ -73,9 +86,20 @@ export class TeachersService {
         : undefined,
     };
     if (dto.email) userData.email = dto.email;
-    userData.passwordHash = dto.password
-      ? await bcrypt.hash(dto.password, 12)
-      : await bcrypt.hash(Math.random().toString(36).slice(2, 10) + 'A1!', 12);
+    // Sans mot de passe fourni : mot de passe TEMPORAIRE généré, renvoyé à
+    // l'administrateur (affiché à l'écran) et envoyé par e-mail à l'enseignant ;
+    // changement obligatoire à la première connexion.
+    const temporaryPassword = dto.password ? null : generateTemporaryPassword();
+    userData.passwordHash = await bcrypt.hash(dto.password ?? temporaryPassword!, 12);
+    if (temporaryPassword) userData.mustChangePassword = true;
+
+    // Ne relier que des classes/matières qui existent côté serveur : une classe
+    // créée hors ligne et pas encore synchronisée ferait échouer toute la création.
+    const [validClasses, validSubjects] = await Promise.all([
+      dto.classIds?.length ? this.prisma.class.findMany({ where: { tenantId, id: { in: dto.classIds } }, select: { id: true } }) : [],
+      dto.subjectIds?.length ? this.prisma.subject.findMany({ where: { tenantId, id: { in: dto.subjectIds } }, select: { id: true } }) : [],
+    ]);
+    dto = { ...dto, classIds: validClasses.map((c) => c.id), subjectIds: validSubjects.map((s) => s.id) };
 
     const teacher = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -108,11 +132,19 @@ export class TeachersService {
       newValue: dto,
     });
 
-    // Propager vers CouchDB
+    // Propager vers CouchDB (fiche + compte utilisateur)
     const created = await this.findById(teacher.id, tenantId);
-    this.prisma.notifyWrite('Teacher', created);
+    this.prisma.notifyWrite('Teacher', toTeacherDoc(created));
+    const createdUser = await this.prisma.user.findUnique({ where: { id: teacher.userId } });
+    if (createdUser) this.prisma.notifyWrite('User', createdUser);
 
-    return created;
+    let credentialsEmailed = false;
+    if (temporaryPassword && dto.email) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+      const mail = credentialsMail({ firstName: dto.firstName, email: dto.email, password: temporaryPassword, schoolName: tenant?.name });
+      credentialsEmailed = await this.mail.send(dto.email, mail.subject, mail.text, mail.html);
+    }
+    return { ...created, temporaryPassword, credentialsEmailed };
   }
 
   async update(id: string, tenantId: string, dto: UpdateTeacherDto, userId?: string) {
@@ -155,7 +187,7 @@ export class TeachersService {
 
     // Propager la mise à jour vers CouchDB
     const updated = await this.findById(id, tenantId);
-    this.prisma.notifyWrite('Teacher', updated);
+    this.prisma.notifyWrite('Teacher', toTeacherDoc(updated));
 
     return updated;
   }
@@ -182,4 +214,23 @@ export class TeachersService {
 
     return { message: 'Enseignant désactivé' };
   }
+}
+
+/**
+ * Document enseignant tel que les postes le manipulent : en plus des
+ * relations, les tableaux d'ids (classIds/subjectIds) et les champs plats
+ * user_* utilisés par les listes et le détail de classe hors ligne.
+ */
+function toTeacherDoc(t: any) {
+  const phones: string[] = (t.user?.phones ?? []).map((p: any) => p.value);
+  const flatPhones = Object.fromEntries(phones.map((v, i) => [`user_phone_${i}`, v]));
+  return {
+    ...t,
+    classIds: (t.classes ?? []).map((c: any) => c.id),
+    subjectIds: (t.subjects ?? []).map((s: any) => s.id),
+    user_firstName: t.user?.firstName ?? null,
+    user_lastName: t.user?.lastName ?? null,
+    user_email: t.user?.email ?? null,
+    ...flatPhones,
+  };
 }

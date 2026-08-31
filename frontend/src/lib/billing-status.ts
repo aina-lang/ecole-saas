@@ -1,26 +1,20 @@
 import { getTenantId } from './db/token-cache'
+import { bumpRatchet, getDurable, setDurable, trustedNow } from './trusted-clock'
 
 // Aucun serveur ne peut bloquer une action réellement hors ligne au moment où
-// elle se produit. Trois niveaux de protection :
+// elle se produit. Le contrôle est donc local, et repose sur :
 //
-// 1. On met en cache le DERNIER statut connu à chaque vérification en ligne
-//    (voir SubscriptionBanner.tsx) et on le relit avant toute écriture locale.
-// 2. Comme l'abonnement est annuel, rester hors ligne indéfiniment ne doit pas
-//    suffire à contourner l'expiration : on met aussi en cache la date de fin
-//    (fin d'essai ou fin de période payée) et on la compare à l'heure courante
-//    à chaque écriture — pas seulement au dernier statut connu.
-// 3. L'heure courante utilisée n'est PAS Date.now() brut : c'est un cliquet
-//    (ratchet) qui ne peut qu'avancer. Reculer l'horloge système après usage
-//    ne redonne donc pas de temps — l'app se souvient du dernier instant
-//    légitimement observé (à chaque écriture ET à chaque contact serveur) et
-//    n'accepte jamais de "maintenant" antérieur à ça.
-//    Limite assumée : quelqu'un qui recule son horloge AVANT toute première
-//    utilisation, et ne la laisse plus jamais avancer, contourne quand même ce
-//    contrôle précis — mais reste alors bloqué de toute synchronisation avec
-//    le serveur (qui, lui, a sa propre horloge) tant qu'il ne se reconnecte
-//    pas avec une horloge plausible. Vider le cache local (localStorage)
-//    réinitialise aussi le cliquet — mais le garde-fou serveur referme la
-//    boucle dans les deux cas dès la reconnexion.
+// 1. Le DERNIER statut connu, mis en cache à chaque vérification en ligne
+//    (SubscriptionBanner.tsx) et relu avant toute écriture locale.
+// 2. La DATE DE FIN mise en cache elle aussi (fin d'essai ou de licence),
+//    comparée au « maintenant » de confiance à chaque écriture — rester hors
+//    ligne indéfiniment ne contourne donc pas l'expiration annuelle.
+// 3. Un « maintenant » de confiance (lib/trusted-clock.ts) : heure corrigée
+//    du décalage serveur + cliquet monotone. Reculer ou figer l'horloge, avant
+//    ou après la première utilisation, ne rend pas de temps.
+// 4. Un stockage DURABLE : le cache et le cliquet vivent dans localStorage et
+//    dans deux fichiers hors du profil (processus principal). Vider le cache
+//    du navigateur ne remet pas les compteurs à zéro.
 
 export type CachedBillingStatus = 'ACTIVE' | 'TRIAL' | 'PAST_DUE' | 'SUSPENDED' | 'CANCELLED'
 
@@ -32,50 +26,41 @@ interface CachedBilling {
 
 function cacheKey(): string {
   const tenantId = getTenantId() || localStorage.getItem('tenantId') || 'default'
-  return `billing_status_cache_${tenantId}`
+  return `billing_${tenantId}`
 }
 
-function ratchetKey(): string {
-  const tenantId = getTenantId() || localStorage.getItem('tenantId') || 'default'
-  return `billing_time_ratchet_${tenantId}`
-}
-
-/** Fait avancer le cliquet temporel jusqu'à `Date.now()` si besoin — jamais en arrière. */
+/** Conservé pour compatibilité : fait avancer le cliquet de confiance. */
 export function bumpTimeRatchet(): void {
-  const key = ratchetKey()
-  const stored = parseInt(localStorage.getItem(key) || '0', 10)
-  const now = Date.now()
-  if (now > stored) {
-    localStorage.setItem(key, String(now))
-  }
-}
-
-/** "Maintenant" tel que connu par l'app : jamais antérieur au dernier instant
- * observé, même si l'horloge système a été reculée depuis. */
-function effectiveNow(): number {
-  const stored = parseInt(localStorage.getItem(ratchetKey()) || '0', 10);
-  return Math.max(Date.now(), stored);
+  bumpRatchet()
 }
 
 export function cacheBillingStatus(status: CachedBillingStatus, expiresAt: string | null): void {
   const payload: CachedBilling = { status, expiresAt }
-  localStorage.setItem(cacheKey(), JSON.stringify(payload))
-  bumpTimeRatchet()
+  setDurable(cacheKey(), payload)
+  bumpRatchet()
 }
 
 export function getCachedBilling(): CachedBilling | null {
+  const v = getDurable<CachedBilling>(cacheKey())
+  if (v && typeof v === 'object' && 'status' in v) return v
+  // Migration : ancien cache localStorage des versions précédentes.
   try {
-    const raw = localStorage.getItem(cacheKey())
-    return raw ? (JSON.parse(raw) as CachedBilling) : null
-  } catch {
-    return null
-  }
+    const tenantId = getTenantId() || localStorage.getItem('tenantId') || 'default'
+    const raw = localStorage.getItem(`billing_status_cache_${tenantId}`)
+    if (raw) {
+      const legacy = JSON.parse(raw) as CachedBilling
+      setDurable(cacheKey(), legacy)
+      localStorage.removeItem(`billing_status_cache_${tenantId}`)
+      return legacy
+    }
+  } catch { /* ignoré */ }
+  return null
 }
 
 /** Pas de cache = jamais vérifié en ligne (install neuve) → on n'invente pas
  * un blocage : le serveur tranchera dès le premier appel en ligne. */
 export function isReadOnly(): boolean {
-  bumpTimeRatchet()
+  bumpRatchet()
 
   const cached = getCachedBilling()
   if (!cached) return false
@@ -83,7 +68,7 @@ export function isReadOnly(): boolean {
   if (cached.status === 'PAST_DUE' || cached.status === 'SUSPENDED' || cached.status === 'CANCELLED') {
     return true
   }
-  if (cached.expiresAt && new Date(cached.expiresAt).getTime() < effectiveNow()) {
+  if (cached.expiresAt && new Date(cached.expiresAt).getTime() < trustedNow()) {
     return true
   }
   return false

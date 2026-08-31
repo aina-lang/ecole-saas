@@ -4,13 +4,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { queryEntities, saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
+import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import { useLocalQuery } from '@/lib/db/hooks'
 import type { Subject } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
 import { cn } from '@/lib/utils'
-import { printPdf } from '@/lib/print-pdf'
-import { getSchoolSettings } from '@/lib/school-settings'
+import { generateTimetable } from '@/lib/pdf/timetable'
+import { DAYS } from '@/lib/days'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,18 +32,9 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { TrashIcon, RefreshCw, PlusIcon, PencilIcon, FileDown } from 'lucide-react'
+import { TrashIcon, RefreshCw, PencilIcon, FileDown, Plus, Coffee, CalendarDays } from 'lucide-react'
 import { TimePicker } from '@/components/ui/time-picker'
-
-const DAYS = [
-  { value: 1, label: 'Lundi', short: 'Lun' },
-  { value: 2, label: 'Mardi', short: 'Mar' },
-  { value: 3, label: 'Mercredi', short: 'Mer' },
-  { value: 4, label: 'Jeudi', short: 'Jeu' },
-  { value: 5, label: 'Vendredi', short: 'Ven' },
-  { value: 6, label: 'Samedi', short: 'Sam' },
-  { value: 0, label: 'Dimanche', short: 'Dim' },
-]
+import { PageHeader, EmptyState } from '@/components/layout/page'
 
 const TIME_SLOTS = [
   '07:00', '08:00', '09:00', '10:00', '11:00',
@@ -140,38 +131,9 @@ export function TimetablePage() {
       toast.error('Sélectionnez une classe avec des cours')
       return
     }
-    const school = await getSchoolSettings()
     const className = (classes ?? []).find((c) => c.id === classId)?.name || 'classe'
-    const rows = DAYS.map((d) => {
-      const daySlots = slots.filter((s) => s.dayOfWeek === d.value).sort((a, b) => a.startTime.localeCompare(b.startTime))
-      const cells = daySlots.map((s) => `${s.startTime}-${s.endTime}: ${s.subjectLabel}${s.teacherDisplay ? ` (${s.teacherDisplay})` : ''}${s.room ? ` [${s.room}]` : ''}`).join('\n')
-      return `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${d.label}</td><td style="padding:8px;border:1px solid #ddd;white-space:pre-line">${cells || '-'}</td></tr>`
-    }).join('')
-    const logoHtml = school.logoDataUrl
-      ? `<img src="${school.logoDataUrl}" alt="Logo" style="height:50px;width:auto;display:block;margin:0 auto 8px" />`
-      : ''
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Emploi du temps - ${className}</title>
-<style>
-body{font-family:Arial,sans-serif;padding:20px;color:#333}
-.school-header{text-align:center;margin-bottom:16px}
-.school-header h1{margin:0;font-size:20px;color:#1a365d}
-h2{text-align:center;font-size:18px;margin:16px 0 4px}
-table{width:100%;border-collapse:collapse;margin-top:16px}
-th,td{padding:10px;border:1px solid #ddd;text-align:left}
-th{background:#f5f5f5}
-.footer{text-align:center;margin-top:24px;color:#999;font-size:11px}
-</style></head><body>
-<div class="school-header">${logoHtml}<h1>${school.schoolName}</h1></div>
-<h2>Emploi du temps — ${className}</h2>
-<table><thead><tr><th>Jour</th><th>Cours</th></tr></thead><tbody>${rows}</tbody></table>
-<div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} · ${school.schoolName}</div>
-</body></html>`
-    const ok = await printPdf(html, `Emploi du temps - ${className}.pdf`)
-    if (!ok) {
-      const win = window.open('', '_blank')
-      if (win) { win.document.write(html); win.document.close(); win.onload = () => win.print() }
-      else toast.error('Popup bloquée. Autorisez les popups pour exporter le PDF.')
-    }
+    await generateTimetable({ className, slots })
+    toast.success('Emploi du temps exporté en PDF')
   }
 
   const form = useForm<SlotFormValues>({
@@ -190,6 +152,7 @@ th{background:#f5f5f5}
 
   function openCreate(day: number, time = '08:00') {
     setEditingSlot(null)
+    setIsRecreationMode(false)
     form.reset({
       id: '',
       classId,
@@ -197,7 +160,7 @@ th{background:#f5f5f5}
       subjectId: '',
       teacherId: '',
       startTime: time,
-      endTime: '09:00',
+      endTime: `${String(Math.min(23, Number(time.split(':')[0]) + 1)).padStart(2, '0')}:${time.split(':')[1] ?? '00'}`,
       room: '',
     })
     setOpen(true)
@@ -205,7 +168,9 @@ th{background:#f5f5f5}
 
   function openEdit(slot: TimetableSlot) {
     setEditingSlot(slot)
-    setIsRecreationMode(slot.isRecreation === true || slot.isRecreation === 'true')
+    // Le document répliqué peut porter la chaîne 'true' (anciennes écritures) :
+    // on compare après conversion, le type déclaré étant booléen.
+    setIsRecreationMode(slot.isRecreation === true || String(slot.isRecreation) === 'true')
     form.reset({
       id: slot.id,
       classId: slot.classId,
@@ -285,6 +250,39 @@ th{background:#f5f5f5}
 
   const ROW_HEIGHT = 64
   const FIRST_MIN = timeToMinutes(TIME_SLOTS[0])
+  const HEADER_H = 44
+  const TIME_COL_W = 64
+  const LUNCH_TOP = TIME_SLOTS.indexOf('12:00') * ROW_HEIGHT
+  const todayDow = new Date().getDay()
+
+  // Une couleur stable par matière (même matière = même teinte partout).
+  const SUBJECT_PALETTE = [
+    'border-l-sky-500 bg-sky-50 text-sky-950 dark:bg-sky-950/40 dark:text-sky-100',
+    'border-l-violet-500 bg-violet-50 text-violet-950 dark:bg-violet-950/40 dark:text-violet-100',
+    'border-l-emerald-500 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100',
+    'border-l-rose-500 bg-rose-50 text-rose-950 dark:bg-rose-950/40 dark:text-rose-100',
+    'border-l-orange-500 bg-orange-50 text-orange-950 dark:bg-orange-950/40 dark:text-orange-100',
+    'border-l-teal-500 bg-teal-50 text-teal-950 dark:bg-teal-950/40 dark:text-teal-100',
+    'border-l-fuchsia-500 bg-fuchsia-50 text-fuchsia-950 dark:bg-fuchsia-950/40 dark:text-fuchsia-100',
+    'border-l-indigo-500 bg-indigo-50 text-indigo-950 dark:bg-indigo-950/40 dark:text-indigo-100',
+    'border-l-lime-600 bg-lime-50 text-lime-950 dark:bg-lime-950/40 dark:text-lime-100',
+    'border-l-cyan-500 bg-cyan-50 text-cyan-950 dark:bg-cyan-950/40 dark:text-cyan-100',
+  ]
+  const SUBJECT_DOT = ['bg-sky-500','bg-violet-500','bg-emerald-500','bg-rose-500','bg-orange-500','bg-teal-500','bg-fuchsia-500','bg-indigo-500','bg-lime-600','bg-cyan-500']
+  const subjectIndex = (id?: string | null) => {
+    if (!id) return 0
+    let h = 0
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+    return h % SUBJECT_PALETTE.length
+  }
+
+  const weekStats = useMemo(() => {
+    const courses = slots.filter((s) => !s.isRecreation)
+    const minutes = courses.reduce((acc, s) => acc + Math.max(0, timeToMinutes(s.endTime) - timeToMinutes(s.startTime)), 0)
+    const subjectIds = Array.from(new Set(courses.map((s) => s.subjectId).filter(Boolean)))
+    return { courses: courses.length, hours: minutes / 60, subjectIds }
+  }, [slots])
+  const selectedClassName = (classes ?? []).find((c) => c.id === classId)?.name
 
   function getSlotsForDay(day: number): TimetableSlot[] {
     const daySlots = slots.filter((s) => s.dayOfWeek === day)
@@ -292,265 +290,243 @@ th{background:#f5f5f5}
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Emploi du temps</h2>
-          <p className="text-muted-foreground">Aperçu des cours par classe</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
-            <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleExportPdf}
-            disabled={!classId || !slots.length}
-            title="Générer PDF"
-          >
-            <FileDown className="h-4 w-4" />
-          </Button>
-          <div className="w-56">
+    <div className="space-y-6">
+      <PageHeader
+        title="Emploi du temps"
+        description={selectedClassName ? `${selectedClassName} · ${weekStats.courses} cours · ${weekStats.hours.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h par semaine` : 'Aperçu des cours par classe'}
+        actions={
+          <>
             <Combobox
+              className="w-[220px]"
               value={classId}
               onValueChange={setClassId}
               placeholder="Sélectionner une classe"
               searchPlaceholder="Rechercher une classe..."
               options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
             />
-          </div>
-        </div>
-      </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportPdf}
+              disabled={!classId || !slots.length}
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              Exporter en PDF
+            </Button>
+          </>
+        }
+      />
 
       {!classId ? (
-        <div className="flex h-64 items-center justify-center text-muted-foreground">
-          Sélectionnez une classe pour afficher l'emploi du temps
+        <div className="rounded-lg border bg-card">
+          <EmptyState
+            icon={<CalendarDays className="h-8 w-8" />}
+            title="Aucune classe sélectionnée"
+            description="Choisissez une classe ci-dessus pour afficher et composer son emploi du temps."
+          />
         </div>
       ) : isLoading ? (
         <div className="flex h-64 items-center justify-center text-muted-foreground">
           Chargement...
         </div>
       ) : (
-        <div className="rounded-lg border overflow-auto">
-          <div className="flex min-w-[800px]">
-            {/* Time column */}
-            <div className="shrink-0 relative" style={{ width: 56 }}>
-              <div className="border-b" style={{ height: 40 }} />
-              {TIME_SLOTS.map((time) => (
-                <div
-                  key={time}
-                  className="border-t flex items-start justify-center text-xs text-muted-foreground pt-0.5"
-                  style={{ height: ROW_HEIGHT }}
-                >
-                  {time}
-                </div>
-              ))}
-              <div className="absolute left-0 right-0 text-[9px] font-semibold text-primary/40 text-center leading-none pointer-events-none" style={{ top: 40 + 0.5 * ROW_HEIGHT }}>
-                Matin
-              </div>
-              <div className="absolute left-0 right-0 text-[9px] font-semibold text-primary/40 text-center leading-none pointer-events-none" style={{ top: 40 + 6.5 * ROW_HEIGHT }}>
-                Après-midi
-              </div>
-            </div>
-
-            {/* Day columns wrapper */}
-            <div className="flex flex-1 min-w-0 relative">
-              {DAYS.map((d) => {
-                const daySlots = getSlotsForDay(d.value)
-                const courseSlots = daySlots.filter((s) => !s.isRecreation)
-                const recreationSlots = daySlots.filter((s) => s.isRecreation)
-                const lunchIndex = TIME_SLOTS.indexOf('13:00')
-                const lunchTop = lunchIndex * ROW_HEIGHT
-                return (
-                  <div key={d.value} className="flex-1 min-w-0">
-                    <div className="border-b border-l p-2 text-center text-sm font-semibold truncate" style={{ height: 40 }}>
-                      {d.short}
-                    </div>
-                    <div className="relative" style={{ height: ROW_HEIGHT * (TIME_SLOTS.length + 1) }}>
-                      {/* Hour grid lines */}
-                      {TIME_SLOTS.map((time, i) => (
-                        <div
-                          key={time}
-                          className={cn(
-                            'border-l border-t',
-                            time === '13:00' && 'border-t-2 border-t-primary/30',
-                          )}
-                          style={{ height: ROW_HEIGHT }}
-                        />
-                      ))}
-                      <div className="border-l" style={{ height: ROW_HEIGHT }} />
-
-                      {/* Morning / Afternoon separator line */}
-                      <div
-                        className="absolute left-0 right-0 border-t-2 border-primary/30 pointer-events-none z-10"
-                        style={{ top: lunchTop }}
-                      />
-
-                      {/* "+" buttons at hour marks */}
-                      {TIME_SLOTS.map((time, i) => {
-                        const isOccupied = courseSlots.some((s) => {
-                          const sMin = timeToMinutes(s.startTime)
-                          const eMin = timeToMinutes(s.endTime)
-                          const hourMin = timeToMinutes(time)
-                          return sMin < hourMin + 60 && eMin > hourMin
-                        })
-                        return (
-                          <button
-                            key={`add-${time}`}
-                            type="button"
-                            onClick={() => openCreate(d.value, time)}
-                            className="absolute left-1 right-1 rounded-md border border-dashed border-muted-foreground/20 text-muted-foreground/30 hover:border-primary hover:text-primary text-xs transition-colors"
-                            style={{
-                              top: i * ROW_HEIGHT + 4,
-                              height: ROW_HEIGHT - 8,
-                              display: isOccupied ? 'none' : 'block',
-                            }}
-                          >
-                            +
-                          </button>
-                        )
-                      })}
-
-                      {/* Recreation add button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingSlot(null)
-                          setIsRecreationMode(true)
-                          form.reset({
-                            id: '',
-                            classId,
-                            dayOfWeek: d.value,
-                            subjectId: '',
-                            teacherId: '',
-                            startTime: '09:00',
-                            endTime: '10:00',
-                            room: '',
-                            isRecreation: true,
-                          })
-                          setOpen(true)
-                        }}
-                        className="absolute left-1 rounded-md border border-dashed border-amber-400/30 text-amber-500/50 hover:border-amber-400 hover:text-amber-600 text-xs transition-colors flex items-center justify-center"
-                        style={{
-                          bottom: 4,
-                          height: 24,
-                          width: 24,
-                        }}
-                        title="Ajouter une récréation"
-                      >
-                        R
-                      </button>
-
-                      {/* Cards */}
-                      {courseSlots.map((slot) => {
-                        const startMin = timeToMinutes(slot.startTime)
-                        const endMin = timeToMinutes(slot.endTime)
-                        const top = ((startMin - FIRST_MIN) / 60) * ROW_HEIGHT
-                        const height = Math.max(((endMin - startMin) / 60) * ROW_HEIGHT, 24)
-
-                        return (
-                          <div
-                            key={slot.id}
-                            className="group absolute left-1 right-1 rounded-md border bg-primary/10 p-1.5 text-xs select-none overflow-hidden transition-shadow hover:shadow-md"
-                            style={{ top, height }}
-                          >
-                            <div className="flex items-start gap-1 h-full">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate leading-tight">{slot.subjectLabel}</div>
-                                {slot.teacherDisplay && (
-                                  <div className="text-muted-foreground truncate leading-tight">
-                                    {slot.teacherDisplay}
-                                  </div>
-                                )}
-                                <div className="text-muted-foreground leading-tight">
-                                  {slot.startTime} - {slot.endTime}
-                                  {slot.room ? ` · ${slot.room}` : ''}
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-0.5 shrink-0 opacity-100 transition-opacity">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-4 w-4"
-                                  onClick={(e) => { e.stopPropagation(); openEdit(slot) }}
-                                >
-                                  <PencilIcon className="h-2.5 w-2.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-4 w-4"
-                                  onClick={(e) => { e.stopPropagation(); setDeleteId(slot.id) }}
-                                >
-                                  <TrashIcon className="h-2.5 w-2.5 text-destructive" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-
-                      {/* Recreation cards */}
-                      {recreationSlots.map((slot) => {
-                        const startMin = timeToMinutes(slot.startTime)
-                        const endMin = timeToMinutes(slot.endTime)
-                        const top = ((startMin - FIRST_MIN) / 60) * ROW_HEIGHT
-                        const height = Math.max(((endMin - startMin) / 60) * ROW_HEIGHT, 24)
-
-                        return (
-                          <div
-                            key={slot.id}
-                            className="group absolute left-1 right-1 rounded-md border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-1.5 text-xs select-none overflow-hidden transition-shadow hover:shadow-md cursor-pointer"
-                            style={{ top, height }}
-                            onClick={() => openEdit(slot)}
-                          >
-                            <div className="flex items-start gap-1 h-full">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-semibold truncate leading-tight text-amber-600 dark:text-amber-400">
-                                  {slot.room || 'Récréation'}
-                                </div>
-                                <div className="text-amber-500/70 leading-tight">
-                                  {slot.startTime} - {slot.endTime}
-                                </div>
-                                {slot.room && (
-                                  <div className="text-amber-500/50 leading-tight text-[10px]">
-                                    Récréation
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-0.5 shrink-0 opacity-100 transition-opacity">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-4 w-4"
-                                  onClick={(e) => { e.stopPropagation(); openEdit(slot) }}
-                                >
-                                  <PencilIcon className="h-2.5 w-2.5 text-amber-600" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-4 w-4"
-                                  onClick={(e) => { e.stopPropagation(); setDeleteId(slot.id) }}
-                                >
-                                  <TrashIcon className="h-2.5 w-2.5 text-destructive" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
+        <div className="space-y-4">
+          <div className="overflow-auto rounded-lg border bg-card">
+            <div className="flex min-w-[860px]">
+              {/* Colonne des heures */}
+              <div className="relative shrink-0 border-r bg-muted/30" style={{ width: TIME_COL_W }}>
+                <div className="border-b" style={{ height: HEADER_H }} />
+                {TIME_SLOTS.map((time) => (
+                  <div
+                    key={time}
+                    className="relative"
+                    style={{ height: ROW_HEIGHT }}
+                  >
+                    <span className="absolute -top-2 right-2 text-[11px] tabular-nums text-muted-foreground">{time}</span>
                   </div>
-                )
-              })}
+                ))}
+                <div className="relative" style={{ height: ROW_HEIGHT }}>
+                  <span className="absolute -top-2 right-2 text-[11px] tabular-nums text-muted-foreground">19:00</span>
+                </div>
+              </div>
+
+              {/* Colonnes des jours */}
+              <div className="relative flex min-w-0 flex-1">
+                {DAYS.map((d, dayIdx) => {
+                  const daySlots = getSlotsForDay(d.value)
+                  const courseSlots = daySlots.filter((s) => !s.isRecreation)
+                  const recreationSlots = daySlots.filter((s) => s.isRecreation)
+                  const isToday = d.value === todayDow
+                  const dayMinutes = courseSlots.reduce((acc, s) => acc + (timeToMinutes(s.endTime) - timeToMinutes(s.startTime)), 0)
+                  return (
+                    <div key={d.value} className={cn('min-w-0 flex-1', dayIdx > 0 && 'border-l', isToday && 'bg-primary/[0.03]')}>
+                      <div
+                        className={cn('flex items-center justify-between gap-1 border-b px-2', isToday && 'border-b-primary')}
+                        style={{ height: HEADER_H }}
+                      >
+                        <div className="min-w-0">
+                          <div className={cn('truncate text-sm font-semibold', isToday && 'text-primary')}>{d.label}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {courseSlots.length ? `${courseSlots.length} cours · ${(dayMinutes / 60).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h` : 'Libre'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          title="Ajouter une récréation"
+                          onClick={() => {
+                            setEditingSlot(null)
+                            setIsRecreationMode(true)
+                            form.reset({ id: '', classId, dayOfWeek: d.value, subjectId: '', teacherId: '', startTime: '09:00', endTime: '10:00', room: '', isRecreation: true })
+                            setOpen(true)
+                          }}
+                          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-900/40 dark:hover:text-amber-300"
+                        >
+                          <Coffee className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="relative" style={{ height: ROW_HEIGHT * (TIME_SLOTS.length + 1) }}>
+                        {/* Lignes d'heures */}
+                        {TIME_SLOTS.map((time, i) => (
+                          <div key={time} className={cn('border-t', i % 2 === 1 && 'bg-muted/20')} style={{ height: ROW_HEIGHT }} />
+                        ))}
+                        <div className="border-t" style={{ height: ROW_HEIGHT }} />
+
+                        {/* Pause de midi */}
+                        <div
+                          className="pointer-events-none absolute inset-x-0 flex items-center justify-center bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,hsl(var(--muted))_6px,hsl(var(--muted))_7px)]"
+                          style={{ top: LUNCH_TOP, height: ROW_HEIGHT }}
+                        >
+                          <span className="rounded bg-card/80 px-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Pause</span>
+                        </div>
+
+                        {/* Boutons + sur les créneaux libres (visibles au survol) */}
+                        {TIME_SLOTS.map((time, i) => {
+                          const hourMin = timeToMinutes(time)
+                          const occupied = daySlots.some((s) => timeToMinutes(s.startTime) < hourMin + 60 && timeToMinutes(s.endTime) > hourMin)
+                          if (occupied) return null
+                          return (
+                            <button
+                              key={`add-${time}`}
+                              type="button"
+                              onClick={() => openCreate(d.value, time)}
+                              aria-label={`Ajouter un cours ${d.label} à ${time}`}
+                              className="group/add absolute inset-x-1 flex items-center justify-center rounded-md border border-dashed border-transparent text-xs text-transparent transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary"
+                              style={{ top: i * ROW_HEIGHT + 3, height: ROW_HEIGHT - 6 }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          )
+                        })}
+
+                        {/* Cours */}
+                        {courseSlots.map((slot) => {
+                          const startMin = timeToMinutes(slot.startTime)
+                          const endMin = timeToMinutes(slot.endTime)
+                          const top = ((startMin - FIRST_MIN) / 60) * ROW_HEIGHT + 2
+                          const height = Math.max(((endMin - startMin) / 60) * ROW_HEIGHT - 4, 26)
+                          const compact = height < 48
+                          return (
+                            <div
+                              key={slot.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openEdit(slot)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') openEdit(slot) }}
+                              className={cn(
+                                'group absolute inset-x-1 cursor-pointer select-none overflow-hidden rounded-md border border-black/5 border-l-[3px] px-2 py-1 text-xs shadow-sm transition-shadow hover:shadow-md dark:border-white/5',
+                                SUBJECT_PALETTE[subjectIndex(slot.subjectId)],
+                              )}
+                              style={{ top, height }}
+                            >
+                              <div className="truncate font-semibold leading-tight">{slot.subjectLabel}</div>
+                              {!compact && slot.teacherDisplay && (
+                                <div className="truncate leading-tight opacity-80">{slot.teacherDisplay}</div>
+                              )}
+                              <div className="truncate text-[11px] leading-tight opacity-70">
+                                {slot.startTime}–{slot.endTime}{slot.room ? ` · ${slot.room}` : ''}
+                              </div>
+                              <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                  type="button"
+                                  aria-label="Modifier"
+                                  className="rounded bg-card/90 p-1 shadow-sm hover:bg-card"
+                                  onClick={(e) => { e.stopPropagation(); openEdit(slot) }}
+                                >
+                                  <PencilIcon className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Supprimer"
+                                  className="rounded bg-card/90 p-1 text-destructive shadow-sm hover:bg-card"
+                                  onClick={(e) => { e.stopPropagation(); setDeleteId(slot.id) }}
+                                >
+                                  <TrashIcon className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {/* Récréations */}
+                        {recreationSlots.map((slot) => {
+                          const startMin = timeToMinutes(slot.startTime)
+                          const endMin = timeToMinutes(slot.endTime)
+                          const top = ((startMin - FIRST_MIN) / 60) * ROW_HEIGHT + 2
+                          const height = Math.max(((endMin - startMin) / 60) * ROW_HEIGHT - 4, 22)
+                          return (
+                            <div
+                              key={slot.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openEdit(slot)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') openEdit(slot) }}
+                              className="group absolute inset-x-1 flex cursor-pointer select-none items-center gap-1.5 overflow-hidden rounded-md border border-dashed border-amber-400 bg-amber-50/80 px-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+                              style={{ top, height }}
+                            >
+                              <Coffee className="h-3 w-3 shrink-0" />
+                              <span className="truncate font-medium">{slot.room || 'Récréation'}</span>
+                              <span className="ml-auto shrink-0 text-[11px] opacity-70">{slot.startTime}–{slot.endTime}</span>
+                              <button
+                                type="button"
+                                aria-label="Supprimer"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 rounded bg-card/90 p-1 text-destructive opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+                                onClick={(e) => { e.stopPropagation(); setDeleteId(slot.id) }}
+                              >
+                                <TrashIcon className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+          </div>
+
+          {/* Légende */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            {weekStats.subjectIds.map((id) => (
+              <span key={id} className="inline-flex items-center gap-1.5">
+                <span className={cn('h-2.5 w-2.5 rounded-sm', SUBJECT_DOT[subjectIndex(id)])} />
+                {subjectLabel(id)}
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm border border-dashed border-amber-400 bg-amber-50" />
+              Récréation
+            </span>
+            <span className="ml-auto">Survolez un créneau libre pour ajouter un cours · cliquez sur un cours pour le modifier</span>
           </div>
         </div>
       )}
@@ -566,7 +542,7 @@ th{background:#f5f5f5}
       <Dialog key={String(open)} open={open} onOpenChange={(o) => { if (!o) setIsRecreationMode(false); setOpen(o) }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>{editingSlot ? 'Modifier le créneau' : 'Ajouter un créneau'}</DialogTitle>
+            <DialogTitle>{editingSlot ? (isRecreationMode ? 'Modifier la récréation' : 'Modifier le cours') : (isRecreationMode ? 'Ajouter une récréation' : 'Ajouter un cours')}</DialogTitle>
             <DialogDescription>
               {DAYS.find((d) => d.value === form.getValues('dayOfWeek'))?.label}
               {classId ? ' · classe sélectionnée' : ''}
@@ -574,7 +550,11 @@ th{background:#f5f5f5}
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
-              {(editingSlot?.isRecreation === true || editingSlot?.isRecreation === 'true' || (!editingSlot && isRecreationMode) || (!editingSlot?.subjectId && !editingSlot?.teacherId && !editingSlot?.room)) ? (
+              {/* Formulaire « récréation » seulement si on en crée une explicitement
+                  ou si le créneau modifié en est une (ou n'a ni matière, ni prof,
+                  ni salle). Avant, la dernière condition était vraie aussi à la
+                  création d'un cours — le formulaire de cours n'apparaissait jamais. */}
+              {(isRecreationMode || editingSlot?.isRecreation === true || (editingSlot as any)?.isRecreation === 'true' || (!!editingSlot && !editingSlot.subjectId && !editingSlot.teacherId && !editingSlot.room)) ? (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <FormField
@@ -737,13 +717,6 @@ th{background:#f5f5f5}
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog
-        open={!!deleteId}
-        onOpenChange={(open) => !open && setDeleteId(null)}
-        onConfirm={() => { if (deleteId) deleteMutation.mutate(deleteId) }}
-        title="Supprimer le créneau"
-        description="Êtes-vous sûr de vouloir supprimer ce créneau ?"
-      />
     </div>
   )
 }

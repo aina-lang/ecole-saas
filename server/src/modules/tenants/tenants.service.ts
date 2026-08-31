@@ -20,6 +20,24 @@ export class TenantsService {
     });
   }
 
+  // L'établissement a-t-il déjà été configuré ? Sert à ne pas renvoyer vers
+  // l'assistant de configuration un utilisateur qui se connecte depuis un
+  // NOUVEAU poste : le drapeau « onboarding terminé » vit dans le
+  // localStorage du poste, il est donc vide sur une installation neuve alors
+  // que l'établissement, lui, est configuré depuis longtemps.
+  //
+  // Accessible à tous les rôles : un enseignant qui installe l'app sur son
+  // portable doit aussi éviter l'assistant.
+  async getSetupState(tenantId: string) {
+    const [academicYears, settings] = await Promise.all([
+      this.prisma.academicYear.count({ where: { tenantId } }),
+      this.prisma.tenantSetting.count({
+        where: { tenantId, key: { in: ['academic_year', 'period_system'] } },
+      }),
+    ]);
+    return { configured: academicYears > 0 || settings > 0 };
+  }
+
   async findById(id: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },

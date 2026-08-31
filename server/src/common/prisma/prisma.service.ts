@@ -2,15 +2,30 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
+import { SYNC_ENTITY_TYPES } from '../../modules/couchdb/couchdb.constants';
+
 /**
  * Modèles Prisma dont les mutations doivent être propagées vers CouchDB
- * pour que les clients PouchDB reçoivent les changements en pull (rupture #5 fix).
+ * pour que les clients PouchDB reçoivent les changements en pull.
+ * Dérivé de la source unique (couchdb.constants), moins les exclusions.
  */
-export const SYNCABLE_MODELS = new Set([
-  'Student', 'Grade', 'Attendance', 'Class', 'Subject', 'Teacher',
-  'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
-  'TeacherContract', 'TeacherPayment', 'TeacherAttendance', 'AuditLog', 'Level',
+const NON_PROPAGATED = new Set([
+  // GradeConfig et TenantSetting : leurs lignes Postgres portent un id
+  // synthétique (<tenantId>_<clé>) différent de l'_id client fixe — les
+  // repropager créerait des doublons dans CouchDB. Ces entités sont
+  // écrites uniquement par les clients.
+  'GradeConfig',
+  'TenantSetting',
 ]);
+export const SYNCABLE_MODELS = new Set<string>(
+  SYNC_ENTITY_TYPES.filter((e) => !NON_PROPAGATED.has(e)),
+);
+
+/**
+ * Champs à ne jamais propager vers CouchDB (répliqué sur tous les postes du
+ * tenant) : secrets de connexion du modèle User.
+ */
+const SENSITIVE_FIELDS = ['passwordHash', 'refreshToken', 'twoFactorSecret'];
 
 /** Interface minimale pour éviter une dépendance circulaire avec CouchDbService */
 export interface ICouchDbWriter {
@@ -64,11 +79,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     // pour que le client PouchDB puisse accéder aux détails directement.
     const flat: Record<string, unknown> = { ...doc };
 
+    // Ne jamais répliquer les secrets (User.passwordHash & co) vers CouchDB.
+    for (const f of SENSITIVE_FIELDS) delete flat[f];
+
     // User imbriqué → props user_ à la racine (firstName, email, etc.)
     const userObj = flat.user as Record<string, any> | undefined;
     if (userObj && typeof userObj === 'object') {
       for (const [k, v] of Object.entries(userObj)) {
-        if (k !== 'phones') {
+        if (k !== 'phones' && !SENSITIVE_FIELDS.includes(k)) {
           flat[`user_${k}`] = v;
         }
       }

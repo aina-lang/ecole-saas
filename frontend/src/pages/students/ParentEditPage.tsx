@@ -6,10 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { getEntityById, saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
+import { fileToResizedDataUrl } from '@/lib/image-utils'
 import type { Student } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
@@ -19,8 +19,9 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { ArrowLeftIcon, ReloadIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
+import { ReloadIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
 import { PhotoUpload } from '@/components/ui/photo-upload'
+import { PageHeader, FormShell, FormSection } from '@/components/layout/page'
 
 const parentSchema = z.object({
   firstName: z.string().optional().or(z.literal('')),
@@ -41,21 +42,13 @@ export function ParentEditPage() {
   const photoMutation = useMutation({
     mutationFn: async (file: File) => {
       if (!id) return { url: '' }
-      const api = window.api
-      if (api?.file) {
-        const buffer = await file.arrayBuffer()
-        const result = await api.file.save({
-          buffer, entityType: 'User', entityId: id,
-          fieldName: 'photo_url', originalName: file.name, mimeType: file.type,
-        })
-        const localUrl = await api.file.getUrl((result as any).local_path)
-        const existing = await getEntityById<any>('User', id)
-        if (existing) {
-          await saveEntity('User', { ...existing, photoUrl: localUrl })
-        }
-        return { url: localUrl || '' }
+      // Data URL dans le document synchronisé (propagation multi-postes).
+      const photoDataUrl = await fileToResizedDataUrl(file)
+      const existing = await getEntityById<any>('User', id)
+      if (existing) {
+        await saveEntity('User', { ...existing, photoUrl: photoDataUrl })
       }
-      return { url: '' }
+      return { url: photoDataUrl }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parent', id] })
@@ -81,9 +74,10 @@ export function ParentEditPage() {
   const { data: parent, isLoading: loadingParent } = useQuery({
     queryKey: ['parent', id],
     queryFn: async () => {
-      const doc = await getEntityById<any>('User', id)
+      const doc = await getEntityById<any>('User', id!)
       return doc ?? null
     },
+    enabled: !!id,
   })
 
   const { data: allStudents } = useQuery({
@@ -202,62 +196,68 @@ export function ParentEditPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(`/parents/${id}`)}>
-          <ArrowLeftIcon className="h-4 w-4" />
-        </Button>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Modifier le parent</h2>
-          <p className="text-muted-foreground">{parent.firstName} {parent.lastName}</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo={`/parents/${id}`}
+        title="Modifier le parent"
+        description={`${parent.firstName ?? ''} ${parent.lastName ?? ''}`.trim()}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations personnelles</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prénom</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Prénom" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormShell
+            actions={
+              <>
+                <Button type="button" variant="outline" onClick={() => navigate(`/parents/${id}`)}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+                  Enregistrer
+                </Button>
+              </>
+            }
+          >
+            <FormSection
+              title="Informations personnelles"
+              description="Identité et coordonnées du parent ou tuteur"
+              columns={2}
+              aside={
+                <PhotoUpload
+                  src={parent?.photoUrl}
+                  firstName={form.watch('firstName')}
+                  lastName={form.watch('lastName')}
+                  onUpload={(file) => photoMutation.mutateAsync(file)}
+                  onDelete={() => deletePhotoMutation.mutateAsync()}
                 />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Nom" {...field} />
-
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <PhotoUpload
-                src={parent?.photoUrl}
-                firstName={form.watch('firstName')}
-                lastName={form.watch('lastName')}
-                onUpload={(file) => photoMutation.mutateAsync(file)}
-                onDelete={() => deletePhotoMutation.mutateAsync()}
+              }
+            >
+              <FormField
+                control={form.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prénom</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Prénom" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nom" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="email"
@@ -316,7 +316,13 @@ export function ParentEditPage() {
                   </Button>
                 )}
               </div>
+            </FormSection>
 
+            <FormSection
+              title="Élèves liés"
+              description="Ajouter ou retirer les élèves rattachés à ce parent"
+              columns={1}
+            >
               <div className="space-y-2">
                 <label className="text-sm font-medium">Élèves liés</label>
                 <Combobox
@@ -334,7 +340,7 @@ export function ParentEditPage() {
                   emptyText="Aucun élève trouvé"
                 />
                 {selectedStudentIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {selectedStudentIds.map((sid) => {
                       const s = allStudents?.find((st) => st.id === sid)
                       return (
@@ -356,26 +362,10 @@ export function ParentEditPage() {
                   </div>
                 )}
               </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" disabled={updateMutation.isPending} className="flex-1">
-                  {updateMutation.isPending ? (
-                    <>
-                      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                      Enregistrement...
-                    </>
-                  ) : (
-                    'Enregistrer'
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => navigate(`/parents/${id}`)}>
-                  Annuler
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+            </FormSection>
+          </FormShell>
+        </form>
+      </Form>
     </div>
   )
 }

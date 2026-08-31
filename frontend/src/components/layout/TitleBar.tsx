@@ -74,9 +74,9 @@ export function TitleBar() {
     >
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <span className="flex h-5 w-5 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
-          E
+          S
         </span>
-        École SaaS
+        Sekoliko
       </div>
 
       <div

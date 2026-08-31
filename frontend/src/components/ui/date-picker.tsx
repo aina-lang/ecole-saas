@@ -39,19 +39,22 @@ export function DatePicker({
   }, [value])
 
   return (
+    // Conteneur bloc : le sélecteur occupe sa propre ligne sous son libellé
+    // (le bouton seul était en ligne avec le <label>, d'où les étiquettes
+    // collées au champ) ; la largeur passée en className s'applique ici.
+    <div className={cn('block w-full', className)}>
     <Popover>
       <PopoverTrigger asChild>
         <Button
           variant={"outline"}
           className={cn(
-            "w-full justify-start text-left font-normal",
-            !date && "text-muted-foreground",
-            className
+            "w-full min-w-0 justify-start overflow-hidden text-left font-normal",
+            !date && "text-muted-foreground"
           )}
           disabled={disabled}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "PPP", { locale: fr }) : <span>{placeholder}</span>}
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          <span className="truncate">{date ? format(date, "d MMM yyyy", { locale: fr }) : placeholder}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
@@ -65,5 +68,6 @@ export function DatePicker({
         />
       </PopoverContent>
     </Popover>
+    </div>
   )
 }

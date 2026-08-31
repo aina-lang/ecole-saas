@@ -3,6 +3,7 @@ import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Loader2, Lock, WifiOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
@@ -31,6 +32,7 @@ export function LoginPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const lockedSession = useAuthStore((s) => s.lockedSession)
   const [error, setError] = useState<string | null>(null)
+  const [online, setOnline] = useState(navigator.onLine)
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -44,6 +46,17 @@ export function LoginPage() {
       form.setValue('email', lockedSession.email)
     }
   }, [lockedSession, form])
+
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
@@ -60,105 +73,129 @@ export function LoginPage() {
     }
   }
 
+  const lockedName = lockedSession
+    ? `${lockedSession.firstName ?? ''} ${lockedSession.lastName ?? ''}`.trim() || lockedSession.email
+    : ''
+
   return (
     <AuthShell
+      eyebrow={lockedSession ? 'Bon retour' : undefined}
       title={lockedSession ? 'Session verrouillée' : 'Connexion'}
       subtitle={
         lockedSession
-          ? `Entrez le mot de passe de ${lockedSession.email} pour déverrouiller`
-          : 'Connectez-vous à votre espace de gestion scolaire'
+          ? 'Saisissez votre mot de passe pour reprendre là où vous en étiez.'
+          : 'Connectez-vous à votre espace de gestion scolaire.'
       }
-    >
-      <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="votre@email.com"
-                        type="email"
-                        autoComplete="email"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mot de passe</FormLabel>
-                    <FormControl>
-                      <PasswordInput
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {error && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 15 15"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 animate-spin"
-                    >
-                      <path
-                        d="M1.84998 7.49998C1.84998 4.66416 4.05979 1.53198 7.49998 1.53198C10.2783 1.53198 12.0406 3.47663 12.8505 5.5M13.15 7.49998C13.15 10.3358 10.9402 13.468 7.49998 13.468C4.72166 13.468 2.95937 11.5234 2.14951 9.5"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M12.5 1.5V5.5H8.5"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M2.5 13.5V9.5H6.5"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    Connexion...
-                  </span>
-                ) : (
-                  'Se connecter'
-                )}
-              </Button>
-            </form>
-          </Form>
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Vous n'avez pas de compte ?{' '}
+      footer={
+        lockedSession ? (
+          <>
+            Ce n'est pas vous ?{' '}
+            <Link to="/register" className="font-medium text-primary hover:underline">
+              Créer un autre établissement
+            </Link>
+          </>
+        ) : (
+          <>
+            Nouvel établissement ?{' '}
             <Link to="/register" className="font-medium text-primary hover:underline">
               Créer un compte
             </Link>
-          </p>
+          </>
+        )
+      }
+    >
+      {!online && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200">
+          <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Vous êtes hors ligne. {lockedSession ? 'Le déverrouillage reste possible avec votre mot de passe habituel.' : 'La première connexion d’un compte nécessite Internet.'}
+          </span>
+        </div>
+      )}
+
+      {lockedSession && (
+        <div className="mb-5 flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            {(lockedSession.firstName?.[0] ?? '') + (lockedSession.lastName?.[0] ?? '') || <Lock className="h-4 w-4" />}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{lockedName}</p>
+            <p className="truncate text-xs text-muted-foreground">{lockedSession.email}</p>
+          </div>
+        </div>
+      )}
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          {!lockedSession && (
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Adresse email</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="vous@etablissement.mg"
+                      type="email"
+                      autoComplete="email"
+                      autoFocus
+                      className="h-11"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Mot de passe</FormLabel>
+                  <Link to="/forgot-password" tabIndex={-1} className="text-xs font-medium text-primary hover:underline">
+                    Mot de passe oublié ?
+                  </Link>
+                </div>
+                <FormControl>
+                  <PasswordInput
+                    placeholder="Votre mot de passe"
+                    autoComplete="current-password"
+                    autoFocus={!!lockedSession}
+                    className="h-11"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <Button type="submit" size="lg" className="h-11 w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {lockedSession ? 'Déverrouillage…' : 'Connexion…'}
+              </>
+            ) : lockedSession ? (
+              'Déverrouiller'
+            ) : (
+              'Se connecter'
+            )}
+          </Button>
+        </form>
+      </Form>
     </AuthShell>
   )
 }

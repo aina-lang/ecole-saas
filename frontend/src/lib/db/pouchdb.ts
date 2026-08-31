@@ -1,24 +1,21 @@
 import PouchDB from 'pouchdb'
 import client from '@/api/client'
 
-export type EntityType =
-  | 'Student'
-  | 'User'
-  | 'Teacher'
-  | 'Subject'
-  | 'Class'
-  | 'Grade'
-  | 'Attendance'
-  | 'Payment'
-  | 'FeeStructure'
-  | 'Message'
-  | 'TimetableSlot'
-  | 'TeacherContract'
-  | 'TeacherPayment'
-  | 'TeacherAttendance'
-  | 'StudentDocument'
-  | 'AuditLog'
-  | 'Level'
+// Source unique des entités locales : le type EntityType, la liste de
+// purge (destroyAllDatabases) et la liste de synchronisation (sync-engine)
+// en dérivent tous — en oublier une devient une erreur de compilation.
+// Doit rester alignée avec SYNC_ENTITY_TYPES côté serveur
+// (server/src/modules/couchdb/couchdb.constants.ts), seule frontière encore
+// manuelle faute de package partagé entre frontend et serveur.
+export const ALL_ENTITY_TYPES = [
+  'Student', 'User', 'Teacher', 'Subject', 'Class', 'Grade',
+  'Attendance', 'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
+  'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
+  'StudentDocument', 'AuditLog', 'Level',
+  'StudentEnrollment', 'AcademicYear', 'GradeConfig', 'TenantSetting',
+] as const
+
+export type EntityType = typeof ALL_ENTITY_TYPES[number]
 
 const DB_PREFIX = 'ecole_saas_'
 let couchDBUrl = 'http://localhost:5984'
@@ -47,16 +44,33 @@ export function configureCouchDB(url: string, user?: string, pass?: string): voi
   couchDBPass = pass || ''
 }
 
-export async function fetchCouchDBConfig(): Promise<void> {
+/** Identifiants CouchDB déjà connus ? (évite un aller-retour serveur inutile) */
+export function hasCouchDBConfig(): boolean {
+  return !!couchDBUser
+}
+
+let lastConfigError: string | null = null
+
+/** Vrai si les identifiants ont été obtenus (sinon, motif dans getCouchDBInfo). */
+export async function fetchCouchDBConfig(): Promise<boolean> {
   try {
-    const { data } = await client.get('/sync/couchdb-config')
+    const { data } = await client.get('/sync/couchdb-config', { timeout: 10000 })
     if (data?.url) couchDBUrl = data.url.replace(/\/+$/, '')
     if (data?.user) couchDBUser = data.user
     if (data?.pass) couchDBPass = data.pass
-    console.log('[PouchDB] CouchDB config:', couchDBUrl)
-  } catch (e) {
-    console.warn('[PouchDB] Cannot fetch CouchDB config, using default', couchDBUrl)
+    lastConfigError = null
+    console.log('[PouchDB] CouchDB config:', couchDBUrl, 'user:', couchDBUser)
+    return !!couchDBUser
+  } catch (e: any) {
+    lastConfigError = e?.response ? `API ${e.response.status}` : (e?.message || 'API injoignable')
+    console.warn('[PouchDB] Cannot fetch CouchDB config:', lastConfigError)
+    return false
   }
+}
+
+/** Diagnostic affiché dans l'écran Synchronisation. */
+export function getCouchDBInfo(): { url: string; user: string | null; tenantId: string; error: string | null } {
+  return { url: couchDBUrl, user: couchDBUser || null, tenantId: currentTenantId, error: lastConfigError }
 }
 
 /**
@@ -117,7 +131,7 @@ export async function getAllDocuments(entityType: EntityType): Promise<any[]> {
       })
       .filter(Boolean)
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -133,17 +147,36 @@ export async function getDocument(entityType: EntityType, id: string): Promise<a
       throw err
     }
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
 export async function putDocument(entityType: EntityType, doc: any): Promise<any> {
   const db = createDatabase(entityType)
   try {
-    const response = await db.put(doc)
+    // getDocument() (ci-dessus) retire volontairement _rev de ce qu'il renvoie,
+    // pour ne pas polluer les objets métier utilisés partout dans l'app. Mais
+    // le schéma courant "const existing = await getDocument(...); await
+    // putDocument({...existing, champ: valeur})" (upload de photo, etc.)
+    // arrivait donc ici SANS _rev — et PouchDB refuse catégoriquement un put()
+    // sur un document déjà existant sans sa révision courante (409 Conflict).
+    // On la retrouve nous-mêmes si elle manque, pour que ce schéma reste sûr
+    // quel que soit l'appelant.
+    let toWrite = doc
+    const id = doc._id || doc.id
+    if (!doc._rev && id) {
+      try {
+        const current = await db.get(id)
+        toWrite = { ...doc, _rev: current._rev }
+      } catch (err: any) {
+        if (err.status !== 404) throw err
+        // Document inexistant : rien à fusionner, PouchDB créera normalement.
+      }
+    }
+    const response = await db.put(toWrite)
     return response
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -160,7 +193,7 @@ export async function deleteDocument(
     }
     await db.remove(id, rev)
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -173,7 +206,7 @@ export async function bulkCreateDocuments(
     const result = await db.bulkDocs(docs)
     return result
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -216,13 +249,6 @@ export function removePendingCleanup(tenantId: string): void {
   localStorage.setItem(PENDING_CLEANUP_KEY, JSON.stringify(updated))
 }
 // ────────────────────────────────────────────────────────────────────────────
-
-const ALL_ENTITY_TYPES: EntityType[] = [
-  'Student', 'User', 'Teacher', 'Subject', 'Class', 'Grade',
-  'Attendance', 'Payment', 'FeeStructure', 'Message', 'TimetableSlot',
-  'TeacherContract', 'TeacherPayment', 'TeacherAttendance',
-  'StudentDocument', 'AuditLog', 'Level',
-]
 
 /**
  * Détruit toutes les bases IndexedDB d'un tenant donné.
@@ -267,7 +293,7 @@ export async function loadCustomDocNames(): Promise<string[]> {
   } catch {
     return []
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -277,14 +303,14 @@ export async function saveCustomDocName(name: string): Promise<void> {
     let doc: any
     try {
       doc = await db.get(DOC_NAMES_LOCAL_ID)
-      if (doc.names?.includes(name)) { db.close(); return }
+      if (doc.names?.includes(name)) { return }
       doc.names = [...new Set([...(doc.names ?? []), name])]
     } catch {
       doc = { _id: DOC_NAMES_LOCAL_ID, names: [name] }
     }
     await db.put(doc)
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -303,7 +329,7 @@ export async function loadCustomFeeNames(): Promise<CustomFeeItem[]> {
   } catch {
     return []
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -314,14 +340,14 @@ export async function saveCustomFeeItem(item: CustomFeeItem): Promise<void> {
     try {
       doc = await db.get(FEE_NAMES_LOCAL_ID)
       const exists = (doc.items ?? []).some((i: CustomFeeItem) => i.name === item.name)
-      if (exists) { db.close(); return }
+      if (exists) { return }
       doc.items = [...(doc.items ?? []), item]
     } catch {
       doc = { _id: FEE_NAMES_LOCAL_ID, items: [item] }
     }
     await db.put(doc)
   } finally {
-    db.close()
+    /* pas de close() : connexion IndexedDB partagée avec la réplication live */
   }
 }
 
@@ -357,7 +383,7 @@ export async function migrateLegacyFeeDatabase(): Promise<void> {
           await target.bulkDocs(docs)
           console.log(`[PouchDB] Migration 'Fee' → 'FeeStructure' : ${docs.length} document(s) rapatrié(s)`)
         } finally {
-          target.close()
+          /* pas de close() */
         }
       }
     }
@@ -369,7 +395,7 @@ export async function migrateLegacyFeeDatabase(): Promise<void> {
       try {
         await target.put(rest)
       } finally {
-        target.close()
+        /* pas de close() */
       }
     } catch {
       // Pas de noms personnalisés hérités — rien à migrer.

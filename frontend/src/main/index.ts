@@ -1,11 +1,19 @@
 import { app, shell, BrowserWindow, ipcMain, protocol, session, dialog } from 'electron'
-import { join, extname, dirname } from 'path'
+import { join, extname, dirname, resolve, sep } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { readFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { readFileSync, existsSync, mkdirSync, rmSync, writeFileSync, promises as fsPromises } from 'fs'
 import { getSetting, setSetting, getAllSettings } from './settings'
 import { saveFileLocally, getFileUploadCount, getFileUploadByEntity } from './files'
 import { setAuthToken, getAuthToken } from './auth'
+import {
+  setupUpdater,
+  teardownUpdater,
+  getUpdateState,
+  checkForUpdates,
+  downloadUpdate,
+  installUpdate,
+} from './updater'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -21,7 +29,7 @@ function createWindow(): void {
     transparent: true,
     backgroundColor: '#00000000',
     ...(process.platform === 'win32' ? { roundedCorners: true } : {}),
-    title: 'Ecole SaaS - Gestion Scolaire',
+    title: 'Sekoliko — Gestion scolaire',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -38,6 +46,16 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // Liens tel: / mailto: / https: cliqués dans la page : ouverts par le
+  // système (téléphone, client mail, navigateur) au lieu de naviguer dans
+  // la fenêtre de l'app.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (/^(tel|mailto|https?):/i.test(url) && !url.startsWith('http://localhost')) {
+      event.preventDefault()
+      shell.openExternal(url)
+    }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -68,7 +86,63 @@ function registerLocalProtocol() {
   })
 }
 
+// État de l'horloge de confiance (cliquet, décalage serveur, cache licence).
+// Deux copies hors du profil Chromium : vider les données du site ne les
+// touche pas ; au chargement on renvoie la plus avancée des deux.
+function clockStatePaths(): string[] {
+  return [
+    join(app.getPath('userData'), 'clock-state.json'),
+    join(app.getPath('home'), '.ecole-saas', 'clock-state.json'),
+  ]
+}
+
+function loadClockState(): Record<string, any> | null {
+  // Lecture d'abord, fusion ensuite : accumuler dans une variable qui commence
+  // à `null` faisait réduire son type à `never` par TypeScript au fil des
+  // branches, et la fusion ne compilait plus.
+  const states: Record<string, any>[] = []
+  for (const p of clockStatePaths()) {
+    try {
+      if (!existsSync(p)) continue
+      states.push(JSON.parse(readFileSync(p, 'utf8')))
+    } catch { /* fichier corrompu : ignoré */ }
+  }
+  if (states.length === 0) return null
+
+  // On retient la copie la plus avancée (cliquet le plus haut), mais on fusionne
+  // les `durable` des deux : une copie en retard peut porter une clé que
+  // l'autre n'a pas, et le gagnant garde la priorité en cas de conflit.
+  let best: Record<string, any> = { ...states[0], durable: { ...(states[0].durable ?? {}) } }
+  for (const parsed of states.slice(1)) {
+    best = (parsed.ratchet ?? 0) > (best.ratchet ?? 0)
+      ? { ...best, ...parsed, durable: { ...(best.durable ?? {}), ...(parsed.durable ?? {}) } }
+      : { ...best, durable: { ...(parsed.durable ?? {}), ...(best.durable ?? {}) } }
+  }
+  return best
+}
+
+function saveClockState(state: Record<string, any>): void {
+  const existing = loadClockState()
+  // Jamais de retour en arrière, même si le renderer envoie un état plus vieux.
+  const merged = existing && (existing.ratchet ?? 0) > (state.ratchet ?? 0)
+    ? { ...state, ratchet: existing.ratchet }
+    : state
+  const payload = JSON.stringify(merged)
+  for (const p of clockStatePaths()) {
+    try {
+      mkdirSync(dirname(p), { recursive: true })
+      writeFileSync(p, payload, 'utf8')
+    } catch { /* disque en lecture seule : l'autre copie suffit */ }
+  }
+}
+
 function setupIPC() {
+  ipcMain.handle('clock:load', async () => loadClockState())
+  ipcMain.handle('clock:save', async (_event, state) => {
+    if (state && typeof state === 'object') saveClockState(state)
+    return { success: true }
+  })
+
   ipcMain.handle('local:get-setting', async (_event, key) => {
     return getSetting(key)
   })
@@ -102,6 +176,40 @@ function setupIPC() {
   ipcMain.handle('file:get-url', async (_event, localPath) => {
     if (!localPath || !existsSync(localPath)) return null
     return `${LOCAL_PROTOCOL}://${localPath}`
+  })
+
+  // Mémo des encodages base64 : le même avatar est demandé par chaque ligne
+  // de liste à chaque rendu — sans cache, une lecture disque + encodage par
+  // demande. Invalidé par mtime (photo remplacée = fichier réécrit).
+  const dataUrlCache = new Map<string, { mtimeMs: number; dataUrl: string }>()
+
+  ipcMain.handle('file:get-data-url', async (_event, localPath) => {
+    if (!localPath || typeof localPath !== 'string') return null
+    // Confinement : ce canal ne sert qu'aux fichiers écrits par l'app dans
+    // userData (uploads, logo). Sans cette borne, n'importe quel code du
+    // renderer pourrait exfiltrer un fichier arbitraire du disque en base64.
+    const allowedRoot = app.getPath('userData')
+    const resolved = resolve(localPath)
+    if (!resolved.startsWith(allowedRoot + sep) && resolved !== allowedRoot) return null
+    try {
+      // Lecture asynchrone : readFileSync bloquait le process main (fenêtre,
+      // menus, tous les IPC) à chaque avatar affiché.
+      const stat = await fsPromises.stat(resolved)
+      const cached = dataUrlCache.get(resolved)
+      if (cached && cached.mtimeMs === stat.mtimeMs) return cached.dataUrl
+      const buffer = await fsPromises.readFile(resolved)
+      const ext = extname(resolved).toLowerCase()
+      const mimeMap: Record<string, string> = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+      }
+      const mime = mimeMap[ext] || 'application/octet-stream'
+      const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`
+      dataUrlCache.set(resolved, { mtimeMs: stat.mtimeMs, dataUrl })
+      return dataUrl
+    } catch {
+      return null
+    }
   })
 
   ipcMain.handle('file:get-pending-count', async () => {
@@ -168,6 +276,22 @@ function setupIPC() {
     }
   })
 
+  // Enregistrement générique d'un export (docx, xlsx...) : dialogue, écriture,
+  // puis ouverture dans l'application associée — même parcours que le PDF.
+  ipcMain.handle('documents:save-file', async (_event, { buffer, defaultName, filterName, extension }:
+    { buffer: ArrayBuffer; defaultName: string; filterName: string; extension: string }) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+      defaultPath: defaultName.replace(/[^\w\-\. ]/g, '_'),
+      filters: [{ name: filterName, extensions: [extension] }],
+    })
+    if (canceled || !filePath) return { canceled: true }
+    const dir = dirname(filePath)
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    writeFileSync(filePath, Buffer.from(buffer))
+    shell.openPath(filePath)
+    return { canceled: false, filePath }
+  })
+
   ipcMain.handle('window:is-maximized', async () => mainWindow?.isMaximized() ?? false)
 
   ipcMain.on('window:minimize', () => {
@@ -182,10 +306,34 @@ function setupIPC() {
   ipcMain.on('window:close', () => {
     mainWindow?.close()
   })
+
+  // Mise à jour automatique. Le renderer peut se monter après l'annonce d'une
+  // mise à jour : `updates:get-state` lui donne l'état courant, puis il suit
+  // les changements via l'événement `updates:state`.
+  ipcMain.handle('updates:get-state', async () => getUpdateState())
+  ipcMain.handle('updates:check', async () => checkForUpdates(true))
+  ipcMain.handle('updates:download', async () => downloadUpdate())
+  ipcMain.handle('updates:install', async () => {
+    installUpdate()
+    return { success: true }
+  })
 }
 
+// Locale française pour Chromium : les <input type="date"> s'affichent en
+// jj/mm/aaaa (sinon la locale système, souvent en-US → mm/dd/yyyy).
+app.commandLine.appendSwitch('lang', 'fr-FR')
+// Chromium limite à 6 connexions simultanées par hôte. Or la synchronisation
+// tient ~21 requêtes « longpoll » ouvertes en permanence vers CouchDB (une
+// par base) : toute autre requête vers ce serveur attendait derrière — synchro
+// manuelle en « délai dépassé », passes de fond bloquées, lenteur générale.
+// On lève la limite pour le serveur de synchro (et localhost en développement).
+app.commandLine.appendSwitch('ignore-connections-limit', '51.178.50.63,localhost,127.0.0.1')
+
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.ecole-saas')
+  // Doit être identique à l'`appId` d'electron-builder : c'est cette valeur qui
+  // relie la fenêtre à son raccourci Windows (icône de la barre des tâches,
+  // épinglage, notifications).
+  electronApp.setAppUserModelId('mg.sekoliko.desktop')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -193,6 +341,7 @@ app.whenReady().then(async () => {
 
   setupIPC()
   registerLocalProtocol()
+  setupUpdater()
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const cspHeader = details.responseHeaders?.['content-security-policy']
@@ -200,10 +349,10 @@ app.whenReady().then(async () => {
     if (csp) {
       let fixed = csp
       if (!csp.includes('local-asset:')) {
-        fixed = fixed.replace(/img-src[^;]*/, '$& local-asset: http://localhost:3000')
+        fixed = fixed.replace(/img-src[^;]*/, '$& local-asset: http://localhost:3000 http://51.178.50.63:3000')
       }
       if (!csp.includes('51.178.50.63:5984')) {
-        fixed = fixed.replace(/connect-src[^;]*/, '$& http://51.178.50.63:5984')
+        fixed = fixed.replace(/connect-src[^;]*/, '$& http://51.178.50.63:3000 http://51.178.50.63:5984')
       }
       if (fixed !== csp) {
         callback({
@@ -229,4 +378,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('will-quit', () => {
+  teardownUpdater()
 })

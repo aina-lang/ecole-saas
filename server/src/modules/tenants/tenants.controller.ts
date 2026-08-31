@@ -4,11 +4,19 @@ import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('tenants')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class TenantsController {
   constructor(private tenantsService: TenantsService) {}
+
+  // Déclaré avant @Get(':id') : le tenant vient du jeton, jamais de l'URL, et
+  // aucun @Roles n'est posé — tous les rôles y ont accès (voir le service).
+  @Get('me/setup-state')
+  getSetupState(@CurrentUser('tenantId') tenantId: string) {
+    return this.tenantsService.getSetupState(tenantId);
+  }
 
   @Get()
   @Roles('SUPER_ADMIN')

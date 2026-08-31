@@ -17,6 +17,12 @@ export class TeachersController {
     return this.teachersService.findAll(tenantId);
   }
 
+  /** Fiche enseignant de l'utilisateur connecté (app mobile professeur). */
+  @Get('me')
+  findMe(@CurrentUser('id') userId: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.teachersService.findByUserId(userId, tenantId);
+  }
+
   @Get(':id')
   findById(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
     return this.teachersService.findById(id, tenantId);

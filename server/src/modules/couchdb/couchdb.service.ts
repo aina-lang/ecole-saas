@@ -14,6 +14,11 @@ export class CouchDbService implements OnModuleDestroy {
   private couchPass: string;
   private dbCache = new Map<string, PouchDB.Database>();
   private provisioningInFlight = new Map<string, Promise<{ user: string; pass: string }>>();
+  /** Tenants dont les _security ont été posées récemment : on ne repasse pas
+   * sur les 21 bases à chaque `couchdb-config` (c'était ~42 requêtes CouchDB
+   * par clic « Synchroniser » côté client). Réfait après PROVISION_TTL_MS. */
+  private provisionedAt = new Map<string, number>();
+  private static readonly PROVISION_TTL_MS = 60 * 60 * 1000;
 
   constructor(
     private configService: ConfigService,
@@ -186,13 +191,26 @@ export class CouchDbService implements OnModuleDestroy {
   /** Assure l'utilisateur ET les _security de toutes les bases synchronisées du tenant. */
   async ensureTenantProvisioned(tenantId: string): Promise<{ user: string; pass: string }> {
     const { user, pass } = await this.ensureTenantAccess(tenantId);
+    // CouchDB injoignable : inutile de tenter les 20 _security (20 warnings
+    // par tenant à chaque appel) — un seul message, et on renvoie quand même
+    // les identifiants déjà provisionnés pour que le client puisse répliquer
+    // dès que CouchDB revient.
+    const last = this.provisionedAt.get(tenantId) ?? 0;
+    if (Date.now() - last < CouchDbService.PROVISION_TTL_MS) return { user, pass };
+    if (!(await this.isConnected())) {
+      this.logger.warn(`CouchDB injoignable (${this.couchUrl}) — provisioning des _security du tenant ${tenantId} reporté`);
+      return { user, pass };
+    }
+    let failed = 0;
     await Promise.all(
       SYNC_ENTITY_TYPES.map((entity) =>
-        this.ensureDatabaseSecurity(tenantId, entity, user).catch((err) =>
-          this.logger.warn(`_security ${entity}/${tenantId} échoué: ${err.message}`),
-        ),
+        this.ensureDatabaseSecurity(tenantId, entity, user).catch((err) => {
+          failed++;
+          this.logger.warn(`_security ${entity}/${tenantId} échoué: ${err.message}`);
+        }),
       ),
     );
+    if (failed === 0) this.provisionedAt.set(tenantId, Date.now());
     return { user, pass };
   }
 }

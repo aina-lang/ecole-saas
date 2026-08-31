@@ -9,7 +9,7 @@ import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { Download, RotateCw } from 'lucide-react'
 import { PlusIcon, MagnifyingGlassIcon, Pencil2Icon, TrashIcon } from '@radix-ui/react-icons'
-import { queryEntities, deleteEntity, saveEntity, countEntities } from '@/lib/db/pouchdb-compat'
+import { queryEntities, deleteEntity, saveEntity } from '@/lib/db/pouchdb-compat'
 import { useLocalQuery } from '@/lib/db/hooks'
 import type { Payment, Student } from '@/types'
 import { cn } from '@/lib/utils'
@@ -34,8 +34,9 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
+import { PageHeader, FilterBar } from '@/components/layout/page'
 
 const statusConfig: Record<
   string,
@@ -86,7 +87,8 @@ export function PaymentListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  // Filtre initial depuis l'URL (ex. /finances/payments?status=overdue depuis le tableau de bord).
+  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get('status') || 'all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sortBy, setSortBy] = useState<string>('')
@@ -96,7 +98,7 @@ export function PaymentListPage() {
   const [page, setPage] = useState(1)
   const limit = 15
 
-  const { data: studentsRaw, loading: loadingStudents } = useLocalQuery<Student>('Student')
+  const { data: studentsRaw } = useLocalQuery<Student>('Student')
   const studentsMap = ((studentsRaw ?? []) as any[]).reduce((map, s) => {
     const first = s.firstName ?? (s as any).user_firstName ?? ''
     const last = s.lastName ?? (s as any).user_lastName ?? ''
@@ -186,7 +188,6 @@ export function PaymentListPage() {
 
   const payments = paymentsData?.data ?? []
   const total = paymentsData?.total ?? 0
-  const totalPages = Math.ceil(total / limit)
 
   // reset page when filters change
   function onFilterChange(key: string, value: string) {
@@ -197,74 +198,64 @@ export function PaymentListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Paiements</h2>
-          <p className="text-muted-foreground">Gérer les paiements des frais de scolarité</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['payments'] })}
-            disabled={isLoading}
-          >
-            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => exportCsv(payments, studentsMap)}
-          >
-            <Download className="h-4 w-4" />
-            Exporter CSV
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Paiements"
+        description="Gérer les paiements des frais de scolarité"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['payments'] })}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => exportCsv(payments, studentsMap)}
+            >
+              <Download className="h-4 w-4" />
+              Exporter CSV
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Recherche et filtres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
-            <div className="relative w-72">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher par nom d'élève ou matricule..."
-                className="pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <Combobox
-              className="w-[200px]"
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter(v || 'all')}
-              placeholder="Statut"
-              options={[
-                { value: 'all', label: 'Tous' },
-                { value: 'pending', label: 'En attente' },
-                { value: 'partial', label: 'Partiel' },
-                { value: 'paid', label: 'Payé' },
-                { value: 'overdue', label: 'En retard' },
-                { value: 'cancelled', label: 'Annulé' },
-                { value: 'refunded', label: 'Remboursé' },
-              ]}
-            />
-            <div className="flex items-end gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Du</label>
-                <DatePicker value={dateFrom} onChange={(d) => setDateFrom(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[180px]" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Au</label>
-                <DatePicker value={dateTo} onChange={(d) => setDateTo(d ? format(d, 'yyyy-MM-dd') : '')} className="w-[180px]" />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <div className="relative flex-1 min-w-[220px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par nom d'élève ou matricule..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Combobox
+          className="w-[180px]"
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v || 'all')}
+          placeholder="Statut"
+          options={[
+            { value: 'all', label: 'Tous' },
+            { value: 'pending', label: 'En attente' },
+            { value: 'partial', label: 'Partiel' },
+            { value: 'paid', label: 'Payé' },
+            { value: 'overdue', label: 'En retard' },
+            { value: 'cancelled', label: 'Annulé' },
+            { value: 'refunded', label: 'Remboursé' },
+          ]}
+        />
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">Du</span>
+          <DatePicker value={dateFrom} onChange={(d) => setDateFrom(d ? format(d, 'yyyy-MM-dd') : '')} placeholder="Date début" className="w-[150px]" />
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">au</span>
+          <DatePicker value={dateTo} onChange={(d) => setDateTo(d ? format(d, 'yyyy-MM-dd') : '')} placeholder="Date fin" className="w-[150px]" />
+        </div>
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">

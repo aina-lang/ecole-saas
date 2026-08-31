@@ -1,9 +1,9 @@
 {
-  "name": "electron-app",
+  "name": "sekoliko",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Sekoliko — gestion scolaire hors ligne",
   "main": "./out/main/index.js",
-  "author": "example.com",
+  "author": "Sekoliko",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
@@ -64,6 +64,7 @@
     "clsx": "^2.1.0",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
+    "docx": "^9.7.1",
     "electron-updater": "^6.1.7",
     "embla-carousel-react": "^8.0.0",
     "events": "^3.3.0",
@@ -84,6 +85,7 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^14.0.1",
     "vaul": "^0.9.0",
+    "xlsx-js-style": "^1.2.0",
     "zod": "^3.22.4",
     "zustand": "^5.0.14"
   },

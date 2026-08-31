@@ -6,12 +6,15 @@ import { queryEntities, deleteEntity, enrichTeachers } from '@/lib/db/pouchdb-co
 import type { Teacher } from '@/types'
 import { getInitials, cn } from '@/lib/utils'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader, FilterBar } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { SetPasswordDialog } from '@/components/set-password-dialog'
+import { KeyRound } from 'lucide-react'
 import {
   PlusIcon,
   Pencil2Icon,
@@ -19,12 +22,15 @@ import {
   ReloadIcon,
   TrashIcon,
 } from '@radix-ui/react-icons'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportTeacherList } from '@/lib/export/exporters'
 
 export function TeacherListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [passwordFor, setPasswordFor] = useState<{ userId: string; name: string } | null>(null)
 
   const { data: teachersData, isLoading } = useQuery<Teacher[]>({
     queryKey: ['teacher-list', search],
@@ -59,45 +65,40 @@ export function TeacherListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Enseignants</h2>
-          <p className="text-muted-foreground">Liste et administration des enseignants</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['teacher-list'] })}
-            disabled={isLoading}
-          >
-            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button onClick={() => navigate('/teachers/new')}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Ajouter un enseignant
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Enseignants"
+        description="Liste et administration des enseignants"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['teacher-list'] })}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <ExportMenu onExport={(format) => exportTeacherList(format)} size="default" />
+            <Button onClick={() => navigate('/teachers/new')}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Ajouter un enseignant
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Recherche</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Nom, prénom, spécialité, email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Nom, prénom, spécialité, email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">
@@ -172,6 +173,7 @@ export function TeacherListPage() {
                 })
                 .catch(() => toast.error('Erreur lors de la suppression'))
             }}
+            onRowClick={(teacher) => navigate(`/teachers/${(teacher as any).id}`)}
             getRowId={(teacher) => (teacher as any).id}
             isLoading={isLoading}
             emptyMessage="Aucun enseignant trouvé"
@@ -184,12 +186,23 @@ export function TeacherListPage() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    title="Modifier"
                     onClick={(e) => {
                       e.stopPropagation()
                       navigate(`/teachers/${t.id}/edit`)
                     }}
                   >
                     <Pencil2Icon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={t.userId ? 'Définir / réinitialiser le mot de passe' : 'Aucun compte de connexion'}
+                    aria-label="Définir le mot de passe"
+                    disabled={!t.userId}
+                    onClick={(e) => { e.stopPropagation(); if (t.userId) setPasswordFor({ userId: t.userId, name }) }}
+                  >
+                    <KeyRound className="h-4 w-4" />
                   </Button>
                   <ConfirmDialog
                     open={deleteId === t.id}
@@ -214,6 +227,12 @@ export function TeacherListPage() {
           />
         </CardContent>
       </Card>
+      <SetPasswordDialog
+        open={!!passwordFor}
+        onOpenChange={(o) => !o && setPasswordFor(null)}
+        userId={passwordFor?.userId ?? null}
+        userName={passwordFor?.name ?? ''}
+      />
     </div>
   )
 }

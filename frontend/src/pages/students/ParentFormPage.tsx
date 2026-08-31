@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
+import { fileToResizedDataUrl } from '@/lib/image-utils'
 import { saveEntity, queryEntities, getEntityById } from '@/lib/db/pouchdb-compat'
 import type { Student } from '@/types'
-import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
@@ -22,8 +21,9 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { PlusIcon, Cross2Icon, ArrowLeftIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { PlusIcon, Cross2Icon, ReloadIcon } from '@radix-ui/react-icons'
 import { PhotoUpload } from '@/components/ui/photo-upload'
+import { PageHeader, FormShell, FormSection } from '@/components/layout/page'
 
 const parentSchema = z.object({
   firstName: z.string().optional().or(z.literal('')),
@@ -87,21 +87,16 @@ export function ParentFormPage() {
       }
 
       if (pendingPhoto) {
-        const api = window.api
-        if (api?.file) {
-          const buffer = await pendingPhoto.arrayBuffer()
-          const result = await api.file.save({
-            buffer, entityType: 'User', entityId: userId,
-            fieldName: 'photo_url', originalName: pendingPhoto.name, mimeType: pendingPhoto.type,
-          })
-          const localUrl = await api.file.getUrl((result as any).local_path)
-          if (localUrl) {
-            const existing = await getEntityById<any>('User', userId)
-            if (existing) {
-              await saveEntity('User', { ...existing, photoUrl: localUrl })
-            }
+        try {
+          // Data URL dans le document synchronisé : la photo voyage avec le
+          // parent vers les autres postes (un chemin local-asset:// restait
+          // sur cette machine).
+          const photoDataUrl = await fileToResizedDataUrl(pendingPhoto)
+          const existing = await getEntityById<any>('User', userId)
+          if (existing) {
+            await saveEntity('User', { ...existing, photoUrl: photoDataUrl })
           }
-        }
+        } catch { /* photo optionnelle */ }
         setPendingPhoto(null)
       }
 
@@ -116,68 +111,77 @@ export function ParentFormPage() {
   })
 
   function onSubmit(values: ParentFormValues) {
-    createMutation.mutate({ ...values, studentIds: selectedStudentIds })
+    // `studentIds` n'était pas lu : la mutation utilise directement
+    // selectedStudentIds via la portée (voir mutationFn).
+    createMutation.mutate(values)
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/parents')}>
-          <ArrowLeftIcon className="h-4 w-4" />
-        </Button>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Nouveau parent / tuteur</h2>
-          <p className="text-muted-foreground">Créer un compte parent et lier à des élèves</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/parents"
+        title="Nouveau parent / tuteur"
+        description="Créer un compte parent et lier à des élèves"
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations personnelles</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prénom *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Prénom" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormShell
+            actions={
+              <>
+                <Button type="button" variant="outline" onClick={() => navigate('/parents')}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+                  Enregistrer
+                </Button>
+              </>
+            }
+          >
+            <FormSection
+              title="Informations personnelles"
+              description="Identité et coordonnées du parent ou tuteur"
+              columns={2}
+              aside={
+                <PhotoUpload
+                  src={null}
+                  firstName={form.watch('firstName')}
+                  lastName={form.watch('lastName')}
+                  onUpload={async (file) => {
+                    setPendingPhoto(file)
+                    return { url: '' }
+                  }}
+                  onDelete={undefined}
                 />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Nom" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <PhotoUpload
-                src={null}
-                firstName={form.watch('firstName')}
-                lastName={form.watch('lastName')}
-                onUpload={async (file) => {
-                  setPendingPhoto(file)
-                  return { url: '' }
-                }}
-                onDelete={undefined}
+              }
+            >
+              <FormField
+                control={form.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prénom</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Prénom" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nom" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="email"
@@ -236,7 +240,13 @@ export function ParentFormPage() {
                   </Button>
                 )}
               </div>
+            </FormSection>
 
+            <FormSection
+              title="Élèves liés"
+              description="Rattacher ce parent à un ou plusieurs élèves (optionnel)"
+              columns={1}
+            >
               <div className="space-y-2">
                 <label className="text-sm font-medium">Élèves à lier (optionnel)</label>
                 <Combobox
@@ -254,7 +264,7 @@ export function ParentFormPage() {
                   emptyText="Aucun élève trouvé"
                 />
                 {selectedStudentIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {selectedStudentIds.map((sid) => {
                       const s = students?.find((st) => st.id === sid)
                       return (
@@ -276,26 +286,10 @@ export function ParentFormPage() {
                   </div>
                 )}
               </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" disabled={createMutation.isPending} className="flex-1">
-                  {createMutation.isPending ? (
-                    <>
-                      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                      Création...
-                    </>
-                  ) : (
-                    'Créer le compte parent'
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => navigate('/parents')}>
-                  Annuler
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+            </FormSection>
+          </FormShell>
+        </form>
+      </Form>
     </div>
   )
 }

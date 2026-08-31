@@ -2,12 +2,12 @@ import {
   getAllDocuments,
   getDocument,
   putDocument,
-  deleteDocument,
   createDatabase,
   type EntityType,
 } from './pouchdb'
 import { getTenantId } from './token-cache'
 import { isReadOnly } from '../billing-status'
+import { trustedNowIso } from '../trusted-clock'
 
 /** Résout le tenantId courant depuis la mémoire (token-cache) ou localStorage. */
 function getCurrentTenantId(): string | null {
@@ -15,7 +15,7 @@ function getCurrentTenantId(): string | null {
 }
 
 const READ_ONLY_MESSAGE =
-  "Abonnement expiré — mode lecture seule. Régularisez votre abonnement dans Paramètres > Abonnement pour continuer à modifier vos données."
+  "Licence expirée — mode lecture seule. Saisissez un code de licence valide dans Paramètres > Licence pour continuer à modifier vos données."
 
 function assertWritable(): void {
   if (isReadOnly()) {
@@ -53,7 +53,7 @@ export async function logAudit(params: {
     action: params.action,
     entityType: params.entityType,
     entityId: params.entityId || null,
-    timestamp: new Date().toISOString(),
+    timestamp: trustedNowIso(),
     oldValue: params.oldValue || null,
     newValue: params.newValue || null,
     metadata: params.metadata || null,
@@ -205,7 +205,33 @@ export async function saveEntity(entityType: EntityType, data: any, retries = 3)
   } catch { }
   db.close()
 
-  const doc: any = { ...data, _id: id, tenantId }
+  // Fusion avec le document existant : beaucoup d'appelants passent un patch
+  // partiel ({ id, isActive }...) — sans fusion, le put remplacerait le
+  // document entier et détruirait tous les autres champs, perte ensuite
+  // répliquée vers CouchDB et les autres postes. Pour effacer un champ,
+  // passer explicitement null (ou undefined, éliminé à la sérialisation).
+  // updatedAt est re-tamponné à chaque écriture locale : c'est la clé
+  // d'arbitrage des conflits dans sync-engine (last-write-wins) — sans lui,
+  // une modification locale perdrait systématiquement face au serveur.
+  // Heure de confiance (corrigée serveur, monotone) : une horloge PC fausse
+  // ne doit pas fausser l'arbitrage « dernière écriture gagnante » de la synchro.
+  const now = trustedNowIso()
+  const buildDoc = (base: any): any => {
+    const merged: any = {
+      ...(base ?? {}),
+      ...data,
+      _id: id,
+      tenantId,
+      createdAt: base?.createdAt ?? data.createdAt ?? now,
+      updatedAt: now,
+    }
+    // _rev est géré à part : celui que `data` pourrait transporter (objet
+    // relu puis re-soumis) est périmé et provoquerait un 409 en boucle.
+    delete merged._rev
+    return merged
+  }
+
+  let doc: any = buildDoc(existingDoc)
   if (existingRev) doc._rev = existingRev
 
   const action = existingRev ? 'UPDATE' : 'CREATE'
@@ -217,9 +243,12 @@ export async function saveEntity(entityType: EntityType, data: any, retries = 3)
       break
     } catch (err: any) {
       if (err.status === 409 && attempt < retries) {
+        // Conflit : on re-fusionne le patch sur la version fraîche (pas
+        // seulement le _rev, sinon on écraserait avec une base périmée).
+        // getDocument ne renvoie pas _rev ; putDocument retrouve alors la
+        // révision courante lui-même.
         const fresh = await getDocument(entityType, id)
-        doc._rev = (fresh as any)?._rev
-        doc.tenantId = tenantId
+        doc = buildDoc(fresh)
         continue
       }
       console.error(`saveEntity(${entityType}, ${id}) putDocument error:`, err)
@@ -255,7 +284,7 @@ export async function deleteEntity(entityType: EntityType, id: string): Promise<
       ...doc,
       _deleted: true,
       tenantId: doc.tenantId || getCurrentTenantId(),
-      deletedAt: new Date().toISOString(),
+      deletedAt: trustedNowIso(),
     }
     await db.put(tombstone)
     logAudit({ action: 'DELETE', entityType, entityId: id, oldValue: doc }).catch(() => {})

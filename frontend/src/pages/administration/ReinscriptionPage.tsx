@@ -5,7 +5,10 @@ import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { StudentEnrollment, Student, Level, Payment } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import { Clock, CheckCircle2, Ban } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
 import {
   Dialog,
   DialogContent,
@@ -159,15 +162,19 @@ export function ReinscriptionPage() {
       })
 
       if (status === 'INSCRIT_ACTIF' && amount && amount > 0) {
+        // Suffixe UUID comme les autres reçus : deux postes hors ligne ne
+        // peuvent pas générer le même numéro (unicité par tenant en base).
+        // Un numéro saisi manuellement (reçu papier) est conservé tel quel.
+        const paymentId = crypto.randomUUID()
         await saveEntity('Payment' as any, {
-          id: crypto.randomUUID(),
+          id: paymentId,
           studentId: enrollment.studentId,
           amount,
           paidAmount: amount,
           status: 'paid',
           dueDate: new Date().toISOString(),
           paidAt: new Date().toISOString(),
-          receiptNumber: receipt || `RE-${Date.now()}`,
+          receiptNumber: receipt || `RE-${Date.now()}-${paymentId.slice(0, 6).toUpperCase()}`,
           notes: 'Droit de ré-inscription',
           academicYearId: enrollment.academicYearId
         })
@@ -188,7 +195,7 @@ export function ReinscriptionPage() {
   function openValidateDialog(enrollment: (typeof enriched)[number]) {
     setSelectedEnrollment(enrollment)
     setReinscriptionAmount('')
-    setReceiptNumber(`RE-${Date.now()}`)
+    setReceiptNumber(`RE-${Date.now()}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`)
     setValidateDialogOpen(true)
   }
 
@@ -214,34 +221,33 @@ export function ReinscriptionPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">En attente</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{stats.enAttente}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Validés</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-600">{stats.valides}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Bloqués</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-destructive">{stats.bloques}</p>
-          </CardContent>
-        </Card>
+      <PageHeader
+        title="Ré-inscriptions"
+        description="Validation des ré-inscriptions et contrôle des dettes"
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {([
+          ['En attente', stats.enAttente, Clock, 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', 'À valider'],
+          ['Validés', stats.valides, CheckCircle2, 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', 'Ré-inscription confirmée'],
+          ['Bloqués', stats.bloques, Ban, 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Dettes à régulariser'],
+        ] as const).map(([label, value, Icon, iconClass, hint]) => (
+          <Card key={label}>
+            <CardContent className="flex items-center gap-4 p-4">
+              <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-lg', iconClass)}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                <p className="text-2xl font-semibold tabular-nums">{value}</p>
+                <p className="truncate text-xs text-muted-foreground">{hint}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="flex items-center gap-4">
+      <FilterBar>
         <div className="w-48">
           <Select value={levelFilter} onValueChange={setLevelFilter}>
             <SelectTrigger>
@@ -270,7 +276,7 @@ export function ReinscriptionPage() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">
@@ -293,8 +299,11 @@ export function ReinscriptionPage() {
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Aucune ré-inscription trouvée
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      title="Aucune ré-inscription"
+                      description="Aucune ré-inscription ne correspond aux filtres."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -316,13 +325,13 @@ export function ReinscriptionPage() {
                     </TableCell>
                     <TableCell>
                       {enr.reinscriptionStatus === 'PRE_INSCRIT' && (
-                        <Badge variant="secondary">En attente</Badge>
+                        <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">En attente</Badge>
                       )}
                       {enr.reinscriptionStatus === 'INSCRIT_ACTIF' && (
-                        <Badge variant="default">Validé</Badge>
+                        <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Validé</Badge>
                       )}
                       {enr.reinscriptionStatus === 'BLOQUE' && (
-                        <Badge variant="destructive">Bloqué</Badge>
+                        <Badge variant="outline" className="border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">Bloqué</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">

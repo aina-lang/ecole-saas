@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { Pencil1Icon, PlusIcon, TrashIcon, MagnifyingGlassIcon } from '@radix-ui/react-icons'
 import { queryEntities, saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
 import { LEVELS } from '@/lib/levels'
 import type { Level } from '@/types'
+import { PageHeader, FilterBar } from '@/components/layout/page'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DataTable } from '@/components/ui/data-table'
@@ -143,7 +145,7 @@ export function LevelsPage() {
   const paginated = filtered.slice((page - 1) * limit, page * limit)
 
   const columns: ColumnDef<Level>[] = [
-    { key: 'name', label: 'Nom', sortable: true, filterable: true },
+    { key: 'name', label: 'Nom', sortable: true },
     { key: 'sortOrder', label: 'Ordre', sortable: true },
     { key: 'nextLevelId', label: 'Niveau supérieur', sortable: false, render: (level) => getLevelName(level.nextLevelId) },
   ]
@@ -153,66 +155,85 @@ export function LevelsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Niveaux</h2>
-          <p className="text-muted-foreground">Gérer les niveaux scolaires (6ème, 5ème, etc.)</p>
-        </div>
-        <div className="flex gap-2">
-          {!isLoading && (levels ?? []).length === 0 && (
-            <Button variant="outline" className="gap-2" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
-              Créer les niveaux standards (Madagascar)
-            </Button>
-          )}
-          <Button className="gap-2" onClick={openCreate}>
-            <PlusIcon className="h-4 w-4" />
-            Nouveau niveau
-          </Button>
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={paginated}
-        total={total}
-        page={page}
-        limit={limit}
-        onPageChange={setPage}
-        onSortChange={(key, dir) => { setSortBy(key); setSortDirection(dir); setPage(1) }}
-        sortKey={sortBy}
-        sortDirection={sortDirection}
-        filters={{ name: search }}
-        onFilterChange={(key, value) => { setSearch(value); setPage(1) }}
-        onBulkDelete={(ids) => {
-          Promise.all(ids.map((id) => deleteEntity('Level', id)))
-            .then(() => {
-              queryClient.invalidateQueries({ queryKey: ['levels'] })
-              toast.success(`${ids.length} niveau(x) supprimé(s)`)
-            })
-            .catch(() => toast.error('Erreur lors de la suppression'))
-        }}
-        getRowId={(level) => level.id}
-        isLoading={isLoading}
-        emptyMessage="Aucun niveau défini"
-        bulkDeleteLabel="niveau(x)"
-        renderRowActions={(level) => (
+      <PageHeader
+        title="Niveaux"
+        description="Gérer les niveaux scolaires (6ème, 5ème, etc.)"
+        actions={
           <>
-            <Button variant="ghost" size="icon" onClick={() => openEdit(level)}>
-              <Pencil1Icon className="h-4 w-4" />
-            </Button>
-            <ConfirmDialog
-              open={deleteId === level.id}
-              onOpenChange={(open) => !open && setDeleteId(null)}
-              onConfirm={() => deleteMutation.mutate(level.id)}
-              title="Supprimer le niveau"
-              description="Cette action est irréversible."
-            />
-            <Button variant="ghost" size="icon" onClick={() => setDeleteId(level.id)}>
-              <TrashIcon className="h-4 w-4 text-destructive" />
+            {!isLoading && (levels ?? []).length === 0 && (
+              <Button variant="outline" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
+                Créer les niveaux standards (Madagascar)
+              </Button>
+            )}
+            <Button onClick={openCreate}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Ajouter un niveau
             </Button>
           </>
-        )}
+        }
       />
+
+      <FilterBar>
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher un niveau..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+          />
+        </div>
+      </FilterBar>
+
+      <Card>
+        <CardContent className="p-0">
+          <DataTable
+            columns={columns}
+            data={paginated}
+            total={total}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            onSortChange={(key, dir) => { setSortBy(key); setSortDirection(dir); setPage(1) }}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            filters={{ name: search }}
+            onFilterChange={(_key, value) => { setSearch(value); setPage(1) }}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map((id) => deleteEntity('Level', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['levels'] })
+                  toast.success(`${ids.length} niveau(x) supprimé(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
+            getRowId={(level) => level.id}
+            isLoading={isLoading}
+            emptyMessage="Aucun niveau défini"
+            bulkDeleteLabel="niveau(x)"
+            renderRowActions={(level) => (
+              <>
+                <Button variant="ghost" size="icon" onClick={() => openEdit(level)}>
+                  <Pencil1Icon className="h-4 w-4" />
+                </Button>
+                <ConfirmDialog
+                  open={deleteId === level.id}
+                  onOpenChange={(open) => !open && setDeleteId(null)}
+                  onConfirm={() => deleteMutation.mutate(level.id)}
+                  title="Supprimer le niveau"
+                  description="Cette action est irréversible."
+                />
+                <Button variant="ghost" size="icon" onClick={() => setDeleteId(level.id)}>
+                  <TrashIcon className="h-4 w-4 text-destructive" />
+                </Button>
+              </>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

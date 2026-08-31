@@ -18,12 +18,14 @@ export class GradesService {
     private audit: AuditService,
   ) {}
 
-  async findAll(tenantId: string, filters?: { studentId?: string; subjectId?: string; classId?: string; periodId?: string }) {
+  async findAll(tenantId: string, filters?: { studentId?: string; subjectId?: string; classId?: string | string[]; periodId?: string }) {
     const where: any = { tenantId, deletedAt: null };
     if (filters?.studentId) where.studentId = filters.studentId;
     if (filters?.subjectId) where.subjectId = filters.subjectId;
     if (filters?.periodId) where.periodId = filters.periodId;
-    if (filters?.classId) {
+    if (Array.isArray(filters?.classId)) {
+      where.student = { classId: { in: filters!.classId } };
+    } else if (filters?.classId) {
       where.student = { classId: filters.classId };
     }
 
@@ -143,6 +145,15 @@ export class GradesService {
     this.prisma.notifyWrite('Grade', { id, tenantId, deletedAt: new Date() });
 
     return { message: 'Note supprimée' };
+  }
+
+  async currentPeriods(tenantId: string) {
+    const year = await this.prisma.academicYear.findFirst({
+      where: { tenantId, isCurrent: true },
+      include: { periods: { orderBy: { startDate: 'asc' } } },
+    });
+    if (!year) return { academicYear: null, periods: [] };
+    return { academicYear: { id: year.id, label: year.label, startDate: year.startDate, endDate: year.endDate }, periods: year.periods };
   }
 
   async bulkCreateForClass(tenantId: string, classId: string, grades: CreateGradeDto[], userId?: string) {

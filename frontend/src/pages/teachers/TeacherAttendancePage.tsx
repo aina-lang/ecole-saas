@@ -9,6 +9,7 @@ import type { Teacher } from '@/types'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/layout/page'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
 import { Badge } from '@/components/ui/badge'
 import { ReloadIcon } from '@radix-ui/react-icons'
@@ -33,7 +34,7 @@ export function TeacherAttendancePage() {
   const queryClient = useQueryClient()
   const today = new Date().toISOString().split('T')[0]
 
-  const { data: teachersRaw, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachersRaw, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
   const { data: teachers, isLoading: isLoadingTeachers } = useQuery({
     queryKey: ['enriched-teachers', teachersRaw],
@@ -133,28 +134,28 @@ export function TeacherAttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Présence des enseignants</h2>
-          <p className="text-muted-foreground">Marquer la présence des professeurs</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
-            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <DatePicker
-            value={date}
-            onChange={(d) => {
-              if (d) {
-                const formatted = format(d, 'yyyy-MM-dd')
-                if (formatted <= today) setDate(formatted)
-              }
-            }}
-            className="w-[180px]"
-            max={new Date(today)}
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Présence des enseignants"
+        description="Marquer la présence des professeurs"
+        actions={
+          <>
+            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading} aria-label="Rafraîchir">
+              <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <DatePicker
+              value={date}
+              onChange={(d) => {
+                if (d) {
+                  const formatted = format(d, 'yyyy-MM-dd')
+                  if (formatted <= today) setDate(formatted)
+                }
+              }}
+              className="w-[180px]"
+              max={new Date(today)}
+            />
+          </>
+        }
+      />
 
       <Card>
         <CardContent className="p-0">

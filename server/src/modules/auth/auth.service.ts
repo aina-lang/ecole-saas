@@ -1,12 +1,8 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
+import { MailService } from '../../common/mail/mail.service';
 import * as OTPAuth from 'otplib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
@@ -18,6 +14,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private mail: MailService,
   ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
@@ -31,8 +28,8 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.adminPassword, 12);
 
     // Essai gratuit de 14 jours avec les limites du plan STARTER — pas
-    // d'abonnement Stripe tant que l'admin n'a pas payé depuis /billing.
-    // Passé trialEndsAt, le cron BillingService.expireOverdueTrials() bascule
+    // de licence tant qu'une clé n'a pas été activée depuis Paramètres > Licence.
+    // Passé trialEndsAt, le cron LicenseService.expireOverdue() bascule
     // le tenant en PAST_DUE (lecture seule) s'il n'a toujours pas payé.
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
@@ -144,8 +141,81 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role,
         tenantId: user.tenantId,
+        mustChangePassword: user.mustChangePassword ?? false,
       },
     };
+  }
+
+  // ---------------------------------------------------------------------
+  // Mot de passe oublié / changement
+  // ---------------------------------------------------------------------
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  /** Réponse volontairement identique que l'e-mail existe ou non. */
+  async forgotPassword(rawEmail: string) {
+    const email = rawEmail.trim().toLowerCase();
+    const users = await this.prisma.user.findMany({
+      where: { email, isActive: true },
+      include: { tenant: { select: { name: true } } },
+    });
+    if (users.length > 0) {
+      const token = randomBytes(32).toString('base64url');
+      const expires = new Date(Date.now() + 30 * 60 * 1000);
+      // Même adresse dans plusieurs établissements : un seul jeton, valable pour tous.
+      await this.prisma.user.updateMany({
+        where: { id: { in: users.map((u) => u.id) } },
+        data: { passwordResetToken: this.hashToken(token), passwordResetExpiresAt: expires },
+      });
+      const schools = users.map((u) => u.tenant.name).join(', ');
+      const text = [
+        `Bonjour ${users[0].firstName ?? ''}`.trim() + ',',
+        '',
+        `Une réinitialisation du mot de passe a été demandée pour votre compte Sekoliko (${schools}).`,
+        'Ouvrez l’application, cliquez sur « Mot de passe oublié ? » puis « J’ai déjà un code », et saisissez ce code :',
+        '',
+        `    ${token}`,
+        '',
+        'Il est valable 30 minutes et ne peut servir qu’une fois. Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.',
+      ].join('\n');
+      const html = text.replace(/\n/g, '<br>').replace(token, `<code style="font-size:15px">${token}</code>`);
+      const sent = await this.mail.send(email, 'Réinitialisation de votre mot de passe — Sekoliko', text, html);
+    }
+    return { message: 'Si un compte existe pour cette adresse, un e-mail contenant un code de réinitialisation vient d’être envoyé.' };
+  }
+
+  async resetPassword(token: string, password: string) {
+    const hashed = this.hashToken(token.trim());
+    const users = await this.prisma.user.findMany({
+      where: { passwordResetToken: hashed, passwordResetExpiresAt: { gt: new Date() } },
+    });
+    if (users.length === 0) throw new BadRequestException('Code invalide ou expiré — refaites une demande.');
+    const passwordHash = await bcrypt.hash(password, 12);
+    await this.prisma.user.updateMany({
+      where: { id: { in: users.map((u) => u.id) } },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+        mustChangePassword: false,
+        refreshToken: null, // déconnecte les autres sessions
+      },
+    });
+    return { message: 'Mot de passe modifié. Vous pouvez vous connecter.' };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Mot de passe actuel incorrect');
+    if (currentPassword === newPassword) throw new BadRequestException('Le nouveau mot de passe doit être différent de l’actuel');
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false },
+    });
+    return { message: 'Mot de passe modifié.' };
   }
 
   async refreshTokens(refreshToken: string) {

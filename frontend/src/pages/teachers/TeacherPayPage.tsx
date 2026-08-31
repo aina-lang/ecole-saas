@@ -9,7 +9,8 @@ import { parseISO, eachDayOfInterval, getDay, differenceInCalendarDays, startOfD
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { format } from 'date-fns'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, InfoGrid } from '@/components/layout/page'
 import { Combobox } from '@/components/ui/combobox'
 import { DataTable } from '@/components/ui/data-table'
 import {
@@ -75,7 +76,7 @@ export function TeacherPayPage() {
   const [calcDialogOpen, setCalcDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: teachersRaw, loading: loadingTeachers, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: teachersRaw, refetch: refetchTeachers } = useLocalQuery<Teacher>('Teacher')
 
   const { data: teachers, isLoading: isLoadingTeachers } = useQuery({
     queryKey: ['enriched-teachers-pay', teachersRaw],
@@ -235,28 +236,30 @@ export function TeacherPayPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Paiements enseignants</h2>
-          <p className="text-muted-foreground">Calculer et gérer les paiements</p>
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleRefresh}
-          disabled={isLoading}
-        >
-          <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-        </Button>
-      </div>
+      <PageHeader
+        title="Paiements enseignants"
+        description="Calculer et gérer les paiements"
+        actions={
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            aria-label="Rafraîchir"
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+        }
+      />
 
       <Card>
-        <CardHeader>
-          <CardTitle>Calculer un paiement</CardTitle>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Calculer un paiement</CardTitle>
+          <CardDescription>Sélectionner un enseignant et une période pour estimer le montant dû</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[200px]">
+            <div className="flex-1 min-w-[200px] space-y-1.5">
               <label className="text-sm font-medium">Enseignant</label>
               <Combobox
                 options={teacherOptions}
@@ -265,20 +268,22 @@ export function TeacherPayPage() {
                 placeholder="Sélectionner"
               />
             </div>
-            <div>
+            <div className="flex w-[170px] flex-col gap-1.5">
               <label className="text-sm font-medium">Début période</label>
               <DatePicker
                 value={periodStart}
                 onChange={(d) => setPeriodStart(d ? format(d, 'yyyy-MM-dd') : '')}
-                className="w-[180px]"
+                placeholder="Date début"
+                className="w-full"
               />
             </div>
-            <div>
+            <div className="flex w-[170px] flex-col gap-1.5">
               <label className="text-sm font-medium">Fin période</label>
               <DatePicker
                 value={periodEnd}
                 onChange={(d) => setPeriodEnd(d ? format(d, 'yyyy-MM-dd') : '')}
-                className="w-[180px]"
+                placeholder="Date fin"
+                className="w-full"
               />
             </div>
             <Button
@@ -381,26 +386,21 @@ export function TeacherPayPage() {
                 <Badge variant="secondary">{calcResult.contractType}</Badge>
               </div>
               <Separator />
+              <InfoGrid
+                columns={3}
+                items={[
+                  { label: 'Heures (emploi du temps)', value: `${calcResult.totalHours}h` },
+                  { label: 'Taux horaire', value: calcResult.hourlyRate > 0 ? `${calcResult.hourlyRate} Ar/h` : '-' },
+                  { label: 'Assiduité', value: `${calcResult.presentDays}/${calcResult.totalDays} jours (${calcResult.attendanceRate}%)` },
+                ]}
+              />
+              <Separator />
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total heures (emploi du temps)</span>
-                  <span>{calcResult.totalHours}h</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Taux horaire</span>
-                  <span>{calcResult.hourlyRate > 0 ? `${calcResult.hourlyRate} Ar/h` : '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Assiduité</span>
-                  <span>{calcResult.presentDays}/{calcResult.totalDays} jours ({calcResult.attendanceRate}%)</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span>Salaire de base</span>
+                  <span className="text-muted-foreground">Salaire de base</span>
                   <span>{calcResult.baseAmount} Ar</span>
                 </div>
-                <Separator />
-                <div className="flex justify-between font-bold text-lg">
+                <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
                   <span>{calcResult.totalAmount} Ar</span>
                 </div>

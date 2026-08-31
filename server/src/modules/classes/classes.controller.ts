@@ -8,6 +8,7 @@ import { CreateSubjectDto } from './dto/create-subject.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TeacherScopeService } from '../../common/scope/teacher-scope.service';
 
 @Controller('classes')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -15,11 +16,14 @@ export class ClassesController {
   constructor(
     private classesService: ClassesService,
     private subjectsService: SubjectsService,
+    private scope: TeacherScopeService,
   ) {}
 
   @Get()
-  findAll(@CurrentUser('tenantId') tenantId: string) {
-    return this.classesService.findAll(tenantId);
+  async findAll(@CurrentUser('tenantId') tenantId: string, @CurrentUser() user: any) {
+    const classes = await this.classesService.findAll(tenantId);
+    const ids = await this.scope.classIds(user);
+    return ids === null ? classes : classes.filter((c: any) => ids.includes(c.id));
   }
 
   @Get('teachers')
@@ -33,7 +37,8 @@ export class ClassesController {
   }
 
   @Get(':id')
-  findById(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+  async findById(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string, @CurrentUser() user: any) {
+    await this.scope.assertClass(user, id);
     return this.classesService.findById(id, tenantId);
   }
 
@@ -133,10 +138,12 @@ export class ClassesController {
   }
 
   @Get(':id/subjects')
-  findSubjectsByClass(
+  async findSubjectsByClass(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: any,
   ) {
+    await this.scope.assertClass(user, id);
     return this.subjectsService.findByClass(id, tenantId);
   }
 }

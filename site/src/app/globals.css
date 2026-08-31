@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/*
+ * Charte « Ardoise & indigo » — la même que l'application desktop
+ * (frontend/src/renderer/src/global.css). Le visiteur qui installe Sekoliko
+ * doit retrouver exactement les couleurs qu'il a vues sur le site.
+ */
+@theme {
+  --color-ink-50: #f8fafc;
+  --color-ink-100: #f1f5f9;
+  --color-ink-200: #e2e8f0;
+  --color-ink-300: #cbd5e1;
+  --color-ink-400: #94a3b8;
+  --color-ink-500: #64748b;
+  --color-ink-600: #475569;
+  --color-ink-700: #334155;
+  --color-ink-800: #1e293b;
+  --color-ink-900: #0f172a;
+  --color-ink-950: #080f1f;
+
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+
+  --color-sky-accent: #0ea5e9;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Compense l'en-tête collant quand on arrive sur une ancre. */
+  scroll-padding-top: 5.5rem;
+}
+
+body {
+  background: var(--color-ink-50);
+  color: var(--color-ink-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Rien ici ne masque le contenu au chargement. L'état de départ des blocs
+ * animés est posé par GSAP juste avant de peindre (voir components/animate.tsx) :
+ * si le script échoue, la page reste entièrement lisible.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Barre de défilement discrète, accordée à la charte. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ink-100);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-300);
+  border-radius: 9999px;
+  border: 2px solid var(--color-ink-100);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-400);
+}

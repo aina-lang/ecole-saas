@@ -19,20 +19,26 @@ import { QueryStudentDto } from './dto/query-student.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TeacherScopeService } from '../../common/scope/teacher-scope.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('students')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class StudentsController {
-  constructor(private studentsService: StudentsService) {}
+  constructor(private studentsService: StudentsService,
+    private scope: TeacherScopeService,
+  ) {}
 
   @Get()
   @Roles('ADMIN', 'SECRETARY', 'TEACHER')
-  findAll(
+  async findAll(
     @CurrentUser('tenantId') tenantId: string,
     @Query() query: QueryStudentDto,
+    @CurrentUser() user: any,
   ) {
-    return this.studentsService.findAll(tenantId, query);
+    // Enseignant : uniquement les élèves de ses classes.
+    const classFilter = await this.scope.classFilter(user, query.classId);
+    return this.studentsService.findAll(tenantId, { ...query, classId: classFilter as any });
   }
 
   @Get('deleted')
@@ -43,7 +49,8 @@ export class StudentsController {
 
   @Get(':id')
   @Roles('ADMIN', 'SECRETARY', 'TEACHER')
-  findById(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+  async findById(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string, @CurrentUser() user: any) {
+    await this.scope.assertStudent(user, id);
     return this.studentsService.findById(id, tenantId);
   }
 

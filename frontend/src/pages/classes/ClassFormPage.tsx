@@ -9,9 +9,9 @@ import { getEntityById, saveEntity, queryEntities } from '@/lib/db/pouchdb-compa
 import { useLocalQuery } from '@/lib/db/hooks'
 import type { Class, Teacher, Level } from '@/types'
 
+import { PageHeader, FormShell, FormSection } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Form,
   FormControl,
@@ -42,7 +42,9 @@ export function ClassFormPage() {
   const { data: classData } = useQuery({
     queryKey: ['class', id],
     queryFn: async () => {
-      return getEntityById<Class & { teacherIds?: string[] }>('Class', id!)
+      // Le document porte les deux formes selon son origine : `teacherIds`
+      // (écrit par ce formulaire) ou `teachers` (hydraté par le serveur).
+      return getEntityById<Class & { teacherIds?: string[]; teachers?: { id: string }[] }>('Class', id!)
     },
     enabled: isEditing
   })
@@ -133,29 +135,35 @@ export function ClassFormPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {isEditing ? 'Modifier la classe' : 'Ajouter une classe'}
-          </h2>
-          <p className="text-muted-foreground">
-            {isEditing
-              ? 'Modifier les informations de cette classe'
-              : 'Remplissez les informations pour créer une nouvelle classe'}
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => navigate('/classes')}>
-          Retour à la liste
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/classes"
+        title={isEditing ? 'Modifier la classe' : 'Ajouter une classe'}
+        description={
+          isEditing
+            ? 'Modifier les informations de cette classe'
+            : 'Remplissez les informations pour créer une nouvelle classe'
+        }
+      />
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto max-w-3xl space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Informations générales</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormShell
+            actions={
+              <>
+                <Button type="button" variant="outline" onClick={() => navigate('/classes')}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {isEditing ? 'Mettre à jour' : 'Créer la classe'}
+                </Button>
+              </>
+            }
+          >
+            <FormSection
+              title="Informations générales"
+              description="Nom, niveau, salle et capacité de la classe"
+              columns={2}
+            >
               <FormField
                 control={form.control}
                 name="name"
@@ -214,51 +222,41 @@ export function ClassFormPage() {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
+            </FormSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Professeurs assignés</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <FormSection
+              title="Professeurs assignés"
+              description="Cochez les professeurs qui interviennent dans cette classe"
+              columns={1}
+            >
               {teachers && teachers.length > 0 ? (
-                <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {teachers.map((teacher) => {
                     const selected = selectedTeacherIds.includes(teacher.id)
                     return (
-                    <div
-                      key={teacher.id}
-                      className="flex items-center gap-3 rounded-lg border p-3"
-                    >
-                      <Checkbox
-                        checked={selected}
-                        onCheckedChange={() => toggleTeacher(teacher.id)}
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">
+                      <div
+                        key={teacher.id}
+                        className="flex items-center gap-3 rounded-lg border p-3"
+                      >
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => toggleTeacher(teacher.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
                             {(teacher as any).user_firstName || (teacher as any).user?.firstName || ''} {(teacher as any).user_lastName || (teacher as any).user?.lastName || ''}
                           </p>
                           <p className="text-xs text-muted-foreground">{teacher.specialty}</p>
+                        </div>
                       </div>
-                    </div>
                     )
                   })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Aucun professeur disponible</p>
               )}
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate('/classes')}>
-              Annuler
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-              {isEditing ? 'Mettre à jour' : 'Créer la classe'}
-            </Button>
-          </div>
+            </FormSection>
+          </FormShell>
         </form>
       </Form>
     </div>

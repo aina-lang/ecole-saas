@@ -3,3 +3,12 @@ dist
 out
 .DS_Store
 *.log*
+
+# Exports produits en testant l'application (bulletins, fiches élèves, reçus,
+# emplois du temps). Ils portent des données nominatives et n'ont rien à faire
+# dans l'historique du dépôt.
+*.pdf
+*.xlsx
+*.docx
+*.csv
+*.tsbuildinfo

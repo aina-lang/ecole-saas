@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PageHeader, EmptyState } from '@/components/layout/page'
 import {
   Table,
   TableBody,
@@ -14,15 +14,12 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import { useNavigate } from 'react-router-dom'
 import {
   BarChartIcon,
   ExclamationTriangleIcon,
   PersonIcon,
   TimerIcon,
-  CheckCircledIcon,
-  ReaderIcon,
-  CalendarIcon
+  CheckCircledIcon
 } from '@radix-ui/react-icons'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
 import type { Payment, Student } from '@/types'
@@ -42,10 +39,9 @@ interface DashboardData {
 }
 
 async function fetchDashboard(): Promise<DashboardData> {
-  const [payments, students, fees] = await Promise.all([
+  const [payments, students] = await Promise.all([
     queryEntities<Payment>('Payment'),
     queryEntities<Student>('Student'),
-    queryEntities('FeeStructure')
   ])
 
   const totalCollected = payments
@@ -109,8 +105,9 @@ export function FinanceDashboardPage() {
 
   if (!dashboard) {
     return (
-      <div className="flex items-center justify-center p-12 text-muted-foreground">
-        Aucune donnée disponible
+      <div className="space-y-6">
+        <PageHeader title="Tableau de bord financier" description="Aperçu des finances de l'établissement." />
+        <EmptyState title="Aucune donnée disponible" />
       </div>
     )
   }
@@ -119,10 +116,7 @@ export function FinanceDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Tableau de bord financier</h2>
-        <p className="text-muted-foreground">Aperçu des finances de l'établissement.</p>
-      </div>
+      <PageHeader title="Tableau de bord financier" description="Aperçu des finances de l'établissement." />
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -131,10 +125,10 @@ export function FinanceDashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Collecté ce mois
             </CardTitle>
-            <CheckCircledIcon className="h-4 w-4 text-green-600" />
+            <CheckCircledIcon className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-emerald-600">
               {summary.totalCollected.toLocaleString('fr-FR')} Ar
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Total des paiements reçus</p>
@@ -144,10 +138,10 @@ export function FinanceDashboardPage() {
         <Card className="transition-shadow hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">En attente</CardTitle>
-            <TimerIcon className="h-4 w-4 text-orange-500" />
+            <TimerIcon className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-500">
+            <div className="text-2xl font-bold text-amber-500">
               {summary.totalPending.toLocaleString('fr-FR')} Ar
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Paiements en attente</p>
@@ -190,7 +184,7 @@ export function FinanceDashboardPage() {
           </CardHeader>
           <CardContent>
             {summary.monthlyCollection.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucune donnée pour le moment</p>
+              <EmptyState title="Aucune donnée pour le moment" description="Les paiements encaissés apparaîtront ici mois par mois." />
             ) : (
               <div className="space-y-3">
                 {summary.monthlyCollection.map((item) => {
@@ -253,31 +247,55 @@ export function FinanceDashboardPage() {
         </Card>
       </div>
 
-      {/* Overdue payments alert */}
-      {overduePayments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-red-600">
-              <ExclamationTriangleIcon className="h-5 w-5" />
-              Paiements en retard
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {overduePayments.map((p) => (
-              <Alert key={p.id} variant="destructive">
-                <ExclamationTriangleIcon className="h-4 w-4" />
-                <AlertTitle>
-                   {p.student ? `${p.student.firstName ? `${p.student.firstName} ` : ''}${p.student.lastName}` : p.studentId}
-                </AlertTitle>
-                <AlertDescription>
-                  {p.amount.toLocaleString('fr-FR')} Ar - Échu le{' '}
-                  {format(new Date(p.dueDate), 'dd/MM/yyyy', { locale: fr })}
-                </AlertDescription>
-              </Alert>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* Retards : résumé + les plus anciens seulement, le reste dans la liste filtrée */}
+      {overduePayments.length > 0 && (() => {
+        const sorted = [...overduePayments].sort((x, y) => new Date(x.dueDate).getTime() - new Date(y.dueDate).getTime() || (y.amount - (y.paidAmount || 0)) - (x.amount - (x.paidAmount || 0)))
+        const totalDue = overduePayments.reduce((n, p) => n + (p.amount - (p.paidAmount || 0)), 0)
+        const shown = sorted.slice(0, 8)
+        const name = (p: typeof shown[number]) => p.student ? `${p.student.firstName ? `${p.student.firstName} ` : ''}${p.student.lastName}` : p.studentId
+        const daysLate = (d: string | Date) => Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000))
+        return (
+          <Card className="border-red-200 dark:border-red-900/60">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-lg text-red-600 dark:text-red-400">
+                  <ExclamationTriangleIcon className="h-5 w-5" />
+                  Paiements en retard
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">{overduePayments.length}</span>
+                </CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{totalDue.toLocaleString('fr-FR')} Ar restant dus · les {shown.length} plus anciens ci-dessous</p>
+              </div>
+              <Button variant="outline" onClick={() => navigate('/finances/payments?status=overdue')}>
+                Voir tous les retards ({overduePayments.length})
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Élève</TableHead>
+                    <TableHead>Échéance</TableHead>
+                    <TableHead>Retard</TableHead>
+                    <TableHead className="text-right">Reste dû</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {shown.map((p) => (
+                    <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(p.student ? `/students/${p.student.id}` : '/finances/payments?status=overdue')}>
+                      <TableCell className="font-medium">{name(p)}</TableCell>
+                      <TableCell className="text-muted-foreground">{format(new Date(p.dueDate), 'dd/MM/yyyy', { locale: fr })}</TableCell>
+                      <TableCell>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">{daysLate(p.dueDate)} j</span>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-red-600 dark:text-red-400">{(p.amount - (p.paidAmount || 0)).toLocaleString('fr-FR')} Ar</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )
+      })()}
     </div>
   )
 }

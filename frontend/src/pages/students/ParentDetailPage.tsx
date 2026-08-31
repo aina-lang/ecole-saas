@@ -3,13 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getEntityById, queryEntities } from '@/lib/db/pouchdb-compat'
 import type { User, Student } from '@/types'
-import { getPhotoUrl } from '@/api/client'
+import { StudentPhoto } from '@/components/ui/student-photo'
 import { getInitials } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Pencil2Icon, ArrowLeftIcon } from '@radix-ui/react-icons'
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { Pencil2Icon, PersonIcon } from '@radix-ui/react-icons'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportParentProfile } from '@/lib/export/exporters'
+import { PageHeader, DetailHeader, InfoGrid, EmptyState } from '@/components/layout/page'
 
 export function ParentDetailPage() {
   const navigate = useNavigate()
@@ -18,9 +20,12 @@ export function ParentDetailPage() {
   const { data: parent, isLoading } = useQuery({
     queryKey: ['parent', id],
     queryFn: async () => {
-      const doc = await getEntityById<User>('User', id)
+      const doc = await getEntityById<User>('User', id!)
       return doc ?? null
     },
+    // `id` vient de useParams() : sans ce garde, la requête partirait avec
+    // undefined sur une URL malformée.
+    enabled: !!id,
   })
 
   const { data: allStudents, isFetching: fetchingStudents } = useQuery({
@@ -59,81 +64,109 @@ export function ParentDetailPage() {
   }
 
   const initials = getInitials(parent.firstName || '', parent.lastName || '')
+  const allPhones = [
+    ...new Set(
+      [(parent as any).phone, ...(parent.phones?.map((p: any) => p.value) ?? [])].filter(Boolean),
+    ),
+  ] as string[]
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate('/parents')}>
-          <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Retour
-        </Button>
-        <Button onClick={() => navigate(`/parents/${id}/edit`)}>
-          <Pencil2Icon className="mr-2 h-4 w-4" />
-          Modifier
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/parents"
+        title="Fiche parent"
+        description="Coordonnées, compte et élèves rattachés"
+        actions={
+          <>
+            <ExportMenu onExport={(format) => exportParentProfile(id!, format)} label="Exporter la fiche" />
+            <Button onClick={() => navigate(`/parents/${id}/edit`)}>
+              <Pencil2Icon className="mr-2 h-4 w-4" />
+              Modifier
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-6">
-            <Avatar className="h-20 w-20 text-2xl">
-              <AvatarImage src={getPhotoUrl(parent.photoUrl)} alt={`${parent.firstName} ${parent.lastName}`} />
-              <AvatarFallback className="text-2xl font-medium">{initials}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-1">
-              <h3 className="text-2xl font-bold">
-                {parent.firstName} {parent.lastName}
-              </h3>
-              <p className="text-muted-foreground">{parent.email || 'Email non renseigné'}</p>
-              <Badge variant="secondary">
-                {parent.role === 'PARENT' ? 'Parent' : parent.role === 'TUTEUR' ? 'Tuteur' : parent.role}
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <DetailHeader
+        avatar={
+          <StudentPhoto
+            className="h-20 w-20 text-2xl"
+            src={parent.photoUrl}
+            alt={`${parent.firstName} ${parent.lastName}`}
+            initials={initials}
+            fallbackClassName="text-2xl font-medium"
+          />
+        }
+        title={`${parent.firstName ?? ''} ${parent.lastName ?? ''}`.trim()}
+        subtitle={parent.email || 'Email non renseigné'}
+        badges={
+          <>
+            <Badge variant="secondary">
+              {parent.role === 'PARENT' ? 'Parent' : parent.role === 'TUTEUR' ? 'Tuteur' : parent.role}
+            </Badge>
+            <Badge variant={parent.isActive ? 'default' : 'secondary'}>
+              {parent.isActive ? 'Actif' : 'Inactif'}
+            </Badge>
+          </>
+        }
+        meta={
+          <span>
+            {linkedStudents ? `${linkedStudents.length} élève(s) lié(s)` : 'Élèves liés : chargement...'}
+          </span>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Contact</CardTitle>
+            <CardTitle className="text-base">Contact</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>
-              <span className="text-muted-foreground">Email:</span>
-              <p className="font-medium">{parent.email || 'Non renseigné'}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Téléphone:</span>
-              <p className="font-medium">
-                {(parent as any).phone || (parent.phones?.[0]?.value) || 'Non renseigné'}
-              </p>
-            </div>
+          <CardContent>
+            <InfoGrid
+              columns={2}
+              items={[
+                { label: 'Email', value: parent.email },
+                { label: 'Téléphone', value: allPhones.length > 0 ? allPhones.join(' / ') : null },
+              ]}
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Compte</CardTitle>
+            <CardTitle className="text-base">Compte</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>
-              <span className="text-muted-foreground">Statut:</span>
-              <Badge variant={parent.isActive ? 'default' : 'secondary'} className="ml-2">
-                {parent.isActive ? 'Actif' : 'Inactif'}
-              </Badge>
-            </div>
+          <CardContent>
+            <InfoGrid
+              columns={2}
+              items={[
+                {
+                  label: 'Statut',
+                  value: (
+                    <Badge variant={parent.isActive ? 'default' : 'secondary'}>
+                      {parent.isActive ? 'Actif' : 'Inactif'}
+                    </Badge>
+                  ),
+                },
+                {
+                  label: 'Rôle',
+                  value: parent.role === 'PARENT' ? 'Parent' : parent.role === 'TUTEUR' ? 'Tuteur' : parent.role,
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Élèves liés {linkedStudents ? `(${linkedStudents.length})` : ''}</CardTitle>
+          <CardTitle className="text-base">
+            Élèves liés {linkedStudents ? `(${linkedStudents.length})` : ''}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {fetchingStudents ? (
-            <p className="text-center text-muted-foreground py-4">Chargement...</p>
+            <p className="py-4 text-center text-muted-foreground">Chargement...</p>
           ) : linkedStudents && linkedStudents.length > 0 ? (
             <div className="space-y-2">
               {linkedStudents.map((student) => {
@@ -171,9 +204,16 @@ export function ParentDetailPage() {
               })}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-4">
-              Aucun élève lié à ce parent
-            </p>
+            <EmptyState
+              icon={<PersonIcon className="h-5 w-5" />}
+              title="Aucun élève lié"
+              description="Ce parent n'est rattaché à aucun élève pour le moment."
+              action={
+                <Button variant="outline" size="sm" onClick={() => navigate(`/parents/${id}/edit`)}>
+                  Lier des élèves
+                </Button>
+              }
+            />
           )}
         </CardContent>
       </Card>

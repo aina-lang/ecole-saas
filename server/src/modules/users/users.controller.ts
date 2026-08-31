@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -42,8 +42,28 @@ export class UsersController {
 
   @Patch(':id')
   @Roles('ADMIN', 'SUPER_ADMIN')
-  update(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string, @Body() dto: UpdateUserDto) {
+  update(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('id') currentUserId: string,
+    @Body() dto: UpdateUserDto,
+  ) {
+    // Garde-fou serveur : on ne change pas son propre rôle (ni ne se désactive).
+    if (id === currentUserId) {
+      if (dto.role !== undefined) throw new ForbiddenException('Vous ne pouvez pas modifier votre propre rôle');
+      if (dto.isActive === false) throw new ForbiddenException('Vous ne pouvez pas désactiver votre propre compte');
+      if (dto.password !== undefined) throw new ForbiddenException('Utilisez « Changer le mot de passe » (mot de passe actuel requis)');
+    }
     return this.usersService.update(id, tenantId, dto);
+  }
+
+  /** Réinitialisation par l'administrateur : mot de passe temporaire généré,
+   * envoyé par e-mail à l'utilisateur, à changer à la première connexion. */
+  @Post(':id/reset-password')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  resetPassword(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string, @CurrentUser('id') currentUserId: string) {
+    if (id === currentUserId) throw new ForbiddenException('Utilisez « Changer le mot de passe » pour votre propre compte');
+    return this.usersService.resetPassword(id, tenantId);
   }
 
   @Delete(':id')

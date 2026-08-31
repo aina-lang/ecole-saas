@@ -7,14 +7,12 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
 import { saveEntity, getEntityById } from '@/lib/db/pouchdb-compat'
-import { getDocument, putDocument } from '@/lib/db/pouchdb'
+import { fileToResizedDataUrl } from '@/lib/image-utils'
 import type { Student } from '@/types'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PasswordInput } from '@/components/ui/password-input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader, FormShell, FormSection, EmptyState } from '@/components/layout/page'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog,
@@ -57,6 +55,17 @@ const studentFormSchema = z.object({
   enrollmentDate: z.string().min(1, "La date d'inscription est requise")
 })
 
+// Sections du formulaire, dans l'ordre d'affichage. Le sommaire fixe à
+// gauche suit la section visible (IntersectionObserver) et permet d'y sauter ;
+// une erreur de validation fait défiler jusqu'à la section concernée.
+const FORM_SECTIONS = [
+  { id: 'identite', label: 'Identité' },
+  { id: 'parents', label: 'Parents / Tuteurs' },
+  { id: 'contact', label: 'Contact' },
+  { id: 'medical', label: 'Médical' },
+  { id: 'scolarite', label: 'Scolarité' },
+] as const
+
 const fieldTabMap: Record<string, string> = {
   lastName: 'identite',
   firstName: 'identite',
@@ -93,6 +102,25 @@ export function StudentFormPage() {
   const isEditing = !!id
   const [activeTab, setActiveTab] = useState('identite')
 
+  function scrollToSection(id: string) {
+    setActiveTab(id)
+    document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  useEffect(() => {
+    const els = FORM_SECTIONS.map((sec) => document.getElementById(`section-${sec.id}`)).filter(Boolean) as HTMLElement[]
+    if (!els.length) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        if (visible[0]) setActiveTab(visible[0].target.id.replace('section-', ''))
+      },
+      { rootMargin: '-20% 0px -65% 0px', threshold: 0 },
+    )
+    els.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [])
+
   const { data: classes } = useLocalQuery<any>('Class', undefined, [])
 
   const { data: parentUsers } = useLocalQuery<any>('User', { role: 'PARENT' }, [])
@@ -103,11 +131,10 @@ export function StudentFormPage() {
   const [npLastName, setNpLastName] = useState('')
   const [npFirstName, setNpFirstName] = useState('')
   const [npEmail, setNpEmail] = useState('')
-  const [npPassword, setNpPassword] = useState('')
   const [npPhones, setNpPhones] = useState<string[]>([''])
 
   const [student, setStudent] = useState<Student | null>(null)
-  const [loadingStudent, setLoadingStudent] = useState(false)
+  const [, setLoadingStudent] = useState(false)
 
   useEffect(() => {
     if (!isEditing) return
@@ -210,10 +237,13 @@ export function StudentFormPage() {
     mutationFn: async (values: StudentFormValues) => {
       const localId = crypto.randomUUID()
       const year = new Date().getFullYear()
-      const randomNum = String(Math.floor(Math.random() * 99999)).padStart(5, '0')
+      // Dérivé de l'UUID de l'élève (8 hex ≈ 4 milliards de valeurs) : deux
+      // postes hors ligne ne peuvent pas produire le même matricule, alors
+      // que l'ancien tirage sur 100 000 valeurs collisionnait vite — et le
+      // doublon faisait rejeter l'élève entier par la contrainte d'unicité.
       const payload: Record<string, unknown> = {
         id: localId,
-        registrationNumber: `STU-${year}-${randomNum}`,
+        registrationNumber: `STU-${year}-${localId.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
         enrollmentDate: values.enrollmentDate || new Date().toISOString().split('T')[0],
         firstName: values.firstName || undefined,
         lastName: values.lastName,
@@ -236,27 +266,21 @@ export function StudentFormPage() {
       await saveEntity('Student', payload)
 
       if (pendingPhoto) {
-        const api = window.api
-        if (api?.file) {
-          const buffer = await pendingPhoto.arrayBuffer()
-          const result = await api.file.save({
-            buffer, entityType: 'Student', entityId: localId,
-            fieldName: 'photo_url', originalName: pendingPhoto.name, mimeType: pendingPhoto.type,
-          })
-          const localUrl = await api.file.getUrl((result as any).local_path)
-          if (localUrl) {
-            const existing = await getDocument('Student', localId)
-            if (existing) {
-              await putDocument('Student', { ...existing, photoUrl: localUrl })
-            }
-          }
+        try {
+          // Data URL dans le document synchronisé : la photo voyage avec
+          // l'élève vers CouchDB et les autres postes (un chemin
+          // local-asset:// n'existait que sur cette machine).
+          const photoDataUrl = await fileToResizedDataUrl(pendingPhoto)
+          await saveEntity('Student', { id: localId, photoUrl: photoDataUrl })
+        } catch {
+          // L'upload de photo est optionnel — l'élève est déjà créé localement.
         }
         setPendingPhoto(null)
       }
 
       return localId
     },
-    onSuccess: (localId) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
       toast.success('Élève créé (mode hors-ligne)')
       navigate('/students')
@@ -274,7 +298,6 @@ export function StudentFormPage() {
         role: 'PARENT',
         firstName: npFirstName.trim() || undefined,
         email: npEmail.trim() || undefined,
-        password: npPassword.trim() || undefined,
         phones: npPhones.map((p) => p.trim()).filter(Boolean),
         tenantId: localStorage.getItem('tenantId') || undefined,
       }
@@ -291,7 +314,6 @@ export function StudentFormPage() {
       setNpLastName('')
       setNpFirstName('')
       setNpEmail('')
-      setNpPassword('')
       setNpPhones([''])
       toast.success('Parent créé et ajouté')
     },
@@ -302,28 +324,33 @@ export function StudentFormPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (values: StudentFormValues) => {
-      const regNumber = student?.registrationNumber || `STU-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`
+      // Même dérivation UUID qu'à la création (voir createMutation) pour le
+      // cas d'un élève existant sans matricule.
+      const regNumber = student?.registrationNumber ||
+        `STU-${new Date().getFullYear()}-${String(id).replace(/-/g, '').slice(0, 8).toUpperCase()}`
+      // `null` (et non undefined/omission) pour les champs vidés : saveEntity
+      // fusionne avec le document existant, donc un champ absent du patch
+      // CONSERVE son ancienne valeur — seul null l'efface réellement.
       const payload: Record<string, unknown> = {
         id,
         registrationNumber: regNumber,
-        firstName: values.firstName || undefined,
+        firstName: values.firstName || null,
         lastName: values.lastName,
-        birthDate: values.birthDate || undefined,
-        birthPlace: values.birthPlace || undefined,
+        birthDate: values.birthDate || null,
+        birthPlace: values.birthPlace || null,
         gender: values.gender,
-        nationality: values.nationality || undefined,
-        address: values.address || undefined,
-        phoneNumber: values.phone || undefined,
-        email: values.email || undefined,
-        emergencyContact: values.emergencyContact || undefined,
-        emergencyPhone: values.emergencyPhone || undefined,
-        bloodType: values.bloodType || undefined,
-        medicalNotes: values.medicalNotes || undefined,
-        allergies: values.allergies || undefined,
-        classId: values.classId || undefined,
-        enrollmentDate: values.enrollmentDate || undefined,
+        nationality: values.nationality || null,
+        address: values.address || null,
+        phoneNumber: values.phone || null,
+        email: values.email || null,
+        emergencyContact: values.emergencyContact || null,
+        emergencyPhone: values.emergencyPhone || null,
+        bloodType: values.bloodType || null,
+        medicalNotes: values.medicalNotes || null,
+        allergies: values.allergies || null,
+        classId: values.classId || null,
+        enrollmentDate: values.enrollmentDate || null,
       }
-      Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k] })
 
       await saveEntity('Student', payload)
       return id
@@ -353,25 +380,10 @@ export function StudentFormPage() {
         setPendingPhoto(file)
         return { url: '' }
       }
-      const api = window.api
-      if (api?.file) {
-        const buffer = await file.arrayBuffer()
-        const result = await api.file.save({
-          buffer,
-          entityType: 'Student',
-          entityId: id,
-          fieldName: 'photo_url',
-          originalName: file.name,
-          mimeType: file.type,
-        })
-        const localUrl = await api.file.getUrl((result as any).local_path)
-        const existing = await getDocument('Student', id)
-        if (existing) {
-          await putDocument('Student', { ...existing, photoUrl: localUrl })
-        }
-        return { url: localUrl || '' }
-      }
-      return { url: '' }
+      // Data URL dans le document synchronisé (cf. createMutation).
+      const photoDataUrl = await fileToResizedDataUrl(file)
+      await saveEntity('Student', { id, photoUrl: photoDataUrl })
+      return { url: photoDataUrl }
     },
     onSuccess: async (result) => {
       if (!id || !result?.url) return
@@ -383,10 +395,7 @@ export function StudentFormPage() {
   const deletePhotoMutation = useMutation({
     mutationFn: async () => {
       if (!id) return null
-      const existing = await getDocument('Student', id)
-      if (existing) {
-        await putDocument('Student', { ...existing, photoUrl: null })
-      }
+      await saveEntity('Student', { id, photoUrl: null })
       return { success: true }
     },
     onSuccess: async () => {
@@ -398,45 +407,66 @@ export function StudentFormPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {isEditing ? "Modifier l'élève" : 'Ajouter un élève'}
-          </h2>
-          <p className="text-muted-foreground">
-            {isEditing
-              ? 'Modifier les informations de cet élève'
-              : 'Remplissez les informations pour inscrire un nouvel élève'}
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => navigate('/students')}>
-          Retour à la liste
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/students"
+        title={isEditing ? "Modifier l'élève" : 'Ajouter un élève'}
+        description={
+          isEditing
+            ? 'Modifier les informations de cet élève'
+            : 'Remplissez les informations pour inscrire un nouvel élève'
+        }
+      />
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
           const errorFields = Object.keys(errors)
           if (errorFields.length > 0) {
             const tab = fieldTabMap[errorFields[0]]
-            if (tab) setActiveTab(tab)
+            if (tab) scrollToSection(tab)
           }
-        })} className="mx-auto max-w-3xl space-y-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="identite">Identité</TabsTrigger>
-              <TabsTrigger value="parents">Parents / Tuteurs</TabsTrigger>
-              <TabsTrigger value="contact">Contact</TabsTrigger>
-              <TabsTrigger value="medical">Médical</TabsTrigger>
-              <TabsTrigger value="scolarite">Scolarité</TabsTrigger>
-            </TabsList>
+        })}>
+          <FormShell
+            actions={
+              <>
+                <Button type="button" variant="outline" onClick={() => navigate('/students')}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {isEditing ? 'Mettre à jour' : "Enregistrer l'élève"}
+                </Button>
+              </>
+            }
+          >
+          <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+            <nav className="hidden lg:block lg:sticky lg:top-0 space-y-1" aria-label="Sections du formulaire">
+              {FORM_SECTIONS.map((sec, i) => {
+                const active = activeTab === sec.id
+                return (
+                  <button
+                    key={sec.id}
+                    type="button"
+                    onClick={() => scrollToSection(sec.id)}
+                    className={
+                      'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ' +
+                      (active ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground')
+                    }
+                  >
+                    <span className={'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ' + (active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>
+                      {i + 1}
+                    </span>
+                    {sec.label}
+                  </button>
+                )
+              })}
+            </nav>
+            <div className="space-y-6">
 
-            <TabsContent value="identite">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informations personnelles</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+            <section id="section-identite" className="scroll-mt-6">
+              <FormSection
+                title="Informations personnelles"
+                description="Identité de l'élève"
+                columns={2}
+                aside={
                   <PhotoUpload
                     src={student?.photoUrl}
                     firstName={student?.firstName}
@@ -444,7 +474,8 @@ export function StudentFormPage() {
                     onUpload={(file) => photoMutation.mutateAsync(file)}
                     onDelete={() => deletePhotoMutation.mutateAsync()}
                   />
-                  <div className="grid gap-4 sm:grid-cols-2">
+                }
+              >
                   <FormField
                     control={form.control}
                     name="lastName"
@@ -534,17 +565,192 @@ export function StudentFormPage() {
                       </FormItem>
                     )}
                   />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+              </FormSection>
+            </section>
 
-            <TabsContent value="contact">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Coordonnées</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+            <section id="section-parents" className="scroll-mt-6">
+              <FormSection
+                title="Parent / Tuteur"
+                description="Comptes parents rattachés à cet élève"
+                columns={1}
+              >
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <FormLabel>Ajouter un parent ou tuteur</FormLabel>
+                      <Combobox
+                        options={(parentUsers ?? [])
+                          .filter((u) => !parentLinks.some((l) => l.parentId === u.id))
+                           .map((u) => ({ value: u.id, label: `${u.firstName ? `${u.firstName} ` : ''}${u.lastName}` }))}
+                        value=""
+                        onValueChange={(value) => {
+                          if (value) addParent(value)
+                        }}
+                        placeholder="Sélectionner un compte parent..."
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => setParentDialogOpen(true)}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <Dialog open={parentDialogOpen} onOpenChange={setParentDialogOpen}>
+                    <DialogContent className="sm:max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>Nouveau parent / tuteur</DialogTitle>
+                        <DialogDescription>
+                          Créer un compte parent pour l'associer à cet élève
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Nom *</label>
+                          <Input
+                            placeholder="Nom de famille"
+                            value={npLastName}
+                            onChange={(e) => setNpLastName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Prénom</label>
+                          <Input
+                            placeholder="Prénom"
+                            value={npFirstName}
+                            onChange={(e) => setNpFirstName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Email</label>
+                          <Input
+                            placeholder="email@exemple.com"
+                            type="email"
+                            value={npEmail}
+                            onChange={(e) => setNpEmail(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-sm font-medium">Téléphone (max 3)</label>
+                          {npPhones.map((phone, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <Input
+                                placeholder="+261 ..."
+                                value={phone}
+                                onChange={(e) =>
+                                  setNpPhones((prev) => {
+                                    const next = [...prev]
+                                    next[index] = e.target.value
+                                    return next
+                                  })
+                                }
+                              />
+                              {npPhones.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() =>
+                                    setNpPhones((prev) => {
+                                      const next = prev.filter((_, i) => i !== index)
+                                      return next.length ? next : ['']
+                                    })
+                                  }
+                                >
+                                  ×
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                          {npPhones.length < 3 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setNpPhones((prev) => [...prev, ''])}
+                            >
+                              + Ajouter un numéro
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setParentDialogOpen(false)}>
+                          Annuler
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={!npLastName.trim() || createParentMutation.isPending}
+                          onClick={() => createParentMutation.mutate()}
+                        >
+                          {createParentMutation.isPending ? 'Création...' : 'Créer et ajouter'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  {parentLinks.length === 0 && (
+                    <EmptyState
+                      title="Aucun parent ou tuteur rattaché"
+                      description="Sélectionnez un compte parent existant ou créez-en un nouveau."
+                      className="py-8"
+                    />
+                  )}
+
+                  <div className="space-y-3">
+                    {parentLinks.map((link, index) => {
+                      const user = (parentUsers ?? []).find((u) => u.id === link.parentId)
+                      return (
+                        <div
+                          key={link.parentId}
+                          className="flex flex-wrap items-center gap-3 rounded-md border p-3"
+                        >
+                            <span className="font-medium">
+                              {user ? `${user.firstName ? `${user.firstName} ` : ''}${user.lastName}` : link.parentId}
+                            </span>
+                          <Combobox
+                            options={[
+                              { value: 'PARENT', label: 'Parent' },
+                              { value: 'TUTEUR', label: 'Tuteur' },
+                            ]}
+                            value={link.relation}
+                            onValueChange={(value) =>
+                              updateParentLink(index, {
+                                relation: value as 'PARENT' | 'TUTEUR',
+                              })
+                            }
+                            className="w-40"
+                          />
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="primary-parent"
+                              checked={link.isPrimary}
+                              onChange={() => setPrimary(index)}
+                            />
+                            Principal
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="ml-auto"
+                            onClick={() => removeParent(index)}
+                          >
+                            Retirer
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+              </FormSection>
+            </section>
+
+            <section id="section-contact" className="scroll-mt-6">
+              <FormSection title="Coordonnées" description="Adresse, téléphone et contact d'urgence" columns={2}>
                   <FormField
                     control={form.control}
                     name="address"
@@ -610,16 +816,11 @@ export function StudentFormPage() {
                       </FormItem>
                     )}
                   />
-                </CardContent>
-              </Card>
-            </TabsContent>
+              </FormSection>
+            </section>
 
-            <TabsContent value="medical">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informations médicales</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+            <section id="section-medical" className="scroll-mt-6">
+              <FormSection title="Informations médicales" description="Groupe sanguin, allergies et notes" columns={2}>
                   <FormField
                     control={form.control}
                     name="bloodType"
@@ -670,16 +871,11 @@ export function StudentFormPage() {
                       </FormItem>
                     )}
                   />
-                </CardContent>
-              </Card>
-            </TabsContent>
+              </FormSection>
+            </section>
 
-            <TabsContent value="scolarite">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informations scolaires</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+            <section id="section-scolarite" className="scroll-mt-6">
+              <FormSection title="Informations scolaires" description="Classe et date d'inscription" columns={2}>
                   <FormField
                     control={form.control}
                     name="classId"
@@ -714,207 +910,11 @@ export function StudentFormPage() {
                       </FormItem>
                     )}
                   />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="parents">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Parent / Tuteur</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <FormLabel>Ajouter un parent ou tuteur</FormLabel>
-                      <Combobox
-                        options={(parentUsers ?? [])
-                          .filter((u) => !parentLinks.some((l) => l.parentId === u.id))
-                           .map((u) => ({ value: u.id, label: `${u.firstName ? `${u.firstName} ` : ''}${u.lastName}` }))}
-                        value=""
-                        onValueChange={(value) => {
-                          if (value) addParent(value)
-                        }}
-                        placeholder="Sélectionner un compte parent..."
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="shrink-0"
-                      onClick={() => setParentDialogOpen(true)}
-                    >
-                      <PlusIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <Dialog open={parentDialogOpen} onOpenChange={setParentDialogOpen}>
-                    <DialogContent className="sm:max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle>Nouveau parent / tuteur</DialogTitle>
-                        <DialogDescription>
-                          Créer un compte parent pour l'associer à cet élève
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Nom *</label>
-                          <Input
-                            placeholder="Nom de famille"
-                            value={npLastName}
-                            onChange={(e) => setNpLastName(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Prénom</label>
-                          <Input
-                            placeholder="Prénom"
-                            value={npFirstName}
-                            onChange={(e) => setNpFirstName(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Email</label>
-                          <Input
-                            placeholder="email@exemple.com"
-                            type="email"
-                            value={npEmail}
-                            onChange={(e) => setNpEmail(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Mot de passe</label>
-                          <PasswordInput
-                            placeholder="Laisser vide pour générer"
-                            value={npPassword}
-                            onChange={(e) => setNpPassword(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2 sm:col-span-2">
-                          <label className="text-sm font-medium">Téléphone (max 3)</label>
-                          {npPhones.map((phone, index) => (
-                            <div key={index} className="flex items-center gap-2">
-                              <Input
-                                placeholder="+261 ..."
-                                value={phone}
-                                onChange={(e) =>
-                                  setNpPhones((prev) => {
-                                    const next = [...prev]
-                                    next[index] = e.target.value
-                                    return next
-                                  })
-                                }
-                              />
-                              {npPhones.length > 1 && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() =>
-                                    setNpPhones((prev) => {
-                                      const next = prev.filter((_, i) => i !== index)
-                                      return next.length ? next : ['']
-                                    })
-                                  }
-                                >
-                                  ×
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                          {npPhones.length < 3 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setNpPhones((prev) => [...prev, ''])}
-                            >
-                              + Ajouter un numéro
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setParentDialogOpen(false)}>
-                          Annuler
-                        </Button>
-                        <Button
-                          type="button"
-                          disabled={!npLastName.trim() || createParentMutation.isPending}
-                          onClick={() => createParentMutation.mutate()}
-                        >
-                          {createParentMutation.isPending ? 'Création...' : 'Créer et ajouter'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {parentLinks.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Aucun parent ou tuteur rattaché.
-                    </p>
-                  )}
-
-                  <div className="space-y-3">
-                    {parentLinks.map((link, index) => {
-                      const user = (parentUsers ?? []).find((u) => u.id === link.parentId)
-                      return (
-                        <div
-                          key={link.parentId}
-                          className="flex flex-wrap items-center gap-3 rounded-md border p-3"
-                        >
-                            <span className="font-medium">
-                              {user ? `${user.firstName ? `${user.firstName} ` : ''}${user.lastName}` : link.parentId}
-                            </span>
-                          <Combobox
-                            options={[
-                              { value: 'PARENT', label: 'Parent' },
-                              { value: 'TUTEUR', label: 'Tuteur' },
-                            ]}
-                            value={link.relation}
-                            onValueChange={(value) =>
-                              updateParentLink(index, {
-                                relation: value as 'PARENT' | 'TUTEUR',
-                              })
-                            }
-                            className="w-40"
-                          />
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="radio"
-                              name="primary-parent"
-                              checked={link.isPrimary}
-                              onChange={() => setPrimary(index)}
-                            />
-                            Principal
-                          </label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="ml-auto"
-                            onClick={() => removeParent(index)}
-                          >
-                            Retirer
-                          </Button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate('/students')}>
-              Annuler
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-              {isEditing ? 'Mettre à jour' : "Enregistrer l'élève"}
-            </Button>
+              </FormSection>
+            </section>
+            </div>
           </div>
+          </FormShell>
         </form>
       </Form>
     </div>

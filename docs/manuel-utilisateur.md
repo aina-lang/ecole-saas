@@ -20,7 +20,7 @@ Guide pratique pour le personnel de l'établissement (administrateurs, secrétai
 14. [Messagerie](#14-messagerie)
 15. [Administration](#15-administration)
 16. [Synchronisation et mode hors ligne](#16-synchronisation-et-mode-hors-ligne)
-17. [Abonnement](#17-abonnement)
+17. [Licence](#17-licence)
 18. [Questions fréquentes](#18-questions-fréquentes)
 
 ---
@@ -34,7 +34,7 @@ Sur l'écran d'accueil, cliquez sur **Créer un compte**. Renseignez :
 - le prénom, nom et email de l'administrateur principal,
 - un mot de passe (8 caractères minimum).
 
-Un essai gratuit de 14 jours démarre automatiquement — aucune carte bancaire n'est demandée à l'inscription (voir [Abonnement](#17-abonnement)).
+Un essai gratuit de 14 jours démarre automatiquement — aucun paiement n'est demandé à l'inscription (voir [Licence](#17-licence)).
 
 ### Se connecter
 
@@ -195,7 +195,7 @@ Regroupe la gestion technique et administrative de l'établissement (**Paramètr
 - **Utilisateurs** : création de comptes **Administrateur** ou **Secrétaire** uniquement (les comptes Enseignant et Parent se créent depuis leurs modules dédiés, §7 et §5).
 - **Configuration** : nom de l'établissement, logo, année scolaire, système de périodes, configuration des paiements (montant écolage/frais annuel, jour d'échéance), sécurité (changement de mot de passe).
 - **Journaux d'audit** : historique des actions effectuées dans l'application (création, modification, suppression), par utilisateur et par date — utile pour retracer une modification.
-- **Abonnement** : voir [§17](#17-abonnement).
+- **Licence** : voir [§17](#17-licence).
 - **Synchronisation** : voir [§16](#16-synchronisation-et-mode-hors-ligne).
 
 ---
@@ -213,14 +213,15 @@ En cas de modification du même élève/note/paiement sur deux appareils différ
 
 ---
 
-## 17. Abonnement
+## 17. Licence
 
-**Administration → Abonnement**
+**Paramètres → Licence**
 
-- À l'inscription, un **essai gratuit de 14 jours** démarre automatiquement (aucun paiement demandé).
-- Passé ce délai sans activer la licence, l'application passe en **lecture seule** : consultation toujours possible, mais plus de création/modification/suppression tant que la licence n'est pas activée. Un bandeau rouge en haut de l'application le signale, avec un lien direct vers cette page.
-- Le bouton **Activer la licence** ouvre le paiement Stripe dans votre navigateur habituel ; une fois le paiement effectué, l'application redevient pleinement fonctionnelle automatiquement.
-- Une fois la licence active, le bouton **Gérer mon abonnement** ouvre le portail Stripe (facture, moyen de paiement, résiliation).
+- À la création du compte, un **essai gratuit de 14 jours** démarre. Passé ce délai sans licence, l'application passe en **lecture seule** (consultation possible, plus de création ni de modification) et un bandeau rouge l'indique.
+- Pour obtenir une licence, indiquez à votre fournisseur l'**adresse e-mail de l'administrateur** de l'établissement. Après règlement (mobile money, virement…), il vous transmet un **code de licence** de 16 caractères (format `XXXX-XXXX-XXXX-XXXX`), dictable par téléphone ou envoyé par SMS.
+- Saisissez le code dans le champ prévu et cliquez **Activer la licence**. L'activation demande une connexion internet (une seule fois) ; l'application fonctionne ensuite hors ligne toute l'année.
+- La licence est **annuelle** et **sans limite** d'élèves ni d'enseignants ; sa **date d'expiration** est affichée sur la page. Avant l'échéance, demandez une nouvelle clé et activez-la de la même façon.
+- Un code n'est valable que pour l'établissement pour lequel il a été émis ; un code inconnu, expiré ou révoqué est refusé avec un message explicite.
 
 ---
 
@@ -233,7 +234,7 @@ Oui — chaque appareil garde en mémoire le dernier mot de passe utilisé pour 
 Seulement s'il s'est déjà connecté au moins une fois en ligne sur ce même poste auparavant.
 
 **Pourquoi je ne peux plus rien modifier ?**
-Vérifiez la page Abonnement (§17) — l'essai gratuit ou la licence a probablement expiré (mode lecture seule).
+Vérifiez la page Licence (§17) — l'essai gratuit ou la licence a probablement expiré (mode lecture seule).
 
 **Les niveaux que j'ai créés n'apparaissent pas dans le filtre des matières.**
 Vérifiez qu'ils sont bien enregistrés dans Niveaux (§6) — c'est la seule liste de référence utilisée partout dans l'application.

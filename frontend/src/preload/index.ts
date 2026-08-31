@@ -27,6 +27,7 @@ const api = {
       mimeType: string
     }) => ipcRenderer.invoke('file:save', data),
     getUrl: (localPath: string) => ipcRenderer.invoke('file:get-url', localPath),
+    getDataUrl: (localPath: string) => ipcRenderer.invoke('file:get-data-url', localPath),
     getPendingCount: () => ipcRenderer.invoke('file:get-pending-count'),
     getEntityPhoto: (entityType: string, entityId: string) =>
       ipcRenderer.invoke('file:get-entity-photo', entityType, entityId),
@@ -37,9 +38,28 @@ const api = {
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   },
+  clock: {
+    load: () => ipcRenderer.invoke('clock:load'),
+    save: (state: unknown) => ipcRenderer.invoke('clock:save', state),
+  },
   documents: {
     print: (html: string, defaultName: string) =>
       ipcRenderer.invoke('documents:print', { html, defaultName }),
+    saveFile: (buffer: ArrayBuffer, defaultName: string, filterName: string, extension: string) =>
+      ipcRenderer.invoke('documents:save-file', { buffer, defaultName, filterName, extension }),
+  },
+  updates: {
+    getState: () => ipcRenderer.invoke('updates:get-state'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    // Renvoie la fonction de désabonnement : sans elle, chaque remontage d'un
+    // composant React empilerait un écouteur de plus sur le même canal.
+    onState: (callback: (state: unknown) => void) => {
+      const listener = (_event: unknown, state: unknown) => callback(state)
+      ipcRenderer.on('updates:state', listener as never)
+      return () => ipcRenderer.removeListener('updates:state', listener as never)
+    },
   },
 }
 

@@ -14,33 +14,12 @@ import { formatSubjectLabel } from '@/lib/subject'
 
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader, FilterBar } from '@/components/layout/page'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { GradeAveragingConfig } from './GradeAveragingConfig'
-import { DataTable, ColumnDef } from '@/components/ui/data-table'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from '@/components/ui/alert-dialog'
-import { ArrowUpDown } from 'lucide-react'
-import { TableHead } from '@/components/ui/table'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious
-} from '@/components/ui/pagination'
+import { DataTable } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
@@ -57,7 +36,6 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { TrashIcon } from '@radix-ui/react-icons'
 
 interface GradeWithDetails extends Grade {
   student?: { id: string; firstName: string; lastName: string }
@@ -122,7 +100,9 @@ export function GradeListPage() {
         queryEntities<Grade>('Grade', params),
         countEntities('Grade', params),
         queryEntities<Student>('Student'),
-        queryEntities<Subject>('Subject'),
+        // `class` n'est pas dans le type Subject mais le document répliqué le
+        // porte (hydraté côté serveur) — il sert au libellé de la matière.
+        queryEntities<Subject & { class?: { id: string; name: string } | null }>('Subject'),
       ])
       const studentMap = new Map((students ?? []).map((s) => [s.id, s]))
       const subjectMap = new Map((subjects ?? []).map((s) => [s.id, s]))
@@ -197,41 +177,32 @@ export function GradeListPage() {
 
   const grades = gradesResponse?.data ?? []
   const total = gradesResponse?.total ?? 0
-  const totalPages = Math.ceil(total / limit)
-
-  function toggleSort(column: string) {
-    if (sortBy === column) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortBy(column)
-      setSortOrder('asc')
-    }
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Notes</h2>
-          <p className="text-muted-foreground">Consultez et gérez les notes des élèves.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['grades'] })}
-            disabled={isLoading}
-          >
-            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button asChild>
-            <Link to="/grades/entry">
-              <Plus className="mr-2 h-4 w-4" />
-              Saisie de notes
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Notes"
+        description="Consultez et gérez les notes des élèves."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['grades'] })}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <Button asChild>
+              <Link to="/grades/entry">
+                <Plus className="mr-2 h-4 w-4" />
+                Saisie de notes
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -241,60 +212,50 @@ export function GradeListPage() {
 
         <TabsContent value="notes" className="space-y-6 mt-4">
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="w-48">
-              <Combobox
-                value={classId}
-                onValueChange={(v) => {
-                  setClassId(v || 'all')
-                  setPage(1)
-                }}
-                placeholder="Classe"
-                searchPlaceholder="Rechercher une classe..."
-                options={[
-                  { value: 'all', label: 'Toutes les classes' },
-                  ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
-                ]}
-              />
-            </div>
-            <div className="w-48">
-              <Combobox
-                value={subjectId}
-                onValueChange={(v) => {
-                  setSubjectId(v || 'all')
-                  setPage(1)
-                }}
-                placeholder="Matière"
-                searchPlaceholder="Rechercher une matière..."
-                options={[
-                  { value: 'all', label: 'Toutes les matières' },
-                  ...(subjects ?? []).map((s) => ({ value: s.id, label: formatSubjectLabel(s) })),
-                ]}
-              />
-            </div>
-            <div className="w-40">
-              <Combobox
-                value={periodId}
-                onValueChange={(v) => {
-                  setPeriodId(v)
-                  setPage(1)
-                }}
-                placeholder="Période"
-                disabled={loadingPeriods}
-                options={[
-                  { value: 'all', label: 'Toutes' },
-                  ...periods.map((p) => ({ value: p.value, label: p.label })),
-                ]}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <Combobox
+          className="w-[200px]"
+          value={classId}
+          onValueChange={(v) => {
+            setClassId(v || 'all')
+            setPage(1)
+          }}
+          placeholder="Classe"
+          searchPlaceholder="Rechercher une classe..."
+          options={[
+            { value: 'all', label: 'Toutes les classes' },
+            ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
+        <Combobox
+          className="w-[200px]"
+          value={subjectId}
+          onValueChange={(v) => {
+            setSubjectId(v || 'all')
+            setPage(1)
+          }}
+          placeholder="Matière"
+          searchPlaceholder="Rechercher une matière..."
+          options={[
+            { value: 'all', label: 'Toutes les matières' },
+            ...(subjects ?? []).map((s) => ({ value: s.id, label: formatSubjectLabel(s) })),
+          ]}
+        />
+        <Combobox
+          className="w-[160px]"
+          value={periodId}
+          onValueChange={(v) => {
+            setPeriodId(v)
+            setPage(1)
+          }}
+          placeholder="Période"
+          disabled={loadingPeriods}
+          options={[
+            { value: 'all', label: 'Toutes' },
+            ...periods.map((p) => ({ value: p.value, label: p.label })),
+          ]}
+        />
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">
@@ -329,9 +290,9 @@ export function GradeListPage() {
                       className={cn(
                         'font-semibold',
                         g.value >= g.maxValue * 0.8
-                          ? 'text-green-600'
+                          ? 'text-emerald-600'
                           : g.value >= g.maxValue * 0.5
-                            ? 'text-yellow-600'
+                            ? 'text-amber-600'
                             : 'text-red-600'
                       )}
                     >
@@ -539,7 +500,7 @@ export function GradeListPage() {
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Matière</span>
-                <span className="font-medium">{formatSubjectLabel(detailGrade.subject)}</span>
+                <span className="font-medium">{detailGrade.subject ? formatSubjectLabel(detailGrade.subject) : '—'}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Note</span>
@@ -555,7 +516,7 @@ export function GradeListPage() {
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Période</span>
-                <span className="font-medium">{periods.find(p => p.id === detailGrade.periodId)?.label ?? detailGrade.periodId}</span>
+                <span className="font-medium">{periods.find((p) => p.value === detailGrade.periodId)?.label ?? detailGrade.periodId}</span>
               </div>
               {detailGrade.comment && (
                 <div className="flex justify-between border-b pb-2">

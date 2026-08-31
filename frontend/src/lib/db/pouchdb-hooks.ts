@@ -60,7 +60,7 @@ export function usePouchDBQuery<T = any>(entityType: EntityType): QueryResult<T>
     return () => {
       mountedRef.current = false
       unsubscribe.cancel()
-      db.close()
+      /* pas de close() : connexion IndexedDB partagée avec la réplication live */
     }
   }, [entityType, fetch])
 

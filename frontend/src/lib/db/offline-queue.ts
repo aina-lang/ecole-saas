@@ -22,7 +22,7 @@ export async function offlineBulkCreate(
   entityType: EntityType,
   docs: any[],
 ): Promise<any[]> {
-  const results = []
+  const results: Awaited<ReturnType<typeof saveEntity>>[] = []
   for (const doc of docs) {
     const payload = {
       ...doc,

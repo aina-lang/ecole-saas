@@ -3,102 +3,66 @@ import { useQuery } from '@tanstack/react-query'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
 import { useUIStore } from '@/stores/ui-store'
 import {
-  PersonIcon,
-  ReaderIcon,
-  ChatBubbleIcon,
-  GearIcon,
-  UpdateIcon,
-  BookmarkIcon,
-  CalendarIcon,
-  FileTextIcon,
-  BackpackIcon,
-  GroupIcon,
-  ValueIcon,
-  RocketIcon,
-  ArchiveIcon,
-  DashboardIcon,
-  ListBulletIcon,
-  StackIcon,
-  LockClosedIcon,
-} from '@radix-ui/react-icons'
+  LayoutDashboard, UserRound, Users, School, Layers, Presentation, Milestone,
+  ClipboardList, ClipboardCheck, BookOpen, CalendarDays, Wallet, Receipt,
+  UserCog, Settings, KeyRound, RefreshCw,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const menuGroups = [
   {
     label: 'Accueil',
     items: [
-      { label: 'Tableau de bord', path: '/dashboard', icon: HomeDashboardIcon },
+      { label: 'Tableau de bord', path: '/dashboard', icon: LayoutDashboard },
     ]
   },
   {
     label: 'École',
     items: [
-      { label: 'Élèves', path: '/students', icon: PersonIcon, badgeKey: 'students' },
-      { label: 'Parents', path: '/parents', icon: GroupIcon, badgeKey: 'parents' },
-      { label: 'Classes', path: '/classes', icon: ReaderIcon, badgeKey: 'classes' },
-      { label: 'Niveaux', path: '/administration/levels', icon: StackIcon },
-      { label: 'Enseignants', path: '/teachers', icon: BackpackIcon, badgeKey: 'teachers' },
-      { label: 'Promotions', path: '/administration/promotion/deliberation', icon: PromotionIcon },
-     // { label: 'Messagerie', path: '/communications', icon: ChatBubbleIcon },
+      { label: 'Élèves', path: '/students', icon: UserRound, badgeKey: 'students' },
+      { label: 'Parents', path: '/parents', icon: Users, badgeKey: 'parents' },
+      { label: 'Classes', path: '/classes', icon: School, badgeKey: 'classes' },
+      { label: 'Niveaux', path: '/administration/levels', icon: Layers },
+      { label: 'Enseignants', path: '/teachers', icon: Presentation, badgeKey: 'teachers' },
+      { label: 'Promotions', path: '/administration/promotion/deliberation', icon: Milestone },
+     // { label: 'Messagerie', path: '/communications', icon: Users },
     ]
   },
   {
     label: 'Pédagogie',
     items: [
-      { label: 'Notes', path: '/grades', icon: FileTextIcon },
-      { label: 'Présences', path: '/attendance', icon: AttendanceIcon },
-      { label: 'Matières', path: '/subjects', icon: BookmarkIcon },
-      { label: 'Emploi du temps', path: '/timetable', icon: CalendarIcon },
+      { label: 'Notes', path: '/grades', icon: ClipboardList },
+      { label: 'Présences', path: '/attendance', icon: ClipboardCheck },
+      { label: 'Matières', path: '/subjects', icon: BookOpen },
+      { label: 'Emploi du temps', path: '/timetable', icon: CalendarDays },
     ]
   },
   {
     label: 'Finance',
     items: [
- //     { label: 'Vue d\'ensemble', path: '/finances', icon: DashboardIcon },
-      { label: 'Paiements', path: '/finances/payments', icon: ValueIcon },
-      { label: 'Frais par niveau', path: '/finances/fees', icon: ArchiveIcon },
+ //     { label: 'Vue d\'ensemble', path: '/finances', icon: LayoutDashboard },
+      { label: 'Paiements', path: '/finances/payments', icon: Wallet },
+      { label: 'Frais par niveau', path: '/finances/fees', icon: Receipt },
     ]
   },
   {
     label: 'Paramètres',
     items: [
-      { label: 'Utilisateurs', path: '/administration/users', icon: LockClosedIcon },
-      { label: 'Configuration', path: '/administration/settings', icon: GearIcon },
-    //  { label: 'Journaux d\'audit', path: '/administration/audit', icon: ListBulletIcon },
-      { label: 'Abonnement', path: '/administration/billing', icon: RocketIcon },
-      { label: 'Synchronisation', path: '/sync', icon: UpdateIcon },
+      { label: 'Utilisateurs', path: '/administration/users', icon: UserCog },
+      { label: 'Configuration', path: '/administration/settings', icon: Settings },
+    //  { label: 'Journaux d\'audit', path: '/administration/audit', icon: ClipboardList },
+      { label: 'Licence', path: '/administration/license', icon: KeyRound },
+      { label: 'Synchronisation', path: '/sync', icon: RefreshCw },
     ]
   },
 ]
 
-function HomeDashboardIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" {...props}>
-      <path d="M1 6.5V14H5V9H10V14H14V6.5L7.5 1L1 6.5Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
-function AttendanceIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" {...props}>
-      <path d="M3.5 10.5L6.5 13.5L12 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M1 7.5L3.5 10.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 2.5L12 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
-function PromotionIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" {...props}>
-      <path d="M7.5 1L10 5.5L15 6.5L11.5 10L12.5 15L7.5 12.5L2.5 15L3.5 10L0 6.5L5 5.5L7.5 1Z" fill="currentColor" fillOpacity="0.3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 export function SidebarContent({ onItemClick, forceShowLabels }: { onItemClick?: () => void; forceShowLabels?: boolean }) {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -137,18 +101,20 @@ export function SidebarContent({ onItemClick, forceShowLabels }: { onItemClick?:
   }
 
   return (
+    <TooltipProvider>
     <ScrollArea className="flex-1 px-3 py-2">
       <nav className="flex flex-col gap-4">
-        {menuGroups.map((group) => (
+        {menuGroups.map((group, groupIndex) => (
           <div key={group.label} className="flex flex-col gap-1">
             {sidebarOpen && (
-              <p className="px-3 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+              <p className="px-3 text-[10.5px] font-semibold text-sidebar-muted uppercase tracking-[0.12em]">
                 {group.label}
               </p>
             )}
             {group.items.map((item) => {
               const count = badgeCount(item.badgeKey)
-              return (
+              const collapsed = !sidebarOpen && !forceShowLabels
+              const link = (
                 <NavLink
                   key={item.path}
                   to={item.path}
@@ -157,8 +123,8 @@ export function SidebarContent({ onItemClick, forceShowLabels }: { onItemClick?:
                     cn(
                       'relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                       isActive
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+                        ? 'bg-sidebar-foreground/10 text-sidebar-foreground'
+                        : 'text-sidebar-muted hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground',
                       !sidebarOpen && !forceShowLabels && 'lg:justify-center lg:px-0'
                     )
                   }
@@ -166,16 +132,16 @@ export function SidebarContent({ onItemClick, forceShowLabels }: { onItemClick?:
                   {({ isActive }) => (
                     <>
                       {isActive && sidebarOpen && (
-                        <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+                        <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-accent" />
                       )}
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
                       {sidebarOpen && (
                         <span className="flex-1 truncate transition-opacity">
                           {item.label}
                         </span>
                       )}
                       {sidebarOpen && count !== undefined && count > 0 && (
-                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
+                        <Badge variant="secondary" className="h-5 border-0 bg-sidebar-foreground/10 px-1.5 text-[10px] font-medium text-sidebar-foreground">
                           {count}
                         </Badge>
                       )}
@@ -183,11 +149,26 @@ export function SidebarContent({ onItemClick, forceShowLabels }: { onItemClick?:
                   )}
                 </NavLink>
               )
+              if (!collapsed) return link
+              return (
+                <Tooltip key={item.path} delayDuration={150}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={10} className="flex items-center gap-2">
+                    {item.label}
+                    {count !== undefined && count > 0 && (
+                      <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">{count}</span>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              )
             })}
-            <Separator className={cn('mt-1', !sidebarOpen && 'lg:hidden')} />
+            {groupIndex < menuGroups.length - 1 && (
+              <Separator className={cn('mt-1 bg-sidebar-border', !sidebarOpen && 'lg:hidden')} />
+            )}
           </div>
         ))}
       </nav>
     </ScrollArea>
+    </TooltipProvider>
   )
 }

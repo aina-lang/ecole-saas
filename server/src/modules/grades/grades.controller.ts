@@ -6,24 +6,37 @@ import { UpdateGradeDto } from './dto/update-grade.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TeacherScopeService } from '../../common/scope/teacher-scope.service';
 
 @Controller('grades')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class GradesController {
-  constructor(private gradesService: GradesService) {}
+  constructor(private gradesService: GradesService,
+    private scope: TeacherScopeService,
+  ) {}
+
+  /** Périodes (trimestres…) de l'année scolaire courante — app mobile. */
+  @Get('periods')
+  periods(@CurrentUser('tenantId') tenantId: string) {
+    return this.gradesService.currentPeriods(tenantId);
+  }
 
   @Get()
-  findAll(
+  async findAll(
     @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: any,
     @Query('studentId') studentId?: string,
     @Query('subjectId') subjectId?: string,
     @Query('classId') classId?: string,
     @Query('periodId') periodId?: string,
   ) {
+    // Enseignant : uniquement les notes de ses classes.
+    if (studentId) await this.scope.assertStudent(user, studentId);
+    const classFilter = await this.scope.classFilter(user, classId);
     return this.gradesService.findAll(tenantId, {
       studentId,
       subjectId,
-      classId,
+      classId: classFilter,
       periodId,
     });
   }
@@ -35,7 +48,9 @@ export class GradesController {
 
   @Post()
   @Roles('ADMIN', 'SUPER_ADMIN', 'TEACHER')
-  create(@CurrentUser('tenantId') tenantId: string, @Body() dto: CreateGradeDto, @CurrentUser() user: any) {
+  async create(@CurrentUser('tenantId') tenantId: string, @Body() dto: CreateGradeDto, @CurrentUser() user: any) {
+    await this.scope.assertStudent(user, dto.studentId);
+    await this.scope.assertSubject(user, dto.subjectId);
     return this.gradesService.create(tenantId, dto, user?.id);
   }
 
@@ -53,18 +68,21 @@ export class GradesController {
 
   @Post('class/:classId/bulk')
   @Roles('ADMIN', 'SUPER_ADMIN', 'TEACHER')
-  bulkCreate(
+  async bulkCreate(
     @Param('classId') classId: string,
     @CurrentUser('tenantId') tenantId: string,
     @Body() grades: CreateGradeDto[],
     @CurrentUser() user: any,
   ) {
+    await this.scope.assertClass(user, classId);
+    for (const sid of Array.from(new Set(grades.map((g) => g.subjectId)))) await this.scope.assertSubject(user, sid);
     return this.gradesService.bulkCreateForClass(tenantId, classId, grades, user?.id);
   }
 
   @Get('student/:studentId/report')
   @Roles('ADMIN', 'SUPER_ADMIN', 'TEACHER', 'SECRETARY', 'PARENT')
-  getStudentReport(@Param('studentId') studentId: string, @CurrentUser('tenantId') tenantId: string) {
+  async getStudentReport(@Param('studentId') studentId: string, @CurrentUser('tenantId') tenantId: string, @CurrentUser() user: any) {
+    await this.scope.assertStudent(user, studentId);
     return this.gradesService.getStudentReport(studentId, tenantId);
   }
 

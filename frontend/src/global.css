@@ -89,25 +89,20 @@
     height: 100%;
   }
 
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  /* Aucune barre de défilement visible : le défilement (molette, trackpad,
+     glisser) reste actif, seule la barre disparaît — sur tous les éléments. */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none;
   }
 
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--scrollbar-track));
-  }
 
-  ::-webkit-scrollbar-thumb {
-    background: hsl(var(--scrollbar-thumb));
-    border-radius: 9999px;
-  }
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--scrollbar-thumb-hover));
-  }
 
-  ::-webkit-scrollbar-corner {
-    background: hsl(var(--scrollbar-track));
-  }
+
 }

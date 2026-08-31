@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { getEntityById, queryEntities } from '@/lib/db/pouchdb-compat'
+import { getEntityById, queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import type { Class, Student, Subject, Teacher } from '@/types'
 import { formatSubjectLabel } from '@/lib/subject'
-import { printPdf } from '@/lib/print-pdf'
-import { getSchoolSettings } from '@/lib/school-settings'
+import { generateBulletinsByClass } from '@/lib/pdf/bulletin'
 
+import { PageHeader, DetailHeader, EmptyState } from '@/components/layout/page'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,84 +30,10 @@ import {
 } from '@/components/ui/dialog'
 import { Combobox } from '@/components/ui/combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Pencil2Icon, ArrowLeftIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { Pencil2Icon, PlusIcon, TrashIcon, PersonIcon } from '@radix-ui/react-icons'
 import { StudentPhoto } from '@/components/ui/student-photo'
-
-async function generateBulletinHtml(classId: string, schoolName: string, logoDataUrl: string): Promise<string> {
-  const [classData, students, grades, subjects] = await Promise.all([
-    getEntityById<any>('Class', classId),
-    queryEntities<any>('Student', { classId }),
-    queryEntities<any>('Grade'),
-    queryEntities<any>('Subject'),
-  ])
-
-  const gradeMap: Record<string, any[]> = {}
-  for (const g of grades) {
-    if (!gradeMap[g.studentId]) gradeMap[g.studentId] = []
-    gradeMap[g.studentId].push(g)
-  }
-  const subjectMap: Record<string, any> = {}
-  for (const s of subjects) subjectMap[s.id] = s
-
-  const logoHtml = logoDataUrl
-    ? `<img src="${logoDataUrl}" alt="Logo" style="height:60px;width:auto;display:block;margin:0 auto 8px" />`
-    : ''
-
-  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulletins - ${classData?.name || ''}</title>
-<style>
-  @page { margin: 15mm; }
-  body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; color: #333; }
-  .school-header { text-align: center; margin-bottom: 16px; }
-  .school-header h1 { margin: 0; color: #1a365d; font-size: 22px; }
-  .bulletin { page-break-after: always; max-width: 800px; margin: 0 auto 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
-  .bulletin h2 { text-align: center; color: #2d3748; font-size: 18px; margin: 16px 0 4px; }
-  .class-info { text-align: center; color: #666; font-size: 14px; margin-bottom: 16px; }
-  .student-info { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: #f7fafc; border-radius: 6px; }
-  table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
-  th { background: #edf2f7; font-weight: 600; color: #2d3748; }
-  .footer { text-align: center; color: #a0aec0; font-size: 11px; margin-top: 30px; }
-  .average { text-align: right; font-weight: bold; font-size: 16px; margin-top: 15px; padding: 10px; background: #ebf8ff; border-radius: 6px; }
-</style></head><body>
-<div class="school-header">${logoHtml}<h1>${schoolName}</h1></div>`
-
-  for (const student of (students ?? [])) {
-    const studentGrades = gradeMap[student.id] || []
-    const avg = studentGrades.length > 0
-      ? (studentGrades.reduce((s, g) => s + (g.value || 0) * (g.coefficient || 1), 0) /
-         studentGrades.reduce((s, g) => s + (g.coefficient || 1), 0)).toFixed(2)
-      : '—'
-
-    html += `<div class="bulletin">
-      <h2>Bulletin de Notes</h2>
-      <div class="class-info">${classData?.name || ''} — Année scolaire ${new Date().getFullYear()}/${new Date().getFullYear() + 1}</div>
-      <div class="student-info">
-        <div><strong>Élève :</strong> ${student.firstName || ''} ${student.lastName || ''}</div>
-        <div><strong>Matricule :</strong> ${student.registrationNumber || '—'}</div>
-      </div>
-      <table><thead><tr><th>Matière</th><th>Note</th><th>Coeff.</th><th>Moyenne</th></tr></thead><tbody>`
-
-    const bySubject: Record<string, { values: number[]; coeff: number }> = {}
-    for (const g of studentGrades) {
-      if (!bySubject[g.subjectId]) bySubject[g.subjectId] = { values: [], coeff: g.coefficient || 1 }
-      bySubject[g.subjectId].values.push(g.value || 0)
-    }
-
-    for (const [subjId, data] of Object.entries(bySubject)) {
-      const subj = subjectMap[subjId]
-      const subjAvg = (data.values.reduce((a, b) => a + b, 0) / data.values.length).toFixed(2)
-      html += `<tr><td>${subj?.name || subjId}</td><td>${data.values.join(', ')}</td><td>${data.coeff}</td><td><strong>${subjAvg}</strong></td></tr>`
-    }
-
-    html += `</tbody></table>
-      <div class="average">Moyenne générale : <strong>${avg}/20</strong></div>
-      <div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} · ${schoolName}</div>
-    </div>`
-  }
-
-  html += '</body></html>'
-  return html
-}
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportClassStudents } from '@/lib/export/exporters'
 
 export function ClassDetailPage() {
   const navigate = useNavigate()
@@ -121,7 +47,20 @@ export function ClassDetailPage() {
 
   const { data: classData, isLoading } = useQuery({
     queryKey: ['class', id],
-    queryFn: async () => getEntityById<Class & { subjects?: Subject[]; teachers?: Teacher[] }>('Class', id)
+    queryFn: async () => getEntityById<Class & { subjects?: Subject[]; teachers?: Teacher[] }>('Class', id!),
+    enabled: !!id,
+  })
+
+  // Professeurs : déduits des fiches enseignant (classIds / classes), la
+  // source que remplissent les formulaires — le document Classe ne porte
+  // pas cette relation.
+  const { data: classTeachers } = useQuery({
+    queryKey: ['class-teachers', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const all = await queryEntities<any>('Teacher')
+      return all.filter((t) => !t.deletedAt && ((t.classIds ?? []).includes(id) || (t.classes ?? []).some((c: any) => c.id === id)))
+    },
   })
 
   const { data: students } = useQuery({
@@ -198,25 +137,6 @@ export function ClassDetailPage() {
     })
   }
 
-  const generateBulletinsMutation = useMutation({
-    mutationFn: async () => {
-      const school = await getSchoolSettings()
-      const html = await generateBulletinHtml(id!, school.schoolName, school.logoDataUrl)
-      const ok = await printPdf(html, `Bulletins - ${classData?.name || ''}.pdf`)
-      if (!ok) {
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
-        const url = window.URL.createObjectURL(blob)
-        window.open(url, '_blank')
-        window.URL.revokeObjectURL(url)
-      }
-      return true
-    },
-    onSuccess: () => {
-      toast.success('Bulletins générés avec succès')
-    },
-    onError: () => toast.error('Erreur lors de la génération des bulletins')
-  })
-
   if (isLoading) {
     return (
       <div className="flex h-48 items-center justify-center text-muted-foreground">
@@ -227,11 +147,21 @@ export function ClassDetailPage() {
 
   if (!classData) {
     return (
-      <div className="flex h-48 flex-col items-center justify-center gap-4 text-muted-foreground">
-        <p>Classe introuvable</p>
-        <Button variant="outline" onClick={() => navigate('/classes')}>
-          Retour à la liste
-        </Button>
+      <div className="space-y-6">
+        <PageHeader backTo="/classes" title="Classe introuvable" />
+        <Card>
+          <CardContent>
+            <EmptyState
+              title="Classe introuvable"
+              description="Cette classe n'existe pas ou a été supprimée."
+              action={
+                <Button variant="outline" onClick={() => navigate('/classes')}>
+                  Retour à la liste
+                </Button>
+              }
+            />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -241,44 +171,39 @@ export function ClassDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate('/classes')}>
-          <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Retour
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => navigate(`/classes/${id}/edit`)}>
-            <Pencil2Icon className="mr-2 h-4 w-4" />
-            Modifier
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => generateBulletinsMutation.mutate()}
-            disabled={generateBulletinsMutation.isPending}
-          >
-            {generateBulletinsMutation.isPending ? 'Génération...' : 'Générer les bulletins'}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        backTo="/classes"
+        title="Fiche classe"
+        description="Élèves, matières et professeurs de la classe"
+        actions={
+          <>
+            <ExportMenu onExport={(format) => exportClassStudents(id!, format)} label="Exporter la liste" />
+            <ExportMenu
+              formats={['pdf', 'docx']}
+              onExport={(format) => generateBulletinsByClass(id!, format)}
+              label="Bulletins"
+            />
+            <Button onClick={() => navigate(`/classes/${id}/edit`)}>
+              <Pencil2Icon className="mr-2 h-4 w-4" />
+              Modifier
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <h3 className="text-2xl font-bold">{classData.name}</h3>
-                <Badge variant="secondary">{classData.level}</Badge>
-              </div>
-              <div className="flex gap-4 text-sm text-muted-foreground">
-                <span>Salle: {classData.room || 'Non définie'}</span>
-                <span>
-                  Capacité: {classData.studentCount || 0}/{classData.capacity}
-                </span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <DetailHeader
+        title={classData.name}
+        badges={<Badge variant="secondary">{classData.level}</Badge>}
+        meta={
+          <>
+            <span>Salle : {classData.room || 'Non définie'}</span>
+            <span className="inline-flex items-center gap-1">
+              <PersonIcon className="h-3.5 w-3.5" />
+              {(students ?? []).length} / {classData.capacity} élèves
+            </span>
+          </>
+        }
+      />
 
       <Tabs defaultValue="students">
         <TabsList>
@@ -290,9 +215,9 @@ export function ClassDetailPage() {
 
         <TabsContent value="students" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Liste des élèves ({students?.length ?? 0})</CardTitle>
-              <div className="flex items-center gap-2">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-base">Liste des élèves ({students?.length ?? 0})</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
                 {selectedRowIds.size > 0 && (
                   <Button
                     size="sm"
@@ -415,8 +340,12 @@ export function ClassDetailPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        Aucun élève dans cette classe
+                      <TableCell colSpan={6} className="p-0">
+                        <EmptyState
+                          icon={<PersonIcon className="h-5 w-5" />}
+                          title="Aucun élève dans cette classe"
+                          description="Ajoutez un élève existant ou créez-en un nouveau."
+                        />
                       </TableCell>
                     </TableRow>
                   )}
@@ -437,7 +366,7 @@ export function ClassDetailPage() {
         <TabsContent value="subjects" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Matières enseignées</CardTitle>
+              <CardTitle className="text-base">Matières enseignées</CardTitle>
             </CardHeader>
             <CardContent>
               {classData.subjects && classData.subjects.length > 0 ? (
@@ -449,9 +378,10 @@ export function ClassDetailPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  Aucune matière assignée à cette classe
-                </p>
+                <EmptyState
+                  title="Aucune matière assignée"
+                  description="Les matières rattachées à cette classe apparaîtront ici."
+                />
               )}
             </CardContent>
           </Card>
@@ -460,26 +390,45 @@ export function ClassDetailPage() {
         <TabsContent value="teachers" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Professeurs</CardTitle>
+              <CardTitle className="text-base">Professeurs</CardTitle>
             </CardHeader>
             <CardContent>
-              {classData.teachers && classData.teachers.length > 0 ? (
-                <div className="space-y-3">
-                  {classData.teachers.map((teacher) => (
-                    <div key={teacher.id} className="flex items-center gap-3 rounded-lg border p-3">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          {teacher.user.firstName} {teacher.user.lastName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{teacher.specialty}</p>
-                      </div>
-                    </div>
-                  ))}
+              {classTeachers && classTeachers.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {classTeachers.map((teacher: any) => {
+                    const first = teacher.user_firstName ?? teacher.user?.firstName ?? ''
+                    const last = teacher.user_lastName ?? teacher.user?.lastName ?? ''
+                    const subjectNames = (teacher.subjects ?? []).map((s: any) => s.name).filter(Boolean)
+                    return (
+                      <button
+                        key={teacher.id}
+                        type="button"
+                        onClick={() => navigate(`/teachers/${teacher.id}`)}
+                        className="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/60"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {`${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase() || '?'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{`${first} ${last}`.trim()}</p>
+                          <p className="truncate text-xs text-muted-foreground">{teacher.specialty || subjectNames.join(', ') || 'Enseignant'}</p>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  Aucun professeur assigné à cette classe
-                </p>
+                <EmptyState
+                  icon={<PersonIcon className="h-5 w-5" />}
+                  title="Aucun professeur assigné"
+                  description="Assignez des professeurs depuis le formulaire de la classe."
+                  action={
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/classes/${id}/edit`)}>
+                      <Pencil2Icon className="mr-2 h-4 w-4" />
+                      Modifier la classe
+                    </Button>
+                  }
+                />
               )}
             </CardContent>
           </Card>
@@ -488,12 +437,13 @@ export function ClassDetailPage() {
         <TabsContent value="schedule" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Emploi du temps</CardTitle>
+              <CardTitle className="text-base">Emploi du temps</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-center text-muted-foreground py-8">
-                L'emploi du temps n'est pas encore disponible
-              </p>
+              <EmptyState
+                title="Emploi du temps indisponible"
+                description="L'emploi du temps de cette classe n'est pas encore disponible."
+              />
             </CardContent>
           </Card>
         </TabsContent>

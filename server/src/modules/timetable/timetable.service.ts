@@ -12,9 +12,9 @@ const SLOT_INCLUDE = {
       code: true,
       coefficient: true,
       level: true,
-      class: { select: { id: true, name: true } },
     },
   },
+  class: { select: { id: true, name: true } },
   teacher: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
 };
 

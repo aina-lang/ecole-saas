@@ -4,6 +4,8 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { MailModule } from './common/mail/mail.module';
+import { ScopeModule } from './common/scope/scope.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -24,7 +26,7 @@ import { TeacherContractsModule } from './modules/teacher-contracts/teacher-cont
 import { TeacherPaymentsModule } from './modules/teacher-payments/teacher-payments.module';
 import { LevelsModule } from './modules/levels/levels.module';
 import { DocumentsModule } from './modules/documents/documents.module';
-import { BillingModule } from './modules/billing/billing.module';
+import { LicenseModule } from './modules/license/license.module';
 import { SubscriptionGuard } from './common/guards/subscription.guard';
 import envConfig from './config/env.config';
 
@@ -32,6 +34,8 @@ import envConfig from './config/env.config';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [envConfig] }),
     ScheduleModule.forRoot(),
+    MailModule,
+    ScopeModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     AuditModule,
@@ -54,7 +58,7 @@ import envConfig from './config/env.config';
     TeacherPaymentsModule,
     DocumentsModule,
     LevelsModule,
-    BillingModule,
+    LicenseModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

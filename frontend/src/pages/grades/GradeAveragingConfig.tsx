@@ -3,11 +3,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { saveEntity, getEntityById } from '@/lib/db/pouchdb-compat'
 import { EVALUATION_TYPES, EVALUATION_TYPE_LABELS } from '@/lib/evaluation-types'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { FormSection } from '@/components/layout/page'
 
 // Le coefficient par matière se règle désormais uniquement depuis Matières
 // (chaque fiche matière a son propre champ Coefficient) — l'ancien onglet
@@ -94,92 +93,82 @@ export function GradeAveragingConfig() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Types d'évaluation inclus</CardTitle>
-          <CardDescription>
-            Activer ou désactiver chaque type d'évaluation pour le calcul de la moyenne générale
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border">
-            <div className="divide-y">
-              {EVALUATION_TYPES.map((type) => {
-                const isIncluded = gradeConfig.includedTypes.includes(type)
-                return (
-                  <div
-                    key={type}
-                    className="flex items-center justify-between px-4 py-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor={`switch-${type}`} className="cursor-pointer font-medium">
-                        {EVALUATION_TYPE_LABELS[type]}
-                      </Label>
-                      {type === 'examen_blanc' && (
-                        <Badge variant="secondary">Isolé</Badge>
-                      )}
-                    </div>
-                    <Switch
-                      id={`switch-${type}`}
-                      checked={isIncluded}
-                      onCheckedChange={(checked) => handleToggleType(type, checked)}
-                      disabled={savingConfig}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="switch-exam-blanc-isolated" className="cursor-pointer font-medium">
-                Examens Blancs isolés
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Les examens blancs génèrent des rapports indépendants de la moyenne générale
-              </p>
-            </div>
-            <Switch
-              id="switch-exam-blanc-isolated"
-              checked={gradeConfig.examBlancIsolated}
-              onCheckedChange={handleToggleExamBlancIsolated}
-              disabled={savingConfig}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Règles de promotion</CardTitle>
-          <CardDescription>
-            Seuils utilisés pour déterminer le passage en classe supérieure
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border divide-y">
-            {RULES.map((rule, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">{rule.condition}</p>
-                  <p className="text-xs text-muted-foreground">{rule.sub}</p>
-                </div>
-                <Badge
-                  variant={
-                    i === 0 ? 'default' : i === 1 ? 'secondary' : 'destructive'
-                  }
+    <div className="space-y-6">
+      <FormSection
+        title="Types d'évaluation inclus"
+        description="Activer ou désactiver chaque type d'évaluation pour le calcul de la moyenne générale. Les changements sont enregistrés automatiquement."
+        columns={1}
+      >
+        <div className="rounded-lg border">
+          <div className="divide-y">
+            {EVALUATION_TYPES.map((type) => {
+              const isIncluded = gradeConfig.includedTypes.includes(type)
+              return (
+                <div
+                  key={type}
+                  className="flex items-center justify-between px-4 py-3"
                 >
-                  {rule.result}
-                </Badge>
-              </div>
-            ))}
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`switch-${type}`} className="cursor-pointer font-medium">
+                      {EVALUATION_TYPE_LABELS[type]}
+                    </Label>
+                    {type === 'examen_blanc' && (
+                      <Badge variant="secondary">Isolé</Badge>
+                    )}
+                  </div>
+                  <Switch
+                    id={`switch-${type}`}
+                    checked={isIncluded}
+                    onCheckedChange={(checked) => handleToggleType(type, checked)}
+                    disabled={savingConfig}
+                  />
+                </div>
+              )
+            })}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="switch-exam-blanc-isolated" className="cursor-pointer font-medium">
+              Examens Blancs isolés
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Les examens blancs génèrent des rapports indépendants de la moyenne générale
+            </p>
+          </div>
+          <Switch
+            id="switch-exam-blanc-isolated"
+            checked={gradeConfig.examBlancIsolated}
+            onCheckedChange={handleToggleExamBlancIsolated}
+            disabled={savingConfig}
+          />
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="Règles de promotion"
+        description="Seuils utilisés pour déterminer le passage en classe supérieure"
+        columns={1}
+      >
+        <div className="rounded-lg border divide-y">
+          {RULES.map((rule, i) => (
+            <div key={i} className="flex items-center justify-between px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">{rule.condition}</p>
+                <p className="text-xs text-muted-foreground">{rule.sub}</p>
+              </div>
+              <Badge
+                variant={
+                  i === 0 ? 'default' : i === 1 ? 'secondary' : 'destructive'
+                }
+              >
+                {rule.result}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      </FormSection>
     </div>
   )
 }

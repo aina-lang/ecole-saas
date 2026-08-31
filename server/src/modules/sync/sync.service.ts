@@ -80,12 +80,16 @@ export class SyncService {
 
   async listConflicts(tenantId: string, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
+    // ERROR inclus : rejets définitifs du worker CouchDB→PostgreSQL
+    // (FK introuvable après retries, contrainte violée...) — sans ça ils
+    // resteraient invisibles côté admin.
+    const where = { tenantId, status: { in: ['CONFLICT', 'ERROR'] as any } };
     const [data, total] = await Promise.all([
       this.prisma.syncLog.findMany({
-        where: { tenantId, status: 'CONFLICT' },
+        where,
         orderBy: { createdAt: 'desc' }, skip, take: limit,
       }),
-      this.prisma.syncLog.count({ where: { tenantId, status: 'CONFLICT' } }),
+      this.prisma.syncLog.count({ where }),
     ]);
     return { data, total, page, limit };
   }
@@ -93,7 +97,7 @@ export class SyncService {
   async getSyncStatus(tenantId: string) {
     const [devices, unresolvedConflicts, recentSyncs] = await Promise.all([
       this.prisma.syncDevice.findMany({ where: { tenantId } }),
-      this.prisma.syncLog.count({ where: { tenantId, status: 'CONFLICT' } }),
+      this.prisma.syncLog.count({ where: { tenantId, status: { in: ['CONFLICT', 'ERROR'] as any } } }),
       this.prisma.syncLog.findMany({
         where: { tenantId }, orderBy: { createdAt: 'desc' }, take: 20,
         select: { id: true, entityType: true, entityId: true, operation: true, status: true, deviceId: true, createdAt: true },

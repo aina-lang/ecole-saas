@@ -5,20 +5,10 @@ export interface SchoolSettings {
   logoDataUrl: string
 }
 
-async function fetchAsDataUrl(url: string): Promise<string> {
-  try {
-    const resp = await fetch(url)
-    const blob = await resp.blob()
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return ''
-  }
-}
+// Implémentation déplacée dans image-utils (partagée avec useLocalPhotoSrc) ;
+// ré-exportée ici pour les importeurs existants (pdf/receipt, pdf/bulletin).
+export { fetchAsDataUrl } from './image-utils'
+import { fetchAsDataUrl } from './image-utils'
 
 export async function getSchoolSettings(): Promise<SchoolSettings> {
   const defaultName = 'Établissement scolaire'

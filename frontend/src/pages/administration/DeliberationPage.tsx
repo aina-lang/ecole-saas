@@ -5,6 +5,7 @@ import { queryEntities, saveEntity, getEntityById } from '@/lib/db/pouchdb-compa
 import type { AcademicYear, Class, Student, Grade, Subject, PromotionDecision } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
 import { DataTable } from '@/components/ui/data-table'
 import type { ColumnDef } from '@/components/ui/data-table'
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { InfoCircledIcon } from '@radix-ui/react-icons'
 
@@ -147,12 +149,20 @@ export function DeliberationPage() {
     A_DELIBERER: 'À délibérer',
   }
 
-  const decisionVariants: Record<PromotionDecision, 'default' | 'destructive' | 'secondary' | 'outline'> = {
-    ADMIS: 'default',
-    REDOUBLANT: 'secondary',
-    EXCLU: 'destructive',
-    A_DELIBERER: 'outline',
+  // Couleurs sémantiques : admis (émeraude), à délibérer (ambre), redoublant
+  // (neutre), exclu (rouge) — lisibles en clair et en sombre.
+  const decisionClasses: Record<PromotionDecision, string> = {
+    ADMIS: 'border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    A_DELIBERER: 'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    REDOUBLANT: 'border-transparent bg-muted text-foreground',
+    EXCLU: 'border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   }
+
+  const decisionCounts = useMemo(() => {
+    const counts: Record<PromotionDecision, number> = { ADMIS: 0, A_DELIBERER: 0, REDOUBLANT: 0, EXCLU: 0 }
+    for (const row of studentRows) counts[decisions[row.id] ?? getDefaultDecision(row.average)]++
+    return counts
+  }, [studentRows, decisions])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -203,12 +213,12 @@ export function DeliberationPage() {
       label: 'Moyenne',
       sortable: true,
       render: (row) => {
-        let color = 'font-medium text-red-600'
-        if (row.average >= 10) color = 'font-medium text-green-600'
-        else if (row.average >= 9.5) color = 'font-medium text-amber-600'
+        let color = 'text-red-600 dark:text-red-400'
+        if (row.average >= 10) color = 'text-emerald-700 dark:text-emerald-400'
+        else if (row.average >= 9.5) color = 'text-amber-600 dark:text-amber-400'
         return (
-          <span className={color}>
-            {row.average.toFixed(2)} / 20
+          <span className={cn('font-semibold tabular-nums', color)}>
+            {row.average.toFixed(2)}<span className="ml-0.5 text-xs font-normal text-muted-foreground">/ 20</span>
           </span>
         )
       },
@@ -217,7 +227,7 @@ export function DeliberationPage() {
       key: 'autoDecision',
       label: 'Décision auto',
       render: (row) => (
-        <Badge variant={decisionVariants[getDefaultDecision(row.average)]}>
+        <Badge variant="outline" className={decisionClasses[getDefaultDecision(row.average)]}>
           {decisionLabels[getDefaultDecision(row.average)]}
         </Badge>
       ),
@@ -246,55 +256,106 @@ export function DeliberationPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtres</CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-6">
-          <div className="space-y-2">
-            <Label>Année académique</Label>
-            <Select value={selectedYearId} onValueChange={setSelectedYearId}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Sélectionner une année" />
-              </SelectTrigger>
-              <SelectContent>
-                {academicYears?.map((y) => (
-                  <SelectItem key={y.id} value={y.id}>
-                    {y.label || (y as any).name} {y.isCurrent ? '(En cours)' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Classe</Label>
-            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Sélectionner une classe" />
-              </SelectTrigger>
-              <SelectContent>
-                {classes?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <PageHeader
+        title="Délibération"
+        description="Calcul des moyennes et décisions de passage par classe"
+        actions={
+          studentRows.length > 0 ? (
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending
+                ? 'Enregistrement...'
+                : 'Enregistrer les décisions'}
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <FilterBar>
+        <div className="space-y-2">
+          <Label>Année académique</Label>
+          <Select value={selectedYearId} onValueChange={setSelectedYearId}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Sélectionner une année" />
+            </SelectTrigger>
+            <SelectContent>
+              {academicYears?.map((y) => (
+                <SelectItem key={y.id} value={y.id}>
+                  {y.label || (y as any).name} {y.isCurrent ? '(En cours)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Classe</Label>
+          <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Sélectionner une classe" />
+            </SelectTrigger>
+            <SelectContent>
+              {classes?.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </FilterBar>
+
+      {studentRows.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {([
+            ['ADMIS', 'Admis', 'text-emerald-700 dark:text-emerald-400'],
+            ['A_DELIBERER', 'À délibérer', 'text-amber-600 dark:text-amber-400'],
+            ['REDOUBLANT', 'Redoublants', 'text-foreground'],
+            ['EXCLU', 'Exclus', 'text-red-600 dark:text-red-400'],
+          ] as const).map(([key, label, color]) => (
+            <Card key={key}>
+              <CardContent className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                <p className={cn('mt-1 text-2xl font-semibold tabular-nums', color)}>{decisionCounts[key]}</p>
+                <p className="text-xs text-muted-foreground">
+                  {studentRows.length ? Math.round((decisionCounts[key] / studentRows.length) * 100) : 0} % de la classe
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {studentRows.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+            <CardTitle className="text-base">
               Élèves — {classes?.find((c) => c.id === selectedClassId)?.name}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 ({studentRows.length} élève{studentRows.length > 1 ? 's' : ''})
               </span>
             </CardTitle>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Les décisions modifiées manuellement sont conservées jusqu'à l'enregistrement.</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <InfoCircledIcon className="h-4 w-4" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-sm">
+                    <p className="text-xs">
+                      <strong>Règles de passage :</strong><br />
+                      • Moyenne ≥ 10/20 → <span className="text-emerald-600">Admis</span><br />
+                      • 9,50 ≤ Moyenne &lt; 10 → <span className="text-amber-600">À délibérer</span><br />
+                      • Moyenne &lt; 9,50 → <span className="text-red-600">Redoublant</span>
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <DataTable
               columns={columns}
               data={studentRows}
@@ -310,45 +371,24 @@ export function DeliberationPage() {
         </Card>
       )}
 
-      {studentRows.length > 0 && (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-muted-foreground">
-              Les décisions manuellement modifiées sont conservées jusqu'à
-              l'enregistrement.
-            </p>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <InfoCircledIcon className="h-4 w-4 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent className="max-w-sm">
-                  <p className="text-xs">
-                    <strong>Règles de passage :</strong><br />
-                    • Moyenne ≥ 10/20 → <span className="text-green-600">Admis</span><br />
-                    • 9,50 ≤ Moyenne &lt; 10 → <span className="text-amber-600">À délibérer</span><br />
-                    • Moyenne &lt; 9,50 → <span className="text-red-600">Redoublant</span>
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            size="lg"
-          >
-            {saveMutation.isPending
-              ? 'Enregistrement...'
-              : 'Enregistrer les décisions'}
-          </Button>
-        </div>
+      {!selectedClassId && (
+        <Card>
+          <CardContent>
+            <EmptyState
+              title="Aucune classe sélectionnée"
+              description="Choisissez une année et une classe pour lancer la délibération."
+            />
+          </CardContent>
+        </Card>
       )}
 
       {selectedClassId && !studentsLoading && studentRows.length === 0 && (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Aucun élève trouvé dans cette classe.
+          <CardContent>
+            <EmptyState
+              title="Aucun élève"
+              description="Aucun élève trouvé dans cette classe."
+            />
           </CardContent>
         </Card>
       )}

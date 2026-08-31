@@ -4,7 +4,7 @@ import { UserFormPage } from './UserFormPage'
 import { SettingsPage } from './SettingsPage'
 import { AuditLogPage } from './AuditLogPage'
 import { LevelsPage } from './LevelsPage'
-import { BillingPage } from './BillingPage'
+import { LicensePage } from './LicensePage'
 import { PromotionRoutes } from './PromotionRoutes'
 
 export function AdminRoutes() {
@@ -16,7 +16,7 @@ export function AdminRoutes() {
       <Route path="users/:id/edit" element={<UserFormPage />} />
       <Route path="settings" element={<SettingsPage />} />
       <Route path="levels" element={<LevelsPage />} />
-      <Route path="billing" element={<BillingPage />} />
+      <Route path="license" element={<LicensePage />} />
       {/* Configuration des notes déplacée dans /grades (onglet "Configuration") */}
       <Route path="audit" element={<AuditLogPage />} />
       <Route path="promotion/*" element={<PromotionRoutes />} />

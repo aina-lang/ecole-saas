@@ -9,22 +9,19 @@ import {
   Pencil1Icon,
   EnvelopeClosedIcon,
   EnvelopeOpenIcon,
+  MagnifyingGlassIcon,
   PlusIcon,
-  ReaderIcon,
-  TrashIcon,
-  ReloadIcon
+  TrashIcon
 } from '@radix-ui/react-icons'
 import { Send, RotateCw } from 'lucide-react'
-import client from '@/api/client'
 import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
-import type { Message, ApiResponse, PaginatedResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
 
 type Folder = 'inbox' | 'sent' | 'drafts' | 'archived'
 
@@ -100,48 +97,63 @@ export function InboxPage() {
     setSearch('')
   }
 
-  return (
-    <div className="flex h-[calc(100vh-8rem)] gap-0 overflow-hidden rounded-lg border">
-      {/* Sidebar */}
-      <div className="flex w-64 flex-col border-r bg-muted/30">
-        <div className="p-4 flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ['messages'] })} disabled={isLoading}>
-            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button className="flex-1 gap-2" onClick={() => navigate('/communications/compose')}>
-            <PlusIcon className="h-4 w-4" />
-            Nouveau message
-          </Button>
-        </div>
-        <ScrollArea className="flex-1">
-          <nav className="space-y-1 px-2 pb-4">
-            {folders.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => handleFolderChange(f.key)}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent',
-                  activeFolder === f.key
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground'
-                )}
-              >
-                <f.icon className="h-4 w-4" />
-                {f.label}
-              </button>
-            ))}
-          </nav>
-        </ScrollArea>
-      </div>
+  const activeFolderLabel = folders.find((f) => f.key === activeFolder)?.label ?? 'Messages'
 
-      {/* Message list */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="border-b p-4">
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Messagerie"
+        description="Consultez, archivez et gérez vos messages."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['messages'] })}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <Button className="gap-2" onClick={() => navigate('/communications/compose')}>
+              <PlusIcon className="h-4 w-4" />
+              Nouveau message
+            </Button>
+          </>
+        }
+      />
+
+      <FilterBar>
+        <div className="flex flex-wrap items-center gap-1">
+          {folders.map((f) => (
+            <Button
+              key={f.key}
+              type="button"
+              variant={activeFolder === f.key ? 'secondary' : 'ghost'}
+              size="sm"
+              className="gap-2"
+              onClick={() => handleFolderChange(f.key)}
+            >
+              <f.icon className="h-4 w-4" />
+              {f.label}
+            </Button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-[220px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Rechercher un message..."
+            className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+      </FilterBar>
+
+      <div className="flex h-[calc(100vh-18rem)] min-h-[320px] flex-col overflow-hidden rounded-lg border bg-card">
+        <div className="border-b px-6 py-3 text-sm font-medium">
+          {activeFolderLabel}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">{messages.length} message(s)</span>
         </div>
 
         <ScrollArea className="flex-1">
@@ -150,9 +162,11 @@ export function InboxPage() {
               Chargement...
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex items-center justify-center p-8 text-muted-foreground">
-              Aucun message
-            </div>
+            <EmptyState
+              icon={<EnvelopeOpenIcon className="h-5 w-5" />}
+              title="Aucun message"
+              description="Ce dossier est vide pour le moment."
+            />
           ) : (
             <div className="divide-y">
               {messages.map((msg) => (

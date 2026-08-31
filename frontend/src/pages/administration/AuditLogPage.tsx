@@ -11,7 +11,8 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader, FilterBar, EmptyState, InfoGrid } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -25,7 +26,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
 import {
   Pagination,
   PaginationContent,
@@ -40,6 +40,7 @@ import {
   EyeOpenIcon,
   ReloadIcon
 } from '@radix-ui/react-icons'
+import { cn } from '@/lib/utils'
 
 interface AuditLog {
   id: string
@@ -119,85 +120,80 @@ export function AuditLogPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Journal d'audit</h2>
-          <p className="text-muted-foreground">
-            Consultez l'historique des actions effectuées dans l'application
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
-          <ReloadIcon className={`mr-2 h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-          Actualiser
-        </Button>
-      </div>
+      <PageHeader
+        title="Journal d'audit"
+        description="Consultez l'historique des actions effectuées dans l'application"
+        actions={
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            aria-label="Actualiser"
+          >
+            <ReloadIcon className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Filtres</CardTitle>
-          <CardDescription>Affinez la recherche dans le journal d'audit</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher par utilisateur ou action..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                className="pl-9"
-              />
-            </div>
-            <Combobox
-              options={[
-                { value: 'all', label: 'Toutes les actions' },
-                { value: 'CREATE', label: 'Création' },
-                { value: 'UPDATE', label: 'Modification' },
-                { value: 'DELETE', label: 'Suppression' },
-                { value: 'LOGIN', label: 'Connexion' },
-                { value: 'LOGOUT', label: 'Déconnexion' },
-                { value: 'SYNC_START', label: 'Début synchro' },
-                { value: 'SYNC_COMPLETE', label: 'Fin synchro' },
-                { value: 'EXPORT', label: 'Export' },
-                { value: 'IMPORT', label: 'Import' }
-              ]}
-              value={actionFilter}
-              onValueChange={(v) => { setActionFilter(v); setPage(1) }}
-              placeholder="Action"
-              className="w-[160px]"
-            />
-            <Combobox
-              options={[
-                { value: 'all', label: 'Toutes les entités' },
-                { value: 'USER', label: 'Utilisateur' },
-                { value: 'STUDENT', label: 'Élève' },
-                { value: 'CLASS', label: 'Classe' },
-                { value: 'GRADE', label: 'Note' },
-                { value: 'PAYMENT', label: 'Paiement' },
-                { value: 'ATTENDANCE', label: 'Présence' },
-                { value: 'SETTINGS', label: 'Paramètres' },
-                { value: 'SYNC', label: 'Synchronisation' }
-              ]}
-              value={entityFilter}
-              onValueChange={(v) => { setEntityFilter(v); setPage(1) }}
-              placeholder="Entité"
-              className="w-[160px]"
-            />
-            <DatePicker
-              value={dateFrom}
-              onChange={(d) => { setDateFrom(d ? format(d, 'yyyy-MM-dd') : ''); setPage(1) }}
-              className="w-[160px]"
-              placeholder="Date début"
-            />
-            <DatePicker
-              value={dateTo}
-              onChange={(d) => { setDateTo(d ? format(d, 'yyyy-MM-dd') : ''); setPage(1) }}
-              className="w-[160px]"
-              placeholder="Date fin"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <div className="relative min-w-[200px] flex-1">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par utilisateur ou action..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            className="pl-9"
+          />
+        </div>
+        <Combobox
+          options={[
+            { value: 'all', label: 'Toutes les actions' },
+            { value: 'CREATE', label: 'Création' },
+            { value: 'UPDATE', label: 'Modification' },
+            { value: 'DELETE', label: 'Suppression' },
+            { value: 'LOGIN', label: 'Connexion' },
+            { value: 'LOGOUT', label: 'Déconnexion' },
+            { value: 'SYNC_START', label: 'Début synchro' },
+            { value: 'SYNC_COMPLETE', label: 'Fin synchro' },
+            { value: 'EXPORT', label: 'Export' },
+            { value: 'IMPORT', label: 'Import' }
+          ]}
+          value={actionFilter}
+          onValueChange={(v) => { setActionFilter(v); setPage(1) }}
+          placeholder="Action"
+          className="w-[160px]"
+        />
+        <Combobox
+          options={[
+            { value: 'all', label: 'Toutes les entités' },
+            { value: 'USER', label: 'Utilisateur' },
+            { value: 'STUDENT', label: 'Élève' },
+            { value: 'CLASS', label: 'Classe' },
+            { value: 'GRADE', label: 'Note' },
+            { value: 'PAYMENT', label: 'Paiement' },
+            { value: 'ATTENDANCE', label: 'Présence' },
+            { value: 'SETTINGS', label: 'Paramètres' },
+            { value: 'SYNC', label: 'Synchronisation' }
+          ]}
+          value={entityFilter}
+          onValueChange={(v) => { setEntityFilter(v); setPage(1) }}
+          placeholder="Entité"
+          className="w-[160px]"
+        />
+        <DatePicker
+          value={dateFrom}
+          onChange={(d) => { setDateFrom(d ? format(d, 'yyyy-MM-dd') : ''); setPage(1) }}
+          className="w-[160px]"
+          placeholder="Date début"
+        />
+        <DatePicker
+          value={dateTo}
+          onChange={(d) => { setDateTo(d ? format(d, 'yyyy-MM-dd') : ''); setPage(1) }}
+          className="w-[160px]"
+          placeholder="Date fin"
+        />
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">
@@ -221,8 +217,11 @@ export function AuditLogPage() {
                 </TableRow>
               ) : !logsData?.data.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Aucune entrée trouvée dans le journal d'audit
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      title="Aucune entrée"
+                      description="Aucune entrée trouvée dans le journal d'audit."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -282,51 +281,35 @@ export function AuditLogPage() {
                           </DialogHeader>
                           {selectedLog && (
                             <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Date/Heure</p>
-                                  <p className="text-sm font-medium">
-                                    {format(new Date(selectedLog.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Adresse IP</p>
-                                  <p className="text-sm font-medium font-mono">{selectedLog.ipAddress}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Utilisateur</p>
-                                  <p className="text-sm font-medium">{selectedLog.userName}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Email</p>
-                                  <p className="text-sm font-medium">{selectedLog.userEmail}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Action</p>
-                                  <Badge className={actionColors[selectedLog.action] || ''} variant="secondary">
-                                    {actionLabels[selectedLog.action] || selectedLog.action}
-                                  </Badge>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Entité</p>
-                                  <p className="text-sm font-medium">{selectedLog.entityType}</p>
-                                </div>
-                                <div className="col-span-2">
-                                  <p className="text-xs text-muted-foreground">ID Entité</p>
-                                  <p className="text-sm font-medium font-mono">{selectedLog.entityId}</p>
-                                </div>
-                              </div>
+                              <InfoGrid
+                                items={[
+                                  {
+                                    label: 'Date/Heure',
+                                    value: format(new Date(selectedLog.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: fr }),
+                                  },
+                                  { label: 'Adresse IP', value: <span className="font-mono">{selectedLog.ipAddress}</span> },
+                                  { label: 'Utilisateur', value: selectedLog.userName },
+                                  { label: 'Email', value: selectedLog.userEmail },
+                                  {
+                                    label: 'Action',
+                                    value: (
+                                      <Badge className={actionColors[selectedLog.action] || ''} variant="secondary">
+                                        {actionLabels[selectedLog.action] || selectedLog.action}
+                                      </Badge>
+                                    ),
+                                  },
+                                  { label: 'Entité', value: selectedLog.entityType },
+                                  { label: 'ID Entité', value: <span className="font-mono">{selectedLog.entityId}</span>, wide: true },
+                                ]}
+                              />
 
                               {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
-                                <>
-                                  <Separator />
-                                  <div>
-                                    <p className="text-xs text-muted-foreground mb-2">Détails complets</p>
-                                    <pre className="rounded-md bg-muted p-3 text-xs overflow-auto max-h-[200px] font-mono">
-                                      {JSON.stringify(selectedLog.details, null, 2)}
-                                    </pre>
-                                  </div>
-                                </>
+                                <div className="border-t pt-4">
+                                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Détails complets</p>
+                                  <pre className="max-h-[200px] overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
+                                    {JSON.stringify(selectedLog.details, null, 2)}
+                                  </pre>
+                                </div>
                               )}
                             </div>
                           )}

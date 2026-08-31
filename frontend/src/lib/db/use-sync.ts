@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { performSync, getSyncStatus, type SyncResult } from './sync-manager'
+import { performSync, type SyncResult } from './sync-manager'
 import { useSyncStore } from '@/stores/sync-store'
 
 export function useSync() {

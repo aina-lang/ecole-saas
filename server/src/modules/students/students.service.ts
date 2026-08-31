@@ -35,24 +35,16 @@ export class StudentsService {
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
   }
 
-  private async generateRegistrationNumber(tenantId: string): Promise<string> {
+  private async generateRegistrationNumber(_tenantId: string): Promise<string> {
+    // Même format que le client hors ligne (StudentFormPage) : suffixe dérivé
+    // d'un UUID. Une séquence incrémentale est impossible ici — les postes
+    // hors ligne créent des élèves sans voir le compteur, et l'ancien
+    // parseInt du dernier matricule cassait dès qu'un suffixe hexadécimal
+    // client (ex: STU-2026-A3F91B2C) arrivait en base (NaN → compteur remis
+    // à 1 → violation d'unicité).
     const year = new Date().getFullYear();
-    const prefix = `STU-${year}-`;
-
-    const lastStudent = await this.prisma.student.findFirst({
-      where: { registrationNumber: { startsWith: prefix } },
-      orderBy: { registrationNumber: 'desc' },
-      select: { registrationNumber: true },
-    });
-
-    let counter = 1;
-    if (lastStudent) {
-      const parts = lastStudent.registrationNumber.split('-');
-      const lastNum = parseInt(parts[parts.length - 1], 10);
-      counter = isNaN(lastNum) ? 1 : lastNum + 1;
-    }
-
-    return `${prefix}${String(counter).padStart(5, '0')}`;
+    const suffix = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    return `STU-${year}-${suffix}`;
   }
 
   async findAll(tenantId: string, query: QueryStudentDto) {
@@ -61,7 +53,8 @@ export class StudentsService {
 
     const where: any = { tenantId, deletedAt: null };
 
-    if (classId) where.classId = classId;
+    if (Array.isArray(classId)) where.classId = { in: classId };
+    else if (classId) where.classId = classId;
     if (status) where.status = status;
 
     if (search) {

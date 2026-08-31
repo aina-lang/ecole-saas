@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { getPhotoUrl } from '@/api/client'
+import { useLocalPhotoSrc } from '@/lib/use-local-photo-src'
 
 interface StudentPhotoProps {
   src?: string | null
@@ -13,20 +13,8 @@ interface StudentPhotoProps {
   fallbackClassName?: string
 }
 
-export function StudentPhoto({ src, alt, initials, className, entityId, fallbackClassName }: StudentPhotoProps) {
-  const [photoSrc, setPhotoSrc] = useState<string | undefined>(src || undefined)
-
-  useEffect(() => {
-    const api = (window as any).api
-    if (api?.file && entityId) {
-      api.file.getEntityPhoto('Student', entityId).then((localUrl: string) => {
-        if (localUrl) setPhotoSrc(localUrl)
-        else setPhotoSrc(src || undefined)
-      })
-    } else {
-      setPhotoSrc(src || undefined)
-    }
-  }, [src, entityId])
+export function StudentPhoto({ src, alt, initials, className, fallbackClassName }: StudentPhotoProps) {
+  const photoSrc = useLocalPhotoSrc(src)
 
   return (
     <Avatar className={className}>

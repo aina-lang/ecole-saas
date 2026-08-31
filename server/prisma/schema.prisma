@@ -26,10 +26,8 @@ model Tenant {
   /// global partagé entre tous les tenants. Mot de passe chiffré (AES-256-GCM).
   couchDbUser        String?
   couchDbPasswordEnc String?
-  /// Abonnement Stripe — nul tant que le tenant n'a jamais payé (essai gratuit).
-  stripeCustomerId     String?   @unique
-  stripeSubscriptionId String?   @unique
-  stripePriceId        String?
+  /// Code de la licence active (cf. model License). Nul pendant l'essai.
+  licenseKey           String?
   currentPeriodEnd     DateTime?
   academicYears      AcademicYear[]
   attendances        Attendance[]
@@ -42,6 +40,10 @@ model Tenant {
   messages           Message[]
   payments           Payment[]
   studentEnrollments StudentEnrollment[]
+  studentDocuments   StudentDocument[]
+  gradeConfig        GradeConfig?
+  tenantSettings     TenantSetting[]
+  licenses           License[]
   students           Student[]
   subjects           Subject[]
   syncDevices        SyncDevice[]
@@ -139,6 +141,11 @@ model User {
   updatedAt        DateTime           @updatedAt
   refreshToken     String?
   photoUrl         String?
+  /// Mot de passe temporaire remis par le support : changement forcé à la connexion.
+  mustChangePassword     Boolean   @default(false)
+  /// Hash SHA-256 du jeton de réinitialisation envoyé par e-mail (usage unique).
+  passwordResetToken     String?
+  passwordResetExpiresAt DateTime?
   auditLogs        AuditLog[]
   messagesReceived MessageRecipient[]
   messagesSent     Message[]          @relation("sentMessages")
@@ -165,7 +172,7 @@ model UserPhone {
 model Student {
   id                 String          @id @default(cuid())
   tenantId           String
-  registrationNumber String          @unique
+  registrationNumber String
   firstName          String?
   lastName           String
   birthDate          DateTime?
@@ -192,6 +199,7 @@ model Student {
   deviceId           String?
   attendances        Attendance[]
   documents          Document[]
+  studentDocuments   StudentDocument[]
   grades             Grade[]
   payments           Payment[]
   parents            StudentParent[] @relation("studentParents")
@@ -199,6 +207,9 @@ model Student {
   class              Class?          @relation(fields: [classId], references: [id])
   tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // Unicité PAR ÉTABLISSEMENT : deux écoles peuvent avoir le même matricule,
+  // et la numérotation d'un tenant ne dépend plus de celle des autres.
+  @@unique([tenantId, registrationNumber])
   @@map("students")
 }
 
@@ -309,16 +320,20 @@ model TimetableSlot {
   id        String   @id @default(cuid())
   tenantId  String
   classId   String
-  subjectId String
+  // Optionnel : un créneau peut être posé sans matière (pause, à définir).
+  subjectId String?
   teacherId String?
   dayOfWeek Int      @default(1)
   startTime String
   endTime   String
+  /// Récréation / pause (pas un cours) — les postes la gèrent depuis toujours,
+  /// la colonne manquait en base : l’API renvoyait les pauses comme des cours.
+  isRecreation   Boolean   @default(false)
   room      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject     Subject?     @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   teacher     Teacher?     @relation(fields: [teacherId], references: [id])
   attendances Attendance[]
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -515,6 +530,9 @@ model Payment {
   student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // Pièce comptable : un numéro de reçu ne doit exister qu'une fois par
+  // établissement (NULL multiples autorisés par PostgreSQL).
+  @@unique([tenantId, receiptNumber])
   @@map("payments")
 }
 
@@ -782,4 +800,80 @@ enum SyncJobStatus {
   COMPLETED
   FAILED
   ERROR
+}
+
+// Clé de licence courte (16 caractères, affichée XXXX-XXXX-XXXX-XXXX), émise
+// par l'éditeur pour un établissement (identifié par l'e-mail de son admin)
+// et vérifiée par le serveur à l'activation. Annuelle, sans quota.
+model License {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  tenantId    String
+  email       String
+  issuedAt    DateTime  @default(now())
+  expiresAt   DateTime
+  activatedAt DateTime?
+  revokedAt   DateTime?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("licenses")
+}
+
+// Configuration du calcul des moyennes (types d'évaluation inclus...).
+// Écrite uniquement par le client (GradeAveragingConfig.tsx) avec l'_id fixe
+// "grade_config" dans la base PouchDB du tenant ; côté Postgres le worker la
+// range sous l'id "<tenantId>_grade_config" et l'unicité porte sur tenantId.
+model GradeConfig {
+  id                String   @id
+  tenantId          String   @unique
+  includedTypes     String[] @default([])
+  examBlancIsolated Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("grade_configs")
+}
+
+// Réglages d'établissement partagés entre postes (nom/logo de l'école, année
+// scolaire, système de périodes, config de paiement...) — remplace le
+// settings.json local à chaque poste, qui laissait le poste B sans logo ni
+// périodes. L'_id client est la clé ("school", "academic_year"...), fixe dans
+// chaque base tenant ; côté Postgres l'id est "<tenantId>_<clé>" et l'upsert
+// du worker porte sur l'unicité (tenantId, key).
+model TenantSetting {
+  id        String   @id
+  tenantId  String
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@map("tenant_settings")
+}
+
+// Pièces jointes du dossier élève (onglet Documents de la fiche élève).
+// fileData contient pour l'instant une data URL base64 — à migrer vers des
+// _attachments CouchDB quand la propagation des fichiers sera traitée.
+model StudentDocument {
+  id               String    @id
+  tenantId         String
+  studentId        String
+  fileName         String
+  notes            String?
+  fileData         String?
+  fileMimeType     String?
+  fileOriginalName String?
+  fileSize         Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, studentId])
+  @@map("student_documents")
 }

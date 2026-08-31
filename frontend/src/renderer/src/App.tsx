@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { BrowserRouter, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { SYNC_PULLED_EVENT } from '@/lib/db/sync-engine'
 import { Toaster } from '../../components/ui/sonner'
 import { AppRouter } from '../../router'
-import { TitleBar } from '../../components/layout/TitleBar'
 import { UNAUTHORIZED_EVENT } from '../../api/client'
 import { useAuthStore } from '../../stores/auth-store'
 import { initSyncEngine, destroySyncEngine } from '../../lib/db/sync-manager'
@@ -19,6 +19,19 @@ const queryClient = new QueryClient({
     }
   }
 })
+
+// Données reçues du serveur (mobile, autres postes) : on rafraîchit toutes
+// les requêtes affichées — regroupé pour ne pas relancer 25 fois d'affilée.
+let invalidateTimer: ReturnType<typeof setTimeout> | null = null
+if (typeof window !== 'undefined') {
+  window.addEventListener(SYNC_PULLED_EVENT, () => {
+    if (invalidateTimer) clearTimeout(invalidateTimer)
+    invalidateTimer = setTimeout(() => {
+      invalidateTimer = null
+      queryClient.invalidateQueries()
+    }, 300)
+  })
+}
 
 function AuthListener(): null {
   const navigate = useNavigate()
@@ -66,7 +79,6 @@ function App(): JSX.Element {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <div className="flex h-screen flex-col overflow-hidden rounded-[14px] bg-background shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
-          <TitleBar />
           <div className="flex-1 overflow-hidden">
             <AppRouter />
             <AuthListener />

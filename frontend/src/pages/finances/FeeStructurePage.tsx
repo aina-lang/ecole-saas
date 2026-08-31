@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { MagnifyingGlassIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { queryEntities, saveEntity, deleteEntity } from '@/lib/db/pouchdb-compat'
 import { loadCustomFeeNames, saveCustomFeeItem } from '@/lib/db/pouchdb'
 import type { FeeStructure as FeeType, Level } from '@/types'
@@ -18,6 +18,8 @@ import { Combobox } from '@/components/ui/combobox'
 import { DataTable } from '@/components/ui/data-table'
 import type { SortDirection, ColumnDef } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader, FilterBar } from '@/components/layout/page'
 import {
   Dialog,
   DialogContent,
@@ -214,7 +216,7 @@ export function FeeStructurePage() {
   const paginated = filtered.slice((page - 1) * limit, page * limit)
 
   const columns = [
-    { key: 'label', label: 'Type de frais', sortable: true, filterable: true },
+    { key: 'label', label: 'Type de frais', sortable: true },
     {
       key: 'level',
       label: 'Niveau',
@@ -247,59 +249,75 @@ export function FeeStructurePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Structure des frais</h2>
-          <p className="text-muted-foreground">Définir les frais par niveau (écolage, frais annuels).</p>
-        </div>
-        <Button className="gap-2" onClick={openCreateDialog}>
-          <PlusIcon className="h-4 w-4" />
-          Nouveau frais
-        </Button>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={paginated}
-        total={total}
-        page={page}
-        limit={limit}
-        onPageChange={setPage}
-        onSortChange={(key, dir) => { setSortBy(key); setSortDirection(dir); setPage(1) }}
-        sortKey={sortBy}
-        sortDirection={sortDirection}
-        filters={{ label: search }}
-        onFilterChange={(key, value) => { setSearch(value); setPage(1) }}
-        onBulkDelete={(ids) => {
-          Promise.all(ids.map((id) => deleteEntity('FeeStructure', id)))
-            .then(() => {
-              queryClient.invalidateQueries({ queryKey: ['fees'] })
-              toast.success(`${ids.length} frais supprimé(s)`)
-            })
-            .catch(() => toast.error('Erreur lors de la suppression'))
-        }}
-        getRowId={(fee) => fee.id}
-        isLoading={isLoading}
-        emptyMessage="Aucun frais défini"
-        bulkDeleteLabel="frais"
-        renderRowActions={(fee) => (
-          <>
-            <Button variant="ghost" size="icon" onClick={() => openEditDialog(fee)}>
-              <Pencil1Icon className="h-4 w-4" />
-            </Button>
-            <ConfirmDialog
-              open={deleteId === fee.id}
-              onOpenChange={(open) => !open && setDeleteId(null)}
-              onConfirm={() => deleteMutation.mutate(fee.id)}
-              title="Supprimer le frais"
-              description="Êtes-vous sûr ? Cette action est irréversible."
-            />
-            <Button variant="ghost" size="icon" onClick={() => setDeleteId(fee.id)}>
-              <TrashIcon className="h-4 w-4 text-destructive" />
-            </Button>
-          </>
-        )}
+      <PageHeader
+        title="Structure des frais"
+        description="Définir les frais par niveau (écolage, frais annuels)."
+        actions={
+          <Button className="gap-2" onClick={openCreateDialog}>
+            <PlusIcon className="h-4 w-4" />
+            Nouveau frais
+          </Button>
+        }
       />
+
+      <FilterBar>
+        <div className="relative flex-1 min-w-[220px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par type de frais..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          />
+        </div>
+      </FilterBar>
+
+      <Card>
+        <CardContent className="p-0">
+          <DataTable
+            columns={columns}
+            data={paginated}
+            total={total}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            onSortChange={(key, dir) => { setSortBy(key); setSortDirection(dir); setPage(1) }}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            filters={{ label: search }}
+            onFilterChange={(_key, value) => { setSearch(value); setPage(1) }}
+            onBulkDelete={(ids) => {
+              Promise.all(ids.map((id) => deleteEntity('FeeStructure', id)))
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['fees'] })
+                  toast.success(`${ids.length} frais supprimé(s)`)
+                })
+                .catch(() => toast.error('Erreur lors de la suppression'))
+            }}
+            getRowId={(fee) => fee.id}
+            isLoading={isLoading}
+            emptyMessage="Aucun frais défini"
+            bulkDeleteLabel="frais"
+            renderRowActions={(fee) => (
+              <>
+                <Button variant="ghost" size="icon" onClick={() => openEditDialog(fee)}>
+                  <Pencil1Icon className="h-4 w-4" />
+                </Button>
+                <ConfirmDialog
+                  open={deleteId === fee.id}
+                  onOpenChange={(open) => !open && setDeleteId(null)}
+                  onConfirm={() => deleteMutation.mutate(fee.id)}
+                  title="Supprimer le frais"
+                  description="Êtes-vous sûr ? Cette action est irréversible."
+                />
+                <Button variant="ghost" size="icon" onClick={() => setDeleteId(fee.id)}>
+                  <TrashIcon className="h-4 w-4 text-destructive" />
+                </Button>
+              </>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

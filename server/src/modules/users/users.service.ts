@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -6,10 +6,12 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { MailService } from '../../common/mail/mail.service';
+import { generateTemporaryPassword, credentialsMail } from '../../common/mail/temporary-password';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private mail: MailService) {}
 
   async findAll(
     tenantId: string,
@@ -102,11 +104,14 @@ export class UsersService {
         : undefined,
     };
     if (dto.email) data.email = dto.email;
-    data.passwordHash = dto.password
-      ? await bcrypt.hash(dto.password, 12)
-      : await bcrypt.hash(Math.random().toString(36).slice(2, 10) + 'A1!', 12);
+    // Sans mot de passe fourni : mot de passe TEMPORAIRE généré, renvoyé à
+    // l'administrateur (affiché à l'écran) et envoyé par e-mail à l'utilisateur ;
+    // changement obligatoire à la première connexion.
+    const temporaryPassword = dto.password ? null : generateTemporaryPassword();
+    data.passwordHash = await bcrypt.hash(dto.password ?? temporaryPassword!, 12);
+    if (temporaryPassword) data.mustChangePassword = true;
 
-    return this.prisma.user.create({
+    const created = await this.prisma.user.create({
       data,
       select: {
         id: true,
@@ -114,6 +119,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         role: true,
+        isActive: true,
         photoUrl: true,
         phones: {
           select: { value: true, sortOrder: true },
@@ -122,6 +128,32 @@ export class UsersService {
         createdAt: true,
       },
     });
+    this.prisma.notifyWrite('User', { ...created, tenantId });
+
+    let credentialsEmailed = false;
+    if (temporaryPassword && created.email) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+      const mail = credentialsMail({ firstName: created.firstName, email: created.email, password: temporaryPassword, schoolName: tenant?.name });
+      credentialsEmailed = await this.mail.send(created.email, mail.subject, mail.text, mail.html);
+    }
+    return { ...created, temporaryPassword, credentialsEmailed };
+  }
+
+  async resetPassword(id: string, tenantId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id, tenantId } });
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
+    const temporaryPassword = generateTemporaryPassword();
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash: await bcrypt.hash(temporaryPassword, 12), mustChangePassword: true, refreshToken: null, passwordResetToken: null, passwordResetExpiresAt: null },
+    });
+    let credentialsEmailed = false;
+    if (user.email) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+      const mail = credentialsMail({ firstName: user.firstName, email: user.email, password: temporaryPassword, schoolName: tenant?.name });
+      credentialsEmailed = await this.mail.send(user.email, mail.subject, mail.text, mail.html);
+    }
+    return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, temporaryPassword, credentialsEmailed };
   }
 
   private normalizePhones(phones?: string[]): string[] {
@@ -131,9 +163,25 @@ export class UsersService {
     ).slice(0, 3);
   }
 
+  /** Compte fondateur de l'établissement : le premier administrateur créé.
+   * Il ne peut être ni supprimé, ni désactivé, ni rétrogradé — sinon
+   * l'établissement peut se retrouver sans administrateur. */
+  private async assertNotFounder(user: { id: string; tenantId: string }, action: string) {
+    const founder = await this.prisma.user.findFirst({
+      where: { tenantId: user.tenantId, role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (founder && founder.id === user.id) {
+      throw new ForbiddenException(`Le compte fondateur de l'établissement ne peut pas être ${action}`);
+    }
+  }
+
   async update(id: string, tenantId: string, dto: UpdateUserDto) {
     const user = await this.prisma.user.findFirst({ where: { id, tenantId } });
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
+    if (dto.isActive === false) await this.assertNotFounder(user, 'désactivé');
+    if (dto.role && dto.role !== 'ADMIN' && dto.role !== 'SUPER_ADMIN') await this.assertNotFounder(user, 'rétrogradé');
 
     const data: any = {};
     if (dto.firstName) data.firstName = dto.firstName;
@@ -152,7 +200,7 @@ export class UsersService {
       };
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data,
       select: {
@@ -169,15 +217,19 @@ export class UsersService {
         },
       },
     });
+    this.prisma.notifyWrite('User', { ...updated, tenantId });
+    return updated;
   }
 
   async remove(id: string, tenantId: string) {
     const user = await this.prisma.user.findFirst({ where: { id, tenantId } });
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
-    await this.prisma.user.update({
+    await this.assertNotFounder(user, 'supprimé');
+    const deactivated = await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
     });
+    this.prisma.notifyWrite('User', deactivated);
     return { message: 'Utilisateur désactivé' };
   }
 

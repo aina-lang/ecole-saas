@@ -6,14 +6,18 @@ import { UpdateTimetableSlotDto } from './dto/update-timetable-slot.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TeacherScopeService } from '../../common/scope/teacher-scope.service';
 
 @Controller('timetable')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class TimetableController {
-  constructor(private timetableService: TimetableService) {}
+  constructor(private timetableService: TimetableService,
+    private scope: TeacherScopeService,
+  ) {}
 
   @Get()
-  findByClass(@CurrentUser('tenantId') tenantId: string, @Query('classId') classId?: string) {
+  async findByClass(@CurrentUser('tenantId') tenantId: string, @CurrentUser() user: any, @Query('classId') classId?: string) {
+    if (this.scope.isTeacher(user)) await this.scope.assertClass(user, classId);
     if (!classId) return [];
     return this.timetableService.findByClass(classId, tenantId);
   }

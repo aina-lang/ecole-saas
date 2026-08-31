@@ -39,7 +39,7 @@ export function truncateText(text: string, maxLength: number = 50): string {
   return text.slice(0, maxLength).trimEnd() + '...'
 }
 
-export function getInitials(firstName: string, lastName: string): string {
+export function getInitials(firstName?: string | null, lastName?: string | null): string {
   const first = firstName?.charAt(0)?.toUpperCase() ?? ''
   const last = lastName?.charAt(0)?.toUpperCase() ?? ''
   return `${first}${last}`

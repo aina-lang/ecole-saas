@@ -6,15 +6,17 @@ import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities, deleteEntity } from '@/lib/db/pouchdb-compat'
 import type { User, Student } from '@/types'
 import { getInitials, cn } from '@/lib/utils'
-import { getPhotoUrl } from '@/api/client'
+import { StudentPhoto } from '@/components/ui/student-photo'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { PageHeader, FilterBar } from '@/components/layout/page'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportParentList } from '@/lib/export/exporters'
 import {
   PlusIcon,
   Pencil2Icon,
@@ -74,43 +76,43 @@ export function ParentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Parents / Tuteurs</h2>
-          <p className="text-muted-foreground">Gérer les comptes parents et tuteurs</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['parents'] })}
-            disabled={isLoadingParents}
-          >
-            <ReloadIcon className={cn('h-4 w-4', isLoadingParents && 'animate-spin')} />
-          </Button>
-          <Button onClick={() => navigate('/parents/new')}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Nouveau parent
-          </Button>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Recherche</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative flex-1 min-w-[200px]">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher par nom, prénom, email..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+      <PageHeader
+        title="Parents / Tuteurs"
+        description="Gérer les comptes parents et tuteurs"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['parents'] })}
+              disabled={isLoadingParents}
+              aria-label="Rafraîchir"
+            >
+              <ReloadIcon className={cn('h-4 w-4', isLoadingParents && 'animate-spin')} />
+            </Button>
+            <ExportMenu
+              size="default"
+              onExport={(format) => exportParentList(format, { search })}
             />
-          </div>
-        </CardContent>
-      </Card>
+            <Button onClick={() => navigate('/parents/new')}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Ajouter un parent
+            </Button>
+          </>
+        }
+      />
+
+      <FilterBar>
+        <div className="relative min-w-[200px] flex-1">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par nom, prénom, email..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">
@@ -123,10 +125,13 @@ export function ParentsPage() {
                   const p = parent as any
                   const initials = getInitials(p.firstName || '', p.lastName || '')
                   return (
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={getPhotoUrl(p.photoUrl)} alt={`${p.firstName || ''} ${p.lastName || ''}`} />
-                      <AvatarFallback className="text-sm font-medium">{initials}</AvatarFallback>
-                    </Avatar>
+                    <StudentPhoto
+                      className="h-10 w-10"
+                      src={p.photoUrl}
+                      alt={`${p.firstName || ''} ${p.lastName || ''}`}
+                      initials={initials}
+                      fallbackClassName="text-sm font-medium"
+                    />
                   )
                 },
               },

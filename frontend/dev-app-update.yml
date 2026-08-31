@@ -1,3 +1,7 @@
+# Utilisé uniquement pour tester le mécanisme de mise à jour sur une build
+# locale non installée. En développement, src/main/updater.ts se désactive de
+# lui-même (app.isPackaged === false) : ce fichier ne sert que si l'on force
+# `autoUpdater.forceDevUpdateConfig = true`.
 provider: generic
-url: https://example.com/auto-updates
-updaterCacheDirName: electron-app-updater
+url: http://localhost:3000/updates
+channel: latest

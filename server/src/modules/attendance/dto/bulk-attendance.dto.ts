@@ -18,11 +18,26 @@ class AttendanceRecord {
   @IsOptional()
   @IsString()
   classId?: string;
+
+  /** Créneau d'emploi du temps pendant lequel l'appel est fait (mobile). */
+  @IsOptional()
+  @IsString()
+  timetableSlotId?: string;
+
+  @IsOptional()
+  @IsString()
+  subjectId?: string;
 }
 
 export class BulkAttendanceDto {
   @IsDateString()
   date: string;
+
+  /** Moment de la saisie (ISO) — un appel fait hors ligne pendant le cours et
+   * envoyé plus tard est validé sur cet instant, pas sur l'heure de réception. */
+  @IsOptional()
+  @IsDateString()
+  recordedAt?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

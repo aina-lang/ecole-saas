@@ -102,7 +102,6 @@ export function DataTable<T>({
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
   const allSelected = data.length > 0 && data.every((row) => selectedIds.has(getRowId(row)))
-  const someSelected = data.some((row) => selectedIds.has(getRowId(row))) && !allSelected
 
   const toggleSort = (key: string) => {
     if (!onSortChange) return
@@ -205,7 +204,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="rounded-md border">
+      <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -300,7 +299,7 @@ export function DataTable<T>({
                     {renderRowActions && (
                       <TableCell className="text-right">
                         <div
-                          className="flex justify-end gap-1"
+                          className="flex items-center justify-end gap-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {renderRowActions(row)}

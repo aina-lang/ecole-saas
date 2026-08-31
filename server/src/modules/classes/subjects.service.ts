@@ -207,16 +207,26 @@ export class SubjectsService {
   }
 
   async findByClass(classId: string, tenantId: string) {
+    // Matières d'une classe = celles de son NIVEAU (référentiel) + celles
+    // placées dans son emploi du temps. Avant, seul l'emploi du temps
+    // comptait : une matière enseignée mais pas encore planifiée n'était pas
+    // sélectionnable pour saisir des notes.
+    const cls = await this.prisma.class.findFirst({ where: { id: classId, tenantId }, select: { level: true, levelId: true } });
     const slotSubjects = await this.prisma.timetableSlot.findMany({
       where: { classId, tenantId },
       select: { subjectId: true },
       distinct: ['subjectId'],
     });
-    const subjectIds = slotSubjects.map((s) => s.subjectId);
-    if (subjectIds.length === 0) return [];
-
+    const subjectIds = slotSubjects.map((s) => s.subjectId).filter((id): id is string => !!id);
+    const levelFilter: any[] = [];
+    if (cls?.levelId) levelFilter.push({ levelId: cls.levelId });
+    if (cls?.level) levelFilter.push({ level: cls.level });
+    const or: any[] = [];
+    if (subjectIds.length) or.push({ id: { in: subjectIds } });
+    if (levelFilter.length) or.push(...levelFilter);
+    if (or.length === 0) return [];
     return this.prisma.subject.findMany({
-      where: { id: { in: subjectIds }, tenantId, deletedAt: null },
+      where: { tenantId, deletedAt: null, OR: or },
       orderBy: { name: 'asc' },
     });
   }

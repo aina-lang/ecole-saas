@@ -5,12 +5,12 @@ import { SKIP_SUBSCRIPTION_CHECK } from '../decorators/skip-subscription-check.d
 
 /**
  * Applique le mode lecture seule aux tenants dont l'abonnement est en retard
- * (essai expiré ou paiement Stripe en échec, statut PAST_DUE) : les lectures
+ * (essai ou licence expirés, statut PAST_DUE) : les lectures
  * (GET) restent autorisées, toute écriture (POST/PUT/PATCH/DELETE) est bloquée
  * avec un 402 Payment Required tant que l'abonnement n'est pas régularisé.
  *
  * Global (voir app.module.ts) mais volontairement permissif par défaut : sans
- * utilisateur authentifié (login, register, webhook Stripe) ou avec
+ * utilisateur authentifié (login, register) ou avec
  * @SkipSubscriptionCheck(), on laisse passer — ce n'est pas ce guard qui gère
  * l'authentification, seulement la restriction d'usage une fois connecté.
  */

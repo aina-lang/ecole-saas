@@ -5,17 +5,11 @@ import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
 import { setTenantSetting } from '@/lib/tenant-settings'
 import type { Student, Level, AcademicYear, StudentEnrollment } from '@/types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { PageHeader, InfoGrid, EmptyState } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from '@/components/ui/table'
 
 export function RolloverPage() {
   const [running, setRunning] = useState(false)
@@ -79,6 +73,9 @@ export function RolloverPage() {
   )
 
   const handleRollover = async () => {
+    // L'écran ne s'affiche pas sans année courante (garde plus bas), mais le
+    // compilateur ne relie pas les deux : garde explicite avant d'y toucher.
+    if (!currentYear) return
     setRunning(true)
     setError(null)
     setSummary(null)
@@ -112,7 +109,7 @@ export function RolloverPage() {
             studentId: enrollment.studentId,
             academicYearId: newYearId,
             levelId: nextLevelId,
-            classId: '',
+            classId: null,
             reinscriptionStatus: 'PRE_INSCRIT',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -130,7 +127,7 @@ export function RolloverPage() {
             studentId: enrollment.studentId,
             academicYearId: newYearId,
             levelId: enrollment.levelId,
-            classId: '',
+            classId: null,
             reinscriptionStatus: 'PRE_INSCRIT',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -141,7 +138,7 @@ export function RolloverPage() {
             studentId: enrollment.studentId,
             academicYearId: newYearId,
             levelId: enrollment.levelId,
-            classId: '',
+            classId: null,
             promotionDecision: 'EXCLU',
             reinscriptionStatus: 'BLOQUE',
             createdAt: new Date().toISOString(),
@@ -199,14 +196,10 @@ export function RolloverPage() {
   if (!currentYear) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Gestion des rentrées
-          </h2>
-          <p className="text-muted-foreground">
-            Clôture d'une année scolaire et préparation de la suivante
-          </p>
-        </div>
+        <PageHeader
+          title="Gestion des rentrées"
+          description="Clôture d'une année scolaire et préparation de la suivante"
+        />
         <Alert>
           <AlertTitle>Aucune année scolaire</AlertTitle>
           <AlertDescription>
@@ -222,81 +215,69 @@ export function RolloverPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Année scolaire en cours</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          <p>
-            <span className="font-medium">Libellé :</span>{' '}
-            {currentYear.label || (currentYear as any).name}
-          </p>
-          <p>
-            <span className="font-medium">Début :</span>{' '}
-            {currentYear.startDate}
-          </p>
-          <p>
-            <span className="font-medium">Fin :</span>{' '}
-            {currentYear.endDate}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Décisions d'orientation</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!hasPromotions ? (
-            <p className="text-sm text-muted-foreground">
-              Aucune décision d'orientation n'a encore été enregistrée pour
-              cette année.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Admis</TableHead>
-                  <TableHead>Redoublants</TableHead>
-                  <TableHead>Exclus</TableHead>
-                  <TableHead>Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell className="text-green-600 font-medium">
-                    {stats.admis}
-                  </TableCell>
-                  <TableCell className="text-amber-600 font-medium">
-                    {stats.redoublants}
-                  </TableCell>
-                  <TableCell className="text-red-600 font-medium">
-                    {stats.exclus}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {currentEnrollments.length}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          )}
-
+      <PageHeader
+        title="Gestion des rentrées"
+        description="Clôture d'une année scolaire et préparation de la suivante"
+        actions={
           <Button
             onClick={handleRollover}
             disabled={running || !hasPromotions}
-            className="w-full sm:w-auto"
           >
             {running
               ? 'Traitement en cours…'
               : "Clôturer l'année et préparer la rentrée"}
           </Button>
+        }
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Année scolaire en cours</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <InfoGrid
+            columns={3}
+            items={[
+              { label: 'Libellé', value: currentYear.label || (currentYear as any).name },
+              { label: 'Début', value: currentYear.startDate },
+              { label: 'Fin', value: currentYear.endDate },
+            ]}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Décisions d'orientation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!hasPromotions ? (
+            <EmptyState
+              title="Aucune décision"
+              description="Aucune décision d'orientation n'a encore été enregistrée pour cette année."
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {([
+                ['Admis', stats.admis, 'text-emerald-700 dark:text-emerald-400'],
+                ['Redoublants', stats.redoublants, 'text-amber-600 dark:text-amber-400'],
+                ['Exclus', stats.exclus, 'text-red-600 dark:text-red-400'],
+                ['Effectif total', currentEnrollments.length, 'text-foreground'],
+              ] as const).map(([label, value, color]) => (
+                <div key={label} className="rounded-lg border bg-muted/40 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <p className={cn('mt-1 text-2xl font-semibold tabular-nums', color)}>{value}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {running && maxProgress > 0 && (
         <div className="space-y-2">
           <Progress value={(progress / maxProgress) * 100} />
-          <p className="text-sm text-muted-foreground text-center">
+          <p className="text-sm text-muted-foreground">
             {progress} / {maxProgress} étapes
           </p>
         </div>

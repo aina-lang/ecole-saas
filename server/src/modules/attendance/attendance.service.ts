@@ -15,10 +15,11 @@ export class AttendanceService {
     return new Date(date).getTime() > Date.now() - 24 * 60 * 60 * 1000;
   }
 
-  async findAll(tenantId: string, filters?: { studentId?: string; classId?: string; date?: string; status?: string; startDate?: string; endDate?: string }) {
+  async findAll(tenantId: string, filters?: { studentId?: string; classId?: string | string[]; date?: string; status?: string; startDate?: string; endDate?: string }) {
     const where: any = { tenantId, deletedAt: null };
     if (filters?.studentId) where.studentId = filters.studentId;
-    if (filters?.classId) where.classId = filters.classId;
+    if (Array.isArray(filters?.classId)) where.classId = { in: filters!.classId };
+    else if (filters?.classId) where.classId = filters.classId;
     if (filters?.status) where.status = filters.status;
     if (filters?.date) where.date = new Date(filters.date);
     if (filters?.startDate || filters?.endDate) {
@@ -157,7 +158,7 @@ export class AttendanceService {
     return { message: 'Présence supprimée' };
   }
 
-  async bulkCreate(tenantId: string, dto: BulkAttendanceDto, userId?: string) {
+  async bulkCreate(tenantId: string, dto: BulkAttendanceDto, userId?: string, teacherId?: string | null) {
     const results = { created: 0, skipped: 0, errors: [] as any[] };
 
     const studentIds = [...new Set(dto.records.map((r) => r.studentId))];
@@ -203,6 +204,9 @@ export class AttendanceService {
               date: new Date(dto.date),
               status: record.status,
               justification: record.justification,
+              timetableSlotId: (record as any).timetableSlotId ?? null,
+              subjectId: (record as any).subjectId ?? null,
+              teacherId: teacherId ?? null,
               updatedBy: userId,
             },
           });
@@ -213,18 +217,23 @@ export class AttendanceService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    // On garde les lignes réellement écrites : notifyWrite exige id + tenantId,
+    // et op.data (le DTO) n'en avait pas — l'appel groupé n'était jamais
+    // propagé vers CouchDB, donc invisible sur les postes.
+    const saved = await this.prisma.$transaction(async (tx) => {
+      const rows: any[] = [];
       for (const op of ops) {
         if (op.type === 'update') {
-          await tx.attendance.update({ where: { id: op.id }, data: op.data });
+          rows.push(await tx.attendance.update({ where: { id: op.id }, data: op.data }));
         } else {
-          await tx.attendance.create({ data: op.data });
+          rows.push(await tx.attendance.create({ data: op.data }));
         }
       }
+      return rows;
     });
 
-    for (const op of ops) {
-      this.prisma.notifyWrite('Attendance', op.data);
+    for (const row of saved) {
+      this.prisma.notifyWrite('Attendance', row);
     }
     results.created = ops.length;
 

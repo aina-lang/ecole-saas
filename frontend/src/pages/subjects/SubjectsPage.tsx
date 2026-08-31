@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -9,7 +8,8 @@ import { queryEntities, deleteEntity, saveEntity, countEntities } from '@/lib/db
 import { cn } from '@/lib/utils'
 import type { Level } from '@/types'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, FilterBar } from '@/components/layout/page'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
@@ -21,8 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger
+  DialogTitle
 } from '@/components/ui/dialog'
 import { TrashIcon, PlusIcon, Pencil2Icon, ReloadIcon } from '@radix-ui/react-icons'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -47,7 +46,6 @@ const subjectSchema = z.object({
 type SubjectFormValues = z.infer<typeof subjectSchema>
 
 export function SubjectsPage() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -153,66 +151,46 @@ export function SubjectsPage() {
     onError: () => toast.error('Erreur lors de la suppression')
   })
 
-  const totalPages = subjectsData ? Math.ceil((subjectsData.total || 0) / limit) : 0
 
-  function getPageNumbers() {
-    const pages: (number | 'ellipsis')[] = []
-    if (totalPages <= 5) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i)
-    } else {
-      pages.push(1)
-      if (page > 3) pages.push('ellipsis')
-      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
-        pages.push(i)
-      }
-      if (page < totalPages - 2) pages.push('ellipsis')
-      pages.push(totalPages)
-    }
-    return pages
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Matières</h2>
-          <p className="text-muted-foreground">Gérer les matières et leurs coefficients</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['subjects'] })}
-            disabled={isLoading}
-          >
-            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          </Button>
-          <Button onClick={openCreate}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Ajouter une matière
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Matières"
+        description="Gérer les matières et leurs coefficients"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['subjects'] })}
+              disabled={isLoading}
+              aria-label="Rafraîchir"
+            >
+              <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            </Button>
+            <Button onClick={openCreate}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Ajouter une matière
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Recherche</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative flex-1 min-w-[200px]">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher par nom ou code..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par nom ou code..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+          />
+        </div>
+      </FilterBar>
 
       <Card>
         <CardContent className="p-0">

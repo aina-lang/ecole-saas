@@ -11,10 +11,11 @@ import {
 } from '@/lib/db/pouchdb'
 import type { CustomFeeItem } from '@/lib/db/pouchdb'
 import type { Student, Grade, Attendance, Payment, StudentDocument, FeeStructure } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
+import { formatDate, getInitials, cn } from '@/lib/utils'
 import { evalTypeToLabel } from '@/lib/evaluation-types'
 import { StudentPhoto } from '@/components/ui/student-photo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, DetailHeader, InfoGrid, EmptyState } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -41,15 +42,14 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Separator } from '@/components/ui/separator'
 import {
   Pencil2Icon,
-  ArrowLeftIcon,
   PlusIcon,
   TrashIcon,
-  DownloadIcon,
-  GearIcon
+  DownloadIcon
 } from '@radix-ui/react-icons'
 import { PrinterIcon } from 'lucide-react'
-import { printPdf } from '@/lib/print-pdf'
-import { getSchoolSettings } from '@/lib/school-settings'
+import { generateReceipt } from '@/lib/pdf/receipt'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { exportStudentProfile } from '@/lib/export/exporters'
 
 const statusLabels: Record<
   string,
@@ -73,10 +73,12 @@ export function StudentDetailPage() {
   const { data: student, isLoading } = useQuery({
     queryKey: ['student', id],
     queryFn: async () => {
+      if (!id) return null
       const doc = await getEntityById<Student>('Student', id)
       console.log('STUDENT_DETAIL doc', doc)
       return doc
-    }
+    },
+    enabled: !!id
   })
 
   const { data: classes } = useQuery({
@@ -117,7 +119,7 @@ export function StudentDetailPage() {
     enabled: !!student
   })
 
-  const { data: payments, refetch: refetchPayments } = useQuery({
+  const { data: payments } = useQuery({
     queryKey: ['student-payments', id],
     queryFn: async () => {
       const items = await queryEntities<Payment>('Payment', { studentId: id })
@@ -143,7 +145,7 @@ export function StudentDetailPage() {
     enabled: !!student,
   })
 
-  const { data: documents, refetch: refetchDocuments } = useQuery({
+  const { data: documents } = useQuery({
     queryKey: ['student-documents', id],
     queryFn: async () => {
       const items = await queryEntities<StudentDocument>('StudentDocument', { studentId: id })
@@ -176,13 +178,11 @@ export function StudentDetailPage() {
     name: string
     size: number
   } | null>(null)
-  const fileInputRef = useState<HTMLInputElement | null>(null)
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [paymentFeeId, setPaymentFeeId] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('espèces')
   const [paymentReference, setPaymentReference] = useState('')
-  const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null)
   const [showOtherFee, setShowOtherFee] = useState(false)
   const [paymentFeeDisabled, setPaymentFeeDisabled] = useState(false)
   const [viewPayment, setViewPayment] = useState<Payment | null>(null)
@@ -398,8 +398,12 @@ export function StudentDetailPage() {
         const dueDate = new Date()
         dueDate.setDate(selectedFee.dueDay || 15)
         if (dueDate < new Date()) dueDate.setMonth(dueDate.getMonth() + 1)
+        // Suffixe dérivé de l'UUID du paiement : deux postes hors ligne ne
+        // peuvent pas émettre le même numéro de reçu (unicité par tenant
+        // imposée en base).
+        const paymentId = crypto.randomUUID()
         return saveEntity('Payment', {
-          id: crypto.randomUUID(),
+          id: paymentId,
           studentId: id,
           feeStructureId: selectedFee.id,
           amount: monthlyTuition,
@@ -408,7 +412,7 @@ export function StudentDetailPage() {
           status: 'paid',
           paymentMethod,
           reference: paymentReference || undefined,
-          receiptNumber: `REC-${Date.now()}-${monthKey}`,
+          receiptNumber: `REC-${Date.now()}-${paymentId.slice(0, 6).toUpperCase()}`,
           paidAt: new Date().toISOString(),
           notes: monthKey,
         })
@@ -447,8 +451,9 @@ export function StudentDetailPage() {
     const dueDate = new Date()
     dueDate.setDate(selectedFee?.dueDay || 15)
     if (dueDate < new Date()) dueDate.setMonth(dueDate.getMonth() + 1)
+    const paymentId = crypto.randomUUID()
     savePaymentMutation.mutate({
-      id: crypto.randomUUID(),
+      id: paymentId,
       studentId: id,
       feeStructureId: feeId,
       amount: payAmount,
@@ -457,7 +462,7 @@ export function StudentDetailPage() {
       status: 'paid',
       paymentMethod,
       reference: paymentReference || undefined,
-      receiptNumber: `REC-${Date.now()}`,
+      receiptNumber: `REC-${Date.now()}-${paymentId.slice(0, 6).toUpperCase()}`,
       paidAt: new Date().toISOString(),
       notes,
     } as any)
@@ -472,64 +477,18 @@ export function StudentDetailPage() {
   }
 
   async function handlePrintReceipt(payment: Payment) {
-    const school = await getSchoolSettings()
-    const fee = allFees.find((f) => f.id === payment.feeStructureId)
     const studentName = `${student?.firstName || ''} ${student?.lastName || ''}`.trim()
     const className =
       student?.class?.name ?? classes?.find((c: any) => c.id === student?.classId)?.name ?? ''
-    const logoHtml = school.logoDataUrl
-      ? `<img src="${school.logoDataUrl}" alt="Logo" style="height:50px;width:auto;display:block;margin:0 auto 8px" />`
-      : ''
-    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Reçu de paiement</title>
-<style>
-  body{font-family:Arial,sans-serif;margin:40px;color:#333}
-  .school-header{ text-align:center; margin-bottom:24px; }
-  .school-header h1{ margin:0; font-size:22px; color:#1a365d; }
-  .header{text-align:center;margin-bottom:20px}
-  .header h2{margin:0;font-size:20px}
-  .info{margin-bottom:20px}
-  .info table{width:100%;border-collapse:collapse}
-  .info td{padding:4px 8px}
-  .info td:first-child{font-weight:bold;width:160px}
-  .divider{border-top:2px solid #333;margin:20px 0}
-  .details{width:100%;border-collapse:collapse;margin-bottom:20px}
-  .details th,.details td{border:1px solid #ddd;padding:10px;text-align:left}
-  .details th{background:#f5f5f5}
-  .total{text-align:right;font-size:18px;font-weight:bold;margin-top:16px}
-  .footer{text-align:center;margin-top:40px;color:#999;font-size:12px}
-</style></head><body>
-  <div class="school-header">${logoHtml}<h1>${school.schoolName}</h1></div>
-  <div class="header">
-    <h2>REÇU DE PAIEMENT</h2>
-    <p>Année académique ${new Date().getFullYear()}-${new Date().getFullYear() + 1}</p>
-  </div>
-  <div class="divider"></div>
-  <div class="info">
-    <table>
-      <tr><td>Numéro de reçu</td><td>${payment.receiptNumber || payment.id.slice(0, 8)}</td></tr>
-      <tr><td>Date de paiement</td><td>${formatDate(payment.paidAt || payment.dueDate)}</td></tr>
-      <tr><td>Élève</td><td>${studentName}</td></tr>
-      <tr><td>Classe</td><td>${className}</td></tr>
-      <tr><td>Matricule</td><td>${student?.registrationNumber || 'N/A'}</td></tr>
-    </table>
-  </div>
-  <div class="divider"></div>
-  <table class="details">
-    <thead><tr><th>Libellé</th><th>Montant</th></tr></thead>
-    <tbody><tr><td>${fee?.label || 'Frais de scolarité'}</td><td>${payment.amount.toLocaleString()} Ar</td></tr></tbody>
-  </table>
-  <div class="total">Total payé : ${payment.paidAmount.toLocaleString()} Ar</div>
-  <div class="footer">
-    <p>Reçu généré le ${new Date().toLocaleDateString('fr-FR')}</p>
-    <p>${school.schoolName} — Merci de votre confiance</p>
-  </div>
-</body></html>`
-    const ok = await printPdf(html, `Reçu ${payment.receiptNumber || payment.id.slice(0, 8)}.pdf`)
-    if (!ok) {
-      const win = window.open('', '_blank')
-      if (win) { win.document.write(html); win.document.close(); win.onload = () => win.print() }
-      else toast.error('Popup bloquée. Autorisez les popups pour imprimer le reçu.')
-    }
+    const fee = allFees.find((f) => f.id === payment.feeStructureId)
+    await generateReceipt({
+      payment,
+      studentName,
+      className,
+      registrationNumber: student?.registrationNumber,
+      studentPhotoUrl: student?.photoUrl,
+      feeLabel: fee?.label,
+    })
   }
 
   if (isLoading) {
@@ -542,62 +501,87 @@ export function StudentDetailPage() {
 
   if (!student) {
     return (
-      <div className="flex h-48 flex-col items-center justify-center gap-4 text-muted-foreground">
-        <p>Élève introuvable</p>
-        <Button variant="outline" onClick={() => navigate('/students')}>
-          Retour à la liste
-        </Button>
-      </div>
+      <EmptyState
+        title="Élève introuvable"
+        description="Cet élève n'existe pas localement. Vérifiez la synchronisation."
+        action={
+          <Button variant="outline" onClick={() => navigate('/students')}>
+            Retour à la liste
+          </Button>
+        }
+      />
     )
   }
 
   const status = statusLabels[student.status] || statusLabels.active
   const initials = getInitials(student.firstName, student.lastName)
+  const studentAge = (() => {
+    if (!student.birthDate) return null
+    const d = new Date(student.birthDate)
+    if (Number.isNaN(d.getTime())) return null
+    const now = new Date()
+    let age = now.getFullYear() - d.getFullYear()
+    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--
+    return age >= 0 && age < 120 ? age : null
+  })()
+
+  const className =
+    student.class?.name ??
+    classes?.find((c: any) => c.id === student.classId)?.name ??
+    student.classId
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate('/students')}>
-          <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Retour
-        </Button>
-        <Button onClick={() => navigate(`/students/${id}/edit`)}>
-          <Pencil2Icon className="mr-2 h-4 w-4" />
-          Modifier
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/students"
+        title="Fiche élève"
+        actions={
+          <>
+            <ExportMenu onExport={(format) => exportStudentProfile(id!, format)} label="Exporter la fiche" />
+            <Button onClick={() => navigate(`/students/${id}/edit`)}>
+              <Pencil2Icon className="mr-2 h-4 w-4" />
+              Modifier
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-6">
-            <StudentPhoto
-              src={student.photoUrl}
-              alt={student.firstName}
-              initials={initials}
-              className="h-32 w-32"
-              entityId={student.id}
-              fallbackClassName="text-3xl"
-            />
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-3">
-                <h3 className="text-2xl font-bold">
-                  {student.firstName} {student.lastName}
-                </h3>
-                <Badge variant={status.variant}>{status.label}</Badge>
-              </div>
-              <div className="flex gap-4 text-sm text-muted-foreground">
-                <span>Matricule: {student.registrationNumber || 'Non défini'}</span>
-                <span>
-                  Classe:{' '}
-                  {student.class?.name ??
-                    classes?.find((c: any) => c.id === student.classId)?.name ??
-                    student.classId}
-                </span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <DetailHeader
+        avatar={
+          <StudentPhoto
+            src={student.photoUrl}
+            alt={student.firstName}
+            initials={initials}
+            className="h-28 w-28 ring-4 ring-background shadow-md"
+            entityId={student.id}
+            fallbackClassName="text-3xl"
+          />
+        }
+        title={`${student.firstName ?? ''} ${student.lastName}`.trim()}
+        subtitle={[genderLabel[student.gender], studentAge != null ? `${studentAge} ans` : null, student.birthDate ? `né${student.gender === 'F' ? 'e' : ''} le ${formatDate(student.birthDate)}` : null].filter(Boolean).join(' · ')}
+        badges={<Badge variant={status.variant}>{status.label}</Badge>}
+        meta={
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground">
+              {student.registrationNumber || 'Sans matricule'}
+            </span>
+            {className ? (
+              <button
+                type="button"
+                onClick={() => (student.classId ? navigate(`/classes/${student.classId}`) : undefined)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+              >
+                Classe {className}
+              </button>
+            ) : (
+              <span className="inline-flex items-center rounded-md bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                Non affecté à une classe
+              </span>
+            )}
+            {student.enrollmentDate && <span className="self-center">Inscrit le {formatDate(student.enrollmentDate)}</span>}
+          </>
+        }
+      />
 
       <Tabs defaultValue="infos">
         <TabsList>
@@ -610,106 +594,90 @@ export function StudentDetailPage() {
 
         <TabsContent value="infos" className="space-y-4 mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Identité</CardTitle>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Identité</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Nom:</span>
-                  <p className="font-medium">{student.lastName}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Prénom:</span>
-                  <p className="font-medium">{student.firstName}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date de naissance:</span>
-                  <p className="font-medium">{formatDate(student.birthDate)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Genre:</span>
-                  <p className="font-medium">{genderLabel[student.gender]}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Matricule:</span>
-                  <p className="font-medium">{student.registrationNumber || 'Non défini'}</p>
-                </div>
-              </div>
+              <InfoGrid
+                columns={3}
+                items={[
+                  { label: 'Nom', value: student.lastName },
+                  { label: 'Prénom', value: student.firstName },
+                  { label: 'Matricule', value: student.registrationNumber || 'Non défini' },
+                  { label: 'Date de naissance', value: formatDate(student.birthDate) },
+                  { label: 'Âge', value: studentAge != null ? `${studentAge} ans` : null },
+                  { label: 'Genre', value: genderLabel[student.gender] },
+                ]}
+              />
             </CardContent>
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
-              <CardHeader>
-                <CardTitle>Contact</CardTitle>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Contact</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {student.address && (
-                  <div>
-                    <span className="text-muted-foreground">Adresse:</span>
-                    <p className="font-medium">{student.address}</p>
-                  </div>
+              <CardContent>
+                {(
+                  <InfoGrid
+                    items={[
+                      { label: 'Adresse', value: student.address, wide: true },
+                      { label: 'Téléphone', value: (student as any).phone },
+                      {
+                        label: 'Parent(s) / Tuteur(s)',
+                        wide: true,
+                        value:
+                          student.parents && student.parents.length > 0 ? (
+                            <ul className="space-y-1">
+                              {student.parents.map((link: any) => {
+                                const parentId = link.parent?.id ?? link.parentId
+                                const parentUser = parentMap.get(parentId)
+                                const name = link.parent
+                                  ? `${link.parent.firstName} ${link.parent.lastName}`
+                                  : parentUser
+                                    ? `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim()
+                                    : parentId
+                                return (
+                                  <li key={link.id ?? parentId}>
+                                    <button
+                                      onClick={() => navigate(`/parents/${parentId}`)}
+                                      className="font-medium text-primary hover:underline"
+                                    >
+                                      {name}
+                                    </button>
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      {link.relation === 'TUTEUR' ? 'Tuteur' : 'Parent'}
+                                      {link.isPrimary ? ' · Principal' : ''}
+                                    </span>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          ) : null,
+                      },
+                    ]}
+                  />
                 )}
-                {(student as any).phone && (
-                  <div>
-                    <span className="text-muted-foreground">Téléphone:</span>
-                    <p className="font-medium">{(student as any).phone}</p>
-                  </div>
-                )}
-                {student.parents && student.parents.length > 0 && (
-                  <div>
-                    <span className="text-muted-foreground">Parent(s) / Tuteur(s):</span>
-                    <ul className="mt-1 space-y-1">
-                      {student.parents.map((link: any) => {
-                        const parentId = link.parent?.id ?? link.parentId
-                        const parentUser = parentMap.get(parentId)
-                        const name = link.parent
-                          ? `${link.parent.firstName} ${link.parent.lastName}`
-                          : parentUser
-                            ? `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim()
-                            : parentId
-                        return (
-                          <li key={link.id ?? parentId}>
-                            <button
-                              onClick={() => navigate(`/parents/${parentId}`)}
-                              className="font-medium text-primary hover:underline"
-                            >
-                              {name}
-                            </button>
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {link.relation === 'TUTEUR' ? 'Tuteur' : 'Parent'}
-                              {link.isPrimary ? ' · Principal' : ''}
-                            </span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )}
-                {!student.address && (!student.parents || student.parents.length === 0) && (
-                  <p className="text-muted-foreground italic">Aucune information de contact</p>
+                {!student.address && !(student as any).phone && (!student.parents || student.parents.length === 0) && (
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    Aucune coordonnée renseignée —{' '}
+                    <button type="button" className="text-primary hover:underline" onClick={() => navigate(`/students/${id}/edit`)}>compléter la fiche</button>
+                  </p>
                 )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle>Scolarité</CardTitle>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Scolarité</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Classe:</span>
-                  <p className="font-medium">
-                    {student.class?.name ??
-                      classes?.find((c: any) => c.id === student.classId)?.name ??
-                      student.classId}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Inscrit le:</span>
-                  <p className="font-medium">{formatDate(student.enrollmentDate)}</p>
-                </div>
+              <CardContent>
+                <InfoGrid
+                  items={[
+                    { label: 'Classe', value: className },
+                    { label: 'Inscrit le', value: formatDate(student.enrollmentDate) },
+                  ]}
+                />
               </CardContent>
             </Card>
           </div>
@@ -747,7 +715,10 @@ export function StudentDetailPage() {
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-center text-muted-foreground py-8">Aucune note enregistrée</p>
+                <EmptyState
+                  title="Aucune note enregistrée"
+                  description="Les notes saisies pour cet élève apparaîtront ici."
+                />
               )}
             </CardContent>
           </Card>
@@ -793,68 +764,53 @@ export function StudentDetailPage() {
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  Aucune présence enregistrée
-                </p>
+                <EmptyState
+                  title="Aucune présence enregistrée"
+                  description="L'historique des présences et absences apparaîtra ici."
+                />
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total dû
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">
-                  {totalDue.toLocaleString()} Ar
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total payé
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-green-600">
-                  {(payments ?? []).reduce((s, p) => s + p.paidAmount, 0).toLocaleString()} Ar
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Reste à payer
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-destructive">
-                  {Math.max(0, totalDue - (payments ?? []).reduce((s, p) => s + p.paidAmount, 0)).toLocaleString()}{' '}
-                  Ar
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {(() => {
+            const paid = (payments ?? []).reduce((acc, p) => acc + p.paidAmount, 0)
+            const rest = Math.max(0, totalDue - paid)
+            const ratio = totalDue > 0 ? Math.min(paid / totalDue, 1) : 0
+            return (
+              <Card>
+                <CardContent className="p-5">
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {([
+                      ['Total dû', totalDue, 'text-foreground'],
+                      ['Total payé', paid, 'text-emerald-700 dark:text-emerald-400'],
+                      ['Reste à payer', rest, rest > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'],
+                    ] as const).map(([label, value, color]) => (
+                      <div key={label}>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                        <p className={cn('mt-1 text-2xl font-semibold tabular-nums', color)}>{value.toLocaleString('fr-FR')} Ar</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Progression du règlement</span>
+                      <span className="tabular-nums">{totalDue > 0 ? `${Math.round(ratio * 100)} %` : '—'}</span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div className={cn('h-full rounded-full transition-all', ratio >= 1 ? 'bg-emerald-500' : 'bg-primary')} style={{ width: `${ratio * 100}%` }} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })()}
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Frais de scolarité</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => navigate('/administration/settings')}
-                >
-                  <GearIcon className="mr-1 h-3 w-3" />
-                  Configurer
-                </Button>
-              </div>
+             
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -871,8 +827,8 @@ export function StudentDetailPage() {
                 <TableBody>
                   {allFees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        Aucun frais défini
+                      <TableCell colSpan={6}>
+                        <EmptyState title="Aucun frais défini" className="py-8" />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -901,7 +857,7 @@ export function StudentDetailPage() {
                             </TableCell>
                             <TableCell>{monthlyRate.toLocaleString()} Ar/mois</TableCell>
                             <TableCell>{paid.toLocaleString()} Ar</TableCell>
-                            <TableCell className={rest > 0 ? 'text-destructive font-medium' : 'text-green-600'}>
+                            <TableCell className={rest > 0 ? 'text-destructive font-medium' : 'text-emerald-600'}>
                               {rest > 0 ? `${rest.toLocaleString()} Ar` : '0 Ar'}
                             </TableCell>
                             <TableCell>
@@ -934,7 +890,7 @@ export function StudentDetailPage() {
                           <TableCell>{fee.amount.toLocaleString()} Ar</TableCell>
                           <TableCell>{paid.toLocaleString()} Ar</TableCell>
                           <TableCell
-                            className={rest > 0 ? 'text-destructive font-medium' : 'text-green-600'}
+                            className={rest > 0 ? 'text-destructive font-medium' : 'text-emerald-600'}
                           >
                             {rest.toLocaleString()} Ar
                           </TableCell>
@@ -1023,8 +979,8 @@ export function StudentDetailPage() {
                 <TableBody>
                   {(payments ?? []).length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                        Aucun paiement enregistré
+                      <TableCell colSpan={8}>
+                        <EmptyState title="Aucun paiement enregistré" className="py-8" />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -1452,7 +1408,10 @@ export function StudentDetailPage() {
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-center text-muted-foreground py-8">Aucun document ajouté</p>
+                <EmptyState
+                  title="Aucun document ajouté"
+                  description="Ajoutez les pièces du dossier de l'élève (acte de naissance, certificats…)."
+                />
               )}
             </CardContent>
           </Card>

@@ -5,14 +5,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { fileToSquareLogoDataUrl } from '@/lib/image-utils'
 import { ReloadIcon } from '@radix-ui/react-icons'
 import client from '@/api/client'
 
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -20,20 +19,17 @@ import {
 } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
-import { performSync } from '@/lib/db/sync-manager'
 import { getTenantSetting, setTenantSetting } from '@/lib/tenant-settings'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { PageHeader, FormSection } from '@/components/layout/page'
+import { UpdatesCard } from '@/components/layout/UpdatesCard'
 
 interface SchoolSettings {
   schoolName: string
@@ -103,34 +99,41 @@ export const SettingsPage = () => {
   const [savingGeneral, setSavingGeneral] = useState(false)
   const [savingAcademic, setSavingAcademic] = useState(false)
   const [savingSecurity, setSavingSecurity] = useState(false)
-  const [savingPayment, setSavingPayment] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
+  const [logoDragOver, setLogoDragOver] = useState(false)
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingLogo(true)
     try {
-      const api = (window as any).api
-      if (!api?.file) { toast.error('Upload non disponible'); return }
-      const buffer = await file.arrayBuffer()
-      const result = await api.file.save({
-        buffer, entityType: 'School', entityId: 'logo',
-        fieldName: 'logo', originalName: file.name, mimeType: file.type,
-      })
-      const localUrl = await api.file.getUrl((result as any).local_path)
-      if (localUrl) {
-        const raw = await getTenantSetting('school')
-        const school = raw ? JSON.parse(raw) : {}
-        await setTenantSetting('school', JSON.stringify({ ...school, logoUrl: localUrl }))
-        queryClient.invalidateQueries({ queryKey: ['settings-school'] })
-        toast.success('Logo mis à jour')
-      }
+      // Data URL plutôt que fichier sur disque : survit aux redémarrages
+      // (l'index des fichiers était en mémoire volatile) et alimente
+      // directement les PDF (bulletins, reçus).
+      // Carré normalisé : affichage net dans tous les cadres carrés de l'app.
+      const logoDataUrl = await fileToSquareLogoDataUrl(file, 256)
+      const raw = await getTenantSetting('school')
+      const school = raw ? JSON.parse(raw) : {}
+      await setTenantSetting('school', JSON.stringify({ ...school, logoUrl: logoDataUrl }))
+      queryClient.invalidateQueries({ queryKey: ['settings-school'] })
+      toast.success('Logo mis à jour')
     } catch {
       toast.error("Erreur lors de l'upload du logo")
     } finally {
       setUploadingLogo(false)
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    try {
+      const raw = await getTenantSetting('school')
+      const school = raw ? JSON.parse(raw) : {}
+      await setTenantSetting('school', JSON.stringify({ ...school, logoUrl: '' }))
+      queryClient.invalidateQueries({ queryKey: ['settings-school'] })
+      toast.success('Logo retiré')
+    } catch {
+      toast.error('Erreur lors de la suppression du logo')
     }
   }
 
@@ -158,7 +161,7 @@ export const SettingsPage = () => {
     }
   })
 
-  const { data: periodSystem, isLoading: loadingPeriodSystem } = useQuery({
+  const { data: periodSystem } = useQuery({
     queryKey: ['settings-period-system'],
     queryFn: async () => {
       const raw = await getTenantSetting('period_system')
@@ -269,28 +272,7 @@ export const SettingsPage = () => {
     toast.success('Système de périodes mis à jour')
   }
 
-  async function handleSavePaymentConfig(values: PaymentValues) {
-    setSavingPayment(true)
-    try {
-      await setTenantSetting('payment_config', JSON.stringify(values))
-      queryClient.invalidateQueries({ queryKey: ['settings-payment'] })
-      toast.success('Configuration des paiements enregistrée')
-    } catch {
-      toast.error('Erreur lors de l\'enregistrement')
-    } finally {
-      setSavingPayment(false)
-    }
-  }
 
-  async function handleForceSync() {
-    try {
-      await performSync()
-      queryClient.invalidateQueries({ queryKey: ['settings-sync-info'] })
-      toast.success('Synchronisation lancée')
-    } catch {
-      toast.error('Erreur lors de la synchronisation')
-    }
-  }
 
   async function handleChangePassword(values: SecurityValues) {
     setSavingSecurity(true)
@@ -309,21 +291,22 @@ export const SettingsPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Paramètres</h2>
-          <p className="text-muted-foreground">Configurer les paramètres de l'établissement</p>
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleRefresh}
-          disabled={isLoading}
-        >
-          <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Paramètres"
+        description="Configurer les paramètres de l'établissement"
+        actions={
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            aria-label="Rafraîchir"
+          >
+            <ReloadIcon className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+        }
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -332,216 +315,262 @@ export const SettingsPage = () => {
           <TabsTrigger value="security">Sécurité</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Informations générales</CardTitle>
-              <CardDescription>Nom de l'établissement et configuration de base</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...generalForm}>
-                <form id="general-form" onSubmit={generalForm.handleSubmit(handleSaveGeneral)} className="space-y-4">
-                  <FormField
-                    control={generalForm.control}
-                    name="schoolName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom de l'établissement</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ex: École Internationale de Paris" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="space-y-2">
-                    <Label>Logo de l'établissement</Label>
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed text-muted-foreground text-sm overflow-hidden">
-                        {schoolData?.logoUrl ? (
-                          <img src={schoolData.logoUrl} alt="Logo" className="h-full w-full rounded-lg object-contain" />
-                        ) : (
-                          'Aucun logo'
-                        )}
-                      </div>
-                      <input
-                        ref={logoInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleLogoUpload}
-                      />
-                      <Button variant="outline" type="button" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
-                        {uploadingLogo ? 'Upload...' : 'Télécharger'}
-                      </Button>
+        <TabsContent value="general" className="mt-4 space-y-6">
+          <Form {...generalForm}>
+            <form onSubmit={generalForm.handleSubmit(handleSaveGeneral)}>
+              <FormSection
+                title="Informations générales"
+                description="Nom de l'établissement et configuration de base"
+                columns={2}
+              >
+                <FormField
+                  control={generalForm.control}
+                  name="schoolName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nom de l'établissement</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: École Internationale de Paris" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Logo de l'établissement</Label>
+                  <div className="flex items-start gap-5">
+                    {/* La vignette EST le contrôle : clic ou dépôt d'image, survol
+                        pour l'indication — même langage que la photo d'identité. */}
+                    <div
+                      role="button"
+                      tabIndex={uploadingLogo ? -1 : 0}
+                      aria-label={schoolData?.logoUrl ? 'Changer le logo' : 'Ajouter un logo'}
+                      onClick={() => !uploadingLogo && logoInputRef.current?.click()}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); logoInputRef.current?.click() } }}
+                      onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true) }}
+                      onDragLeave={() => setLogoDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault(); setLogoDragOver(false)
+                        const file = e.dataTransfer.files?.[0]
+                        if (file && logoInputRef.current) {
+                          const dt = new DataTransfer(); dt.items.add(file)
+                          logoInputRef.current.files = dt.files
+                          logoInputRef.current.dispatchEvent(new Event('change', { bubbles: true }))
+                        }
+                      }}
+                      className={cn(
+                        'group relative flex h-28 w-28 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 bg-muted/60 transition-colors',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                        schoolData?.logoUrl ? 'border-transparent bg-card' : 'border-dashed border-border hover:border-primary/60 hover:bg-accent',
+                        logoDragOver && 'border-primary bg-accent',
+                        uploadingLogo && 'cursor-wait',
+                      )}
+                    >
+                      {schoolData?.logoUrl ? (
+                        <>
+                          <img src={schoolData.logoUrl} alt="Logo" className="h-full w-full object-contain p-2" />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/45 group-hover:opacity-100">
+                            <ImagePlus className="h-6 w-6" />
+                            <span className="text-xs font-medium">Changer</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5 px-2 text-center text-muted-foreground">
+                          <ImagePlus className="h-7 w-7" />
+                          <span className="text-[11px] leading-tight">Cliquer ou déposer une image</span>
+                        </div>
+                      )}
+                      {uploadingLogo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoUpload}
+                    />
+                    <div className="space-y-1.5 pt-1 text-sm">
+                      <p className="font-medium">{schoolData?.logoUrl ? 'Logo en place' : 'Aucun logo'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        PNG, JPG ou SVG, fond transparent de préférence. Il apparaît dans le menu, sur les bulletins, reçus et exports.
+                      </p>
+                      {schoolData?.logoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleLogoRemove}
+                          disabled={uploadingLogo}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Retirer le logo
+                        </button>
+                      )}
                     </div>
                   </div>
-                </form>
-              </Form>
-            </CardContent>
-            <CardFooter className="border-t px-6 py-4">
-              <Button type="submit" form="general-form" disabled={savingGeneral}>
-                {savingGeneral ? (
-                  <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
-                ) : 'Enregistrer'}
-              </Button>
-            </CardFooter>
-          </Card>
+                </div>
+                <div className="flex justify-end sm:col-span-2">
+                  <Button type="submit" disabled={savingGeneral}>
+                    {savingGeneral ? (
+                      <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
+                    ) : 'Enregistrer'}
+                  </Button>
+                </div>
+              </FormSection>
+            </form>
+          </Form>
+
+          <UpdatesCard />
         </TabsContent>
 
-        <TabsContent value="academic" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Année scolaire en cours</CardTitle>
-              <CardDescription>Gérer l'année scolaire, les périodes et les congés</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <Form {...academicForm}>
-                <form id="academic-form" onSubmit={academicForm.handleSubmit(handleSaveAcademic)} className="space-y-4">
-                  <FormField
-                    control={academicForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom de l'année scolaire</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ex: 2025-2026" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={academicForm.control}
-                      name="startDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Date de début</FormLabel>
-                          <FormControl>
-                            <DatePicker
-                              value={field.value}
-                              onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={academicForm.control}
-                      name="endDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Date de fin</FormLabel>
-                          <FormControl>
-                            <DatePicker
-                              value={field.value}
-                              onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </form>
-              </Form>
+        <TabsContent value="academic" className="mt-4 space-y-6">
+          <Form {...academicForm}>
+            <form onSubmit={academicForm.handleSubmit(handleSaveAcademic)}>
+              <FormSection
+                title="Année scolaire en cours"
+                description="Gérer l'année scolaire, les périodes et les congés"
+                columns={2}
+              >
+                <FormField
+                  control={academicForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Nom de l'année scolaire</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: 2025-2026" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={academicForm.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date de début</FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          value={field.value}
+                          onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={academicForm.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date de fin</FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          value={field.value}
+                          onChange={(d) => field.onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end sm:col-span-2">
+                  <Button type="submit" disabled={savingAcademic}>
+                    {savingAcademic ? (
+                      <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
+                    ) : 'Enregistrer'}
+                  </Button>
+                </div>
+              </FormSection>
+            </form>
+          </Form>
 
-              <Separator />
-
-              <div className="space-y-3">
-                <Label>Système de périodes</Label>
-                <p className="text-sm text-muted-foreground">
-                  Définit le découpage de l'année scolaire en périodes d'évaluation
-                </p>
-                <Select
-                  value={periodSystem || 'TRIMESTER'}
-                  onValueChange={(v) => handleSavePeriodSystem(v as PeriodSystem)}
-                >
-                  <SelectTrigger className="w-[280px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(['TRIMESTER', 'SEMESTER', 'BIMESTER'] as PeriodSystem[]).map((s) => (
-                      <SelectItem key={s} value={s}>{periodSystemLabels[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-            </CardContent>
-            <CardFooter className="border-t px-6 py-4">
-              <Button type="submit" form="academic-form" disabled={savingAcademic}>
-                {savingAcademic ? (
-                  <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
-                ) : 'Enregistrer'}
-              </Button>
-            </CardFooter>
-          </Card>
+          <FormSection
+            title="Système de périodes"
+            description="Définit le découpage de l'année scolaire en périodes d'évaluation (enregistré immédiatement)"
+            columns={2}
+          >
+            <div className="space-y-2">
+              <Label>Découpage</Label>
+              <Select
+                value={periodSystem || 'TRIMESTER'}
+                onValueChange={(v) => handleSavePeriodSystem(v as PeriodSystem)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(['TRIMESTER', 'SEMESTER', 'BIMESTER'] as PeriodSystem[]).map((s) => (
+                    <SelectItem key={s} value={s}>{periodSystemLabels[s]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </FormSection>
         </TabsContent>
 
-
-
-        <TabsContent value="security" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Changer le mot de passe</CardTitle>
-              <CardDescription>Mettez à jour votre mot de passe régulièrement</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...securityForm}>
-                <form id="security-form" onSubmit={securityForm.handleSubmit(handleChangePassword)} className="space-y-4">
-                  <FormField
-                    control={securityForm.control}
-                    name="currentPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Mot de passe actuel</FormLabel>
-                        <FormControl>
-                          <PasswordInput placeholder="••••••••" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={securityForm.control}
-                    name="newPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nouveau mot de passe</FormLabel>
-                        <FormControl>
-                          <PasswordInput placeholder="Minimum 6 caractères" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={securityForm.control}
-                    name="confirmPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirmer le mot de passe</FormLabel>
-                        <FormControl>
-                          <PasswordInput placeholder="Répétez le mot de passe" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </form>
-              </Form>
-            </CardContent>
-            <CardFooter className="border-t px-6 py-4">
-              <Button type="submit" form="security-form" disabled={savingSecurity}>
-                {savingSecurity ? (
-                  <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
-                ) : 'Changer le mot de passe'}
-              </Button>
-            </CardFooter>
-          </Card>
+        <TabsContent value="security" className="mt-4 space-y-6">
+          <Form {...securityForm}>
+            <form onSubmit={securityForm.handleSubmit(handleChangePassword)}>
+              <FormSection
+                title="Changer le mot de passe"
+                description="Mettez à jour votre mot de passe régulièrement"
+                columns={2}
+              >
+                <FormField
+                  control={securityForm.control}
+                  name="currentPassword"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Mot de passe actuel</FormLabel>
+                      <FormControl>
+                        <PasswordInput placeholder="••••••••" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={securityForm.control}
+                  name="newPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nouveau mot de passe</FormLabel>
+                      <FormControl>
+                        <PasswordInput placeholder="Minimum 6 caractères" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={securityForm.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirmer le mot de passe</FormLabel>
+                      <FormControl>
+                        <PasswordInput placeholder="Répétez le mot de passe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end sm:col-span-2">
+                  <Button type="submit" disabled={savingSecurity}>
+                    {savingSecurity ? (
+                      <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
+                    ) : 'Changer le mot de passe'}
+                  </Button>
+                </div>
+              </FormSection>
+            </form>
+          </Form>
         </TabsContent>
       </Tabs>
     </div>

@@ -3,14 +3,16 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity, queryEntities } from '@/lib/db/pouchdb-compat'
+import { saveEntity } from '@/lib/db/pouchdb-compat'
+import client, { extractErrorMessage } from '@/api/client'
+import { CredentialsDialog, type Credentials } from '@/components/credentials-dialog'
 import type { Teacher } from '@/types'
 import { cn } from '@/lib/utils'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ReloadIcon, ArrowLeftIcon } from '@radix-ui/react-icons'
+import { ReloadIcon, CheckIcon } from '@radix-ui/react-icons'
+import { PageHeader, FormShell, FormSection } from '@/components/layout/page'
 
 export function TeacherFormPage() {
   const navigate = useNavigate()
@@ -23,15 +25,32 @@ export function TeacherFormPage() {
   const [email, setEmail] = useState('')
   const [phones, setPhones] = useState<string[]>([])
   const [phoneInput, setPhoneInput] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [specialty, setSpecialty] = useState('')
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([])
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([])
+  const [credentials, setCredentials] = useState<Credentials | null>(null)
 
-  const { data: classes, loading: loadingClasses } = useLocalQuery<{ id: string; name: string }>('Class')
-  const { data: subjects, loading: loadingSubjects } = useLocalQuery<{ id: string; name: string }>('Subject')
-  const { data: allTeachers, loading: loadingTeachers } = useLocalQuery<Teacher>('Teacher')
+  const { data: classesRaw, loading: loadingClasses } = useLocalQuery<{ id: string; name: string; level?: string | null; deletedAt?: string | null }>('Class')
+  const { data: subjectsRaw, loading: loadingSubjects } = useLocalQuery<{ id: string; name: string; level?: string | null; code?: string | null; deletedAt?: string | null }>('Subject')
+  const { data: levels } = useLocalQuery<{ id: string; name: string; sortOrder?: number }>('Level')
+
+  // Classes triées par niveau (ordre pédagogique) puis par nom.
+  const levelOrder = new Map((levels ?? []).map((l) => [l.name, l.sortOrder ?? 0]))
+  const classes = (classesRaw ?? [])
+    .filter((c) => !c.deletedAt)
+    .sort((a, b) => (levelOrder.get(a.level ?? '') ?? 99) - (levelOrder.get(b.level ?? '') ?? 99) || a.name.localeCompare(b.name))
+  // Matières groupées par niveau ; quand des classes sont cochées, on ne
+  // propose que les matières de leurs niveaux (une matière « Malagasy »
+  // existe par niveau : sans le niveau, la liste était illisible).
+  const selectedLevels = new Set(classes.filter((c) => selectedClassIds.includes(c.id)).map((c) => c.level ?? ''))
+  const subjects = (subjectsRaw ?? []).filter((s) => !s.deletedAt)
+  const subjectGroups = Array.from(
+    subjects.reduce((m, s) => { const k = s.level ?? 'Sans niveau'; if (!m.has(k)) m.set(k, []); m.get(k)!.push(s); return m }, new Map<string, typeof subjects>())
+  )
+    .filter(([lvl]) => selectedLevels.size === 0 || selectedLevels.has(lvl))
+    .sort((a, b) => (levelOrder.get(a[0]) ?? 99) - (levelOrder.get(b[0]) ?? 99))
+    .map(([lvl, list]) => [lvl, [...list].sort((a, b) => a.name.localeCompare(b.name))] as const)
+  const { data: allTeachers } = useLocalQuery<Teacher>('Teacher')
 
   const existingTeacher = isEdit ? allTeachers?.find((t) => t.id === id) : null
 
@@ -81,10 +100,34 @@ export function TeacherFormPage() {
             user_email: email || null,
           })
         }
-        return
+        return null
       }
-      const teacherId = crypto.randomUUID()
-      const userId = crypto.randomUUID()
+      // EN LIGNE avec un e-mail : le serveur crée le compte + la fiche, génère
+      // un mot de passe temporaire (affiché ici, envoyé par e-mail à
+      // l'enseignant). Le mot de passe ne transite jamais par un document
+      // synchronisé. Hors ligne : création locale, mot de passe à définir plus tard.
+      let serverTeacher: { id: string; userId: string; temporaryPassword?: string | null; credentialsEmailed?: boolean } | null = null
+      if (email.trim() && navigator.onLine) {
+        try {
+          const { data } = await client.post('/teachers', {
+            email: email.trim().toLowerCase(),
+            firstName: firstName || undefined,
+            lastName,
+            phones,
+            specialty: specialty || undefined,
+            classIds: selectedClassIds,
+            subjectIds: selectedSubjectIds,
+          })
+          serverTeacher = data
+        } catch (err: any) {
+          if (err?.response) throw err // refus du serveur (e-mail déjà pris…) : on remonte
+        }
+      }
+      const teacherId = serverTeacher?.id ?? crypto.randomUUID()
+      const userId = serverTeacher?.userId ?? crypto.randomUUID()
+      const credentials: Credentials | null = serverTeacher?.temporaryPassword
+        ? { name: `${firstName} ${lastName}`.trim(), email: email.trim().toLowerCase(), password: serverTeacher.temporaryPassword, emailed: !!serverTeacher.credentialsEmailed }
+        : null
       const tenantId = localStorage.getItem('tenantId')
       const userPhones: { _id: string; userId: string; value: string; sortOrder: number }[] = phones.map(
         (v, i) => ({ _id: crypto.randomUUID(), userId, value: v, sortOrder: i + 1 })
@@ -98,7 +141,8 @@ export function TeacherFormPage() {
         role: 'TEACHER',
         tenantId,
         isActive: true,
-        passwordHash: password || Math.random().toString(36).slice(2, 10) + 'A1!',
+        // Pas de mot de passe dans le document synchronisé (il partirait en
+        // clair dans CouchDB) — les identifiants se définissent en ligne.
         phones: userPhones,
         user_firstName: firstName,
         user_lastName: lastName,
@@ -117,13 +161,22 @@ export function TeacherFormPage() {
         user_email: email || null,
         ...phones.reduce((acc, p, i) => ({ ...acc, [`user_phone_${i}`]: p }), {} as Record<string, string>),
       })
+      return credentials
     },
-    onSuccess: () => {
+    onSuccess: (creds) => {
       queryClient.invalidateQueries({ queryKey: ['teacher-list'] })
-      toast.success(isEdit ? 'Enseignant modifié' : 'Enseignant ajouté')
+      if (creds) {
+        setCredentials(creds)
+        return
+      }
+      toast.success(isEdit ? 'Enseignant modifié' : 'Enseignant ajouté', isEdit ? undefined : {
+        description: email.trim()
+          ? 'Créé hors ligne : le mot de passe se définira en ligne (Gestion des utilisateurs, bouton clé).'
+          : 'Sans e-mail, aucun accès n’a été généré : ajoutez un e-mail pour créer un compte de connexion.',
+      })
       navigate('/teachers/list')
     },
-    onError: () => toast.error('Erreur lors de l\'enregistrement'),
+    onError: (err) => toast.error(extractErrorMessage(err, "Erreur lors de l'enregistrement")),
   })
 
   function addPhone() {
@@ -146,50 +199,54 @@ export function TeacherFormPage() {
     saveMutation.mutate()
   }
 
-  const isLoading = isEdit && !existingTeacher
-
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/teachers/list')}>
-          <ArrowLeftIcon className="h-4 w-4" />
-        </Button>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {isEdit ? 'Modifier l\'enseignant' : 'Ajouter un enseignant'}
-          </h2>
-          <p className="text-muted-foreground">
-            {isEdit ? 'Modifier les informations de l\'enseignant' : 'Créer un nouveau compte enseignant'}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/teachers/list"
+        title={isEdit ? 'Modifier l\'enseignant' : 'Ajouter un enseignant'}
+        description={isEdit ? 'Modifier les informations de l\'enseignant' : 'Créer un nouveau compte enseignant'}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations personnelles</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Prénom</label>
-              <Input
-                placeholder="Prénom"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Nom de famille <span className="text-red-500">*</span>
-              </label>
-              <Input
-                placeholder="Nom de famille"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
-            </div>
+      <FormShell
+        actions={
+          <>
+            <Button type="button" variant="outline" onClick={() => navigate('/teachers/list')}>
+              Annuler
+            </Button>
+            <Button type="button" onClick={handleSubmit} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? (
+                <>
+                  <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : isEdit ? 'Enregistrer' : 'Créer l\'enseignant'}
+            </Button>
+          </>
+        }
+      >
+        <FormSection
+          title="Informations personnelles"
+          description="Identité et adresse email du compte enseignant"
+          columns={2}
+        >
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Prénom</label>
+            <Input
+              placeholder="Prénom"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
           </div>
-
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Nom de famille <span className="text-destructive">*</span>
+            </label>
+            <Input
+              placeholder="Nom de famille"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+          </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Email</label>
             <Input
@@ -199,7 +256,18 @@ export function TeacherFormPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+          {/* Pas de champ mot de passe : ce formulaire écrit un document
+              local synchronisé — un mot de passe y serait répliqué en clair.
+              Les identifiants de connexion se définissent en ligne. */}
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            En ligne, un mot de passe temporaire est généré à la création, affiché
+            ici et envoyé par e-mail à l'enseignant (à changer à sa première
+            connexion). Hors ligne, il se définira plus tard via Gestion des
+            utilisateurs.
+          </p>
+        </FormSection>
 
+        <FormSection title="Téléphones" description="Jusqu'à 3 numéros de contact" columns={1}>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
               Téléphone(s) <span className="text-xs text-muted-foreground">(max 3)</span>
@@ -212,6 +280,7 @@ export function TeacherFormPage() {
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addPhone())}
               />
               <Button
+                type="button"
                 variant="secondary"
                 onClick={addPhone}
                 disabled={phones.length >= 3 || !phoneInput.trim()}
@@ -220,7 +289,7 @@ export function TeacherFormPage() {
               </Button>
             </div>
             {phones.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {phones.map((phone, i) => (
                   <span
                     key={i}
@@ -228,6 +297,7 @@ export function TeacherFormPage() {
                   >
                     {phone}
                     <button
+                      type="button"
                       onClick={() => removePhone(i)}
                       className="ml-1 text-muted-foreground hover:text-foreground"
                     >
@@ -238,41 +308,9 @@ export function TeacherFormPage() {
               </div>
             )}
           </div>
+        </FormSection>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Mot de passe</label>
-            <div className="relative">
-              <Input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pr-20"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? 'Masquer' : 'Afficher'}
-              </Button>
-            </div>
-            {!isEdit && !password && (
-              <p className="text-xs text-muted-foreground">
-                Si vide, un mot de passe aléatoire sera généré.
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations enseignant</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <FormSection title="Spécialité" columns={2}>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Spécialité</label>
             <Input
@@ -281,11 +319,17 @@ export function TeacherFormPage() {
               onChange={(e) => setSpecialty(e.target.value)}
             />
           </div>
+        </FormSection>
 
+        <FormSection
+          title="Classes et matières"
+          description="Classes affectées et matières enseignées"
+          columns={2}
+        >
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Classes affectées</label>
-            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto rounded-lg border p-2">
-              {(classes ?? []).map((cls) => {
+            <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-lg border p-2">
+              {classes.map((cls) => {
                 const checked = selectedClassIds.includes(cls.id)
                 return (
                   <label
@@ -305,7 +349,8 @@ export function TeacherFormPage() {
                         )
                       }}
                     />
-                    {checked ? '✓ ' : ''}{cls.name}
+                    {checked && <CheckIcon className="h-3.5 w-3.5" />}{cls.name}
+                    {cls.level && <span className="text-[11px] font-normal text-muted-foreground">{cls.level}</span>}
                   </label>
                 )
               })}
@@ -320,31 +365,43 @@ export function TeacherFormPage() {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Matières enseignées</label>
-            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto rounded-lg border p-2">
-              {(subjects ?? []).map((subj) => {
-                const checked = selectedSubjectIds.includes(subj.id)
-                return (
-                  <label
-                    key={subj.id}
-                    className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                      checked ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary'
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={checked}
-                      onChange={() => {
-                        setSelectedSubjectIds((prev) =>
-                          checked ? prev.filter((s) => s !== subj.id) : [...prev, subj.id]
-                        )
-                      }}
-                    />
-                    {checked ? '✓ ' : ''}{subj.name}
-                  </label>
-                )
-              })}
+            <div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border p-2">
+              {subjectGroups.length === 0 && !loadingSubjects && (
+                <p className="px-1 text-sm text-muted-foreground">
+                  {subjects.length === 0 ? 'Aucune matière définie.' : 'Aucune matière pour les niveaux des classes cochées.'}
+                </p>
+              )}
+              {subjectGroups.map(([lvl, list]) => (
+                <div key={lvl}>
+                  <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{lvl}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {list.map((subj) => {
+                      const checked = selectedSubjectIds.includes(subj.id)
+                      return (
+                        <label
+                          key={subj.id}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                            checked ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary'
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedSubjectIds((prev) =>
+                                checked ? prev.filter((s) => s !== subj.id) : [...prev, subj.id]
+                              )
+                            }}
+                          />
+                          {checked && <CheckIcon className="h-3.5 w-3.5" />}{subj.name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
               {loadingSubjects && <span className="text-sm text-muted-foreground">Chargement...</span>}
             </div>
             {selectedSubjectIds.length > 0 && (
@@ -353,22 +410,9 @@ export function TeacherFormPage() {
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex gap-3">
-        <Button onClick={handleSubmit} disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? (
-            <>
-              <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-              Enregistrement...
-            </>
-          ) : isEdit ? 'Enregistrer' : 'Créer l\'enseignant'}
-        </Button>
-        <Button variant="outline" onClick={() => navigate('/teachers/list')}>
-          Annuler
-        </Button>
-      </div>
+        </FormSection>
+      </FormShell>
+      <CredentialsDialog credentials={credentials} onClose={() => { setCredentials(null); navigate('/teachers/list') }} />
     </div>
   )
 }

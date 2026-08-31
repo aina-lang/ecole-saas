@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useAuthStore } from '@/stores/auth-store'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { getDocument, putDocument } from '@/lib/db/pouchdb'
+import { fileToResizedDataUrl } from '@/lib/image-utils'
 import { useLocalQuery } from '@/lib/db/hooks'
-import { saveEntity } from '@/lib/db/pouchdb-compat'
-import type { Subject } from '@/types'
-import { formatSubjectLabel } from '@/lib/subject'
+import { saveEntity, getEntityById } from '@/lib/db/pouchdb-compat'
+import client, { extractErrorMessage } from '@/api/client'
+import { CredentialsDialog, type Credentials } from '@/components/credentials-dialog'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PasswordInput } from '@/components/ui/password-input'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
@@ -26,6 +25,7 @@ import {
 } from '@/components/ui/form'
 import { PlusIcon, Cross2Icon } from '@radix-ui/react-icons'
 import { PhotoUpload } from '@/components/ui/photo-upload'
+import { PageHeader, FormShell, FormSection } from '@/components/layout/page'
 
 interface Option {
   id: string
@@ -97,7 +97,6 @@ const userFormSchema = z.object({
   firstName: z.string().optional().or(z.literal('')),
   lastName: z.string().min(1, 'Le nom est requis'),
   role: z.enum(['ADMIN', 'TEACHER', 'SECRETARY', 'PARENT']),
-  password: z.string().min(6, 'Minimum 6 caractères').optional().or(z.literal('')),
   specialty: z.string().optional().or(z.literal(''))
 })
 
@@ -108,15 +107,34 @@ export function UserFormPage() {
   const { id } = useParams()
   const queryClient = useQueryClient()
   const isEditing = !!id
+  const currentUserId = useAuthStore((s) => s.user?.id)
+  // Son propre compte : le rôle ne se change pas soi-même (un admin qui se
+  // rétrograde par erreur se verrouillerait hors de l'administration).
+  const isOwnAccount = isEditing && !!currentUserId && id === currentUserId
 
   const [phoneInputs, setPhoneInputs] = useState<string[]>([''])
   const [teacherClassIds, setTeacherClassIds] = useState<string[]>([])
   const [teacherSubjectIds, setTeacherSubjectIds] = useState<string[]>([])
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
+  const [credentials, setCredentials] = useState<Credentials | null>(null)
 
-  const { data: classes } = useLocalQuery<Option>('Class')
+  const { data: classesRaw } = useLocalQuery<Option & { level?: string | null; deletedAt?: string | null }>('Class')
+  const { data: subjectsRaw } = useLocalQuery<Option & { level?: string | null; deletedAt?: string | null }>('Subject')
+  const { data: levels } = useLocalQuery<{ id: string; name: string; sortOrder?: number }>('Level')
 
-  const { data: subjects } = useLocalQuery<Option>('Subject')
+  // Classes triées par niveau, libellé « 6ème A · 6ème » ; matières nommées
+  // avec leur niveau (une matière existe par niveau) et limitées aux niveaux
+  // des classes cochées.
+  const levelOrder = new Map((levels ?? []).map((l) => [l.name, l.sortOrder ?? 0]))
+  const classes: Option[] = (classesRaw ?? [])
+    .filter((c) => !c.deletedAt)
+    .sort((a, b) => (levelOrder.get(a.level ?? '') ?? 99) - (levelOrder.get(b.level ?? '') ?? 99) || a.name.localeCompare(b.name))
+    .map((c) => ({ id: c.id, name: c.level && !c.name.includes(c.level) ? `${c.name} · ${c.level}` : c.name }))
+  const selectedLevels = new Set((classesRaw ?? []).filter((c) => teacherClassIds.includes(c.id)).map((c) => c.level ?? ''))
+  const subjects: Option[] = (subjectsRaw ?? [])
+    .filter((s) => !s.deletedAt && (selectedLevels.size === 0 || selectedLevels.has(s.level ?? '')))
+    .sort((a, b) => (levelOrder.get(a.level ?? '') ?? 99) - (levelOrder.get(b.level ?? '') ?? 99) || a.name.localeCompare(b.name))
+    .map((s) => ({ id: s.id, name: s.level ? `${s.name} · ${s.level}` : s.name }))
 
   const { data: user } = useQuery({
     queryKey: ['user', id],
@@ -126,8 +144,6 @@ export function UserFormPage() {
     enabled: isEditing
   })
 
-  const defaultPassword = Math.random().toString(36).slice(2, 10)
-
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -135,7 +151,6 @@ export function UserFormPage() {
       firstName: '',
       lastName: '',
       role: 'ADMIN',
-      password: isEditing ? '' : defaultPassword,
       specialty: ''
     }
   })
@@ -157,25 +172,10 @@ export function UserFormPage() {
         setPendingPhoto(file)
         return { url: '' }
       }
-      const api = window.api
-      if (api?.file) {
-        const buffer = await file.arrayBuffer()
-        const result = await api.file.save({
-          buffer,
-          entityType: 'User',
-          entityId: id,
-          fieldName: 'photo_url',
-          originalName: file.name,
-          mimeType: file.type,
-        })
-        const localUrl = await api.file.getUrl((result as any).local_path)
-        const existing = await getDocument('User', id)
-        if (existing) {
-          await putDocument('User', { ...existing, photoUrl: localUrl })
-        }
-        return { url: localUrl || '' }
-      }
-      return { url: '' }
+      // Data URL dans le document synchronisé (propagation multi-postes).
+      const photoDataUrl = await fileToResizedDataUrl(file)
+      await saveEntity('User', { id, photoUrl: photoDataUrl })
+      return { url: photoDataUrl }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -186,10 +186,7 @@ export function UserFormPage() {
   const deletePhotoMutation = useMutation({
     mutationFn: async () => {
       if (!id) return null
-      const existing = await getDocument('User', id)
-      if (existing) {
-        await putDocument('User', { ...existing, photoUrl: null })
-      }
+      await saveEntity('User', { id, photoUrl: null })
       return { success: true }
     },
     onSuccess: () => {
@@ -206,7 +203,6 @@ export function UserFormPage() {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        password: '',
         specialty: user.teacher?.specialty || ''
       })
       const parts = (user.phones ?? []).map((p: { value: string }) => p.value.trim()).filter(Boolean)
@@ -246,9 +242,36 @@ export function UserFormPage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: async (values: UserFormValues) => {
-      const localId = crypto.randomUUID()
+    mutationFn: async (values: UserFormValues): Promise<{ id: string; credentials: Credentials | null }> => {
       const phones = syncPhoneValue(phoneInputs)
+      const name = `${values.firstName ?? ''} ${values.lastName}`.trim()
+
+      // EN LIGNE avec un e-mail : le serveur crée le compte, génère un mot de
+      // passe temporaire (affiché ici, envoyé par e-mail) et propage le
+      // document vers les postes. Le mot de passe ne transite jamais par un
+      // document synchronisé.
+      let serverId: string | null = null
+      let credentials: Credentials | null = null
+      if (values.email && navigator.onLine) {
+        try {
+          const { data } = await client.post('/users', {
+            email: values.email,
+            firstName: values.firstName || undefined,
+            lastName: values.lastName,
+            role: values.role,
+            phones,
+          })
+          serverId = data.id
+          if (data.temporaryPassword) {
+            credentials = { name, email: data.email, password: data.temporaryPassword, emailed: !!data.credentialsEmailed }
+          }
+        } catch (err: any) {
+          // Serveur injoignable : on retombe sur la création locale (hors ligne).
+          if (err?.response) throw err
+        }
+      }
+
+      const localId = serverId ?? crypto.randomUUID()
       const payload: Record<string, unknown> = {
         id: localId,
         lastName: values.lastName,
@@ -256,52 +279,41 @@ export function UserFormPage() {
       }
       if (values.firstName) payload.firstName = values.firstName
       if (values.email) payload.email = values.email
-      if (values.password) payload.password = values.password
+      // Ne JAMAIS mettre le mot de passe dans le document PouchDB : il serait
+      // répliqué en clair vers CouchDB et tous les postes du tenant.
+      await saveEntity('User', { ...payload, role: values.role })
       if (values.role === 'TEACHER') {
-        await saveEntity('User', {
-          ...payload,
-          role: values.role
-        })
         await saveEntity('Teacher', {
           ...payload,
-          specialty: values.specialty || undefined,
+          id: crypto.randomUUID(),
+          userId: localId,
+          specialty: values.specialty || null,
           classIds: teacherClassIds,
           subjectIds: teacherSubjectIds
         })
-      } else {
-        await saveEntity('User', {
-          ...payload,
-          role: values.role
-        })
       }
       if (pendingPhoto) {
-        const api = window.api
-        if (api?.file) {
-          try {
-            const buffer = await pendingPhoto.arrayBuffer()
-            const result = await api.file.save({
-              buffer,
-              entityType: 'User',
-              entityId: localId,
-              fieldName: 'photo_url',
-              originalName: pendingPhoto.name,
-              mimeType: pendingPhoto.type,
-            })
-            const localUrl = await api.file.getUrl((result as any).local_path)
-            const existing = await getDocument('User', localId)
-            if (existing) {
-              await putDocument('User', { ...existing, photoUrl: localUrl })
-            }
-          } catch { /* ok */ }
-        }
+        try {
+          // Data URL dans le document synchronisé (propagation multi-postes).
+          const photoDataUrl = await fileToResizedDataUrl(pendingPhoto)
+          await saveEntity('User', { id: localId, photoUrl: photoDataUrl })
+        } catch { /* ok */ }
         setPendingPhoto(null)
       }
-      return localId
+      return { id: localId, credentials }
     },
-    onSuccess: () => {
+    onSuccess: ({ credentials }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-      toast.success('Utilisateur créé avec succès')
-      navigate('/administration/users')
+      if (credentials) {
+        setCredentials(credentials)
+      } else {
+        toast.success('Utilisateur créé', {
+          description: navigator.onLine
+            ? 'Sans e-mail, aucun mot de passe n’a été généré : définissez-le via le bouton clé.'
+            : 'Créé hors ligne : le mot de passe se définira en ligne (bouton clé).',
+        })
+        navigate('/administration/users')
+      }
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.message || 'Erreur lors de la création de l\'utilisateur'
@@ -319,16 +331,24 @@ export function UserFormPage() {
       }
       if (values.firstName) payload.firstName = values.firstName
       if (values.email) payload.email = values.email
-      if (values.password) payload.password = values.password
+      // Ne JAMAIS mettre le mot de passe dans le document PouchDB : il serait
+      // répliqué en clair vers CouchDB et tous les postes du tenant. La
+      // définition d'un mot de passe passe par le serveur (en ligne).
       if (values.role === 'TEACHER') {
         await saveEntity('User', {
           ...payload,
           role: values.role
         })
+        // Fiche enseignant : existante (mise à jour) ou créée à la volée quand
+        // un compte passe au rôle Enseignant (conversion d'un admin/secrétaire).
         await saveEntity('Teacher', {
           ...payload,
-          id: user.teacher.id,
-          specialty: values.specialty || undefined,
+          id: user.teacher?.id ?? crypto.randomUUID(),
+          userId: id,
+          user_firstName: values.firstName || null,
+          user_lastName: values.lastName,
+          user_email: values.email || null,
+          specialty: values.specialty || null,
           classIds: teacherClassIds,
           subjectIds: teacherSubjectIds
         })
@@ -345,8 +365,8 @@ export function UserFormPage() {
       toast.success('Utilisateur modifié avec succès')
       navigate('/administration/users')
     },
-    onError: () => {
-      toast.error('Erreur lors de la modification de l\'utilisateur')
+    onError: (err) => {
+      toast.error(extractErrorMessage(err, "Erreur lors de la modification de l'utilisateur"))
     }
   })
 
@@ -362,37 +382,44 @@ export function UserFormPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {isEditing ? "Modifier l'utilisateur" : 'Ajouter un utilisateur'}
-          </h2>
-          <p className="text-muted-foreground">
-            {isEditing
-              ? 'Modifier les informations de cet utilisateur'
-              : 'Créez un nouveau compte utilisateur'}
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => navigate('/administration/users')}>
-          Retour à la liste
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/administration/users"
+        title={isEditing ? "Modifier l'utilisateur" : 'Ajouter un utilisateur'}
+        description={
+          isEditing
+            ? 'Modifier les informations de cet utilisateur'
+            : 'Créez un nouveau compte utilisateur'
+        }
+      />
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto max-w-3xl space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Informations personnelles</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <PhotoUpload
-                src={user?.photoUrl}
-                firstName={user?.firstName}
-                lastName={user?.lastName}
-                onUpload={(file) => photoMutation.mutateAsync(file)}
-                onDelete={() => deletePhotoMutation.mutateAsync()}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormShell
+            actions={
+              <>
+                <Button type="button" variant="outline" onClick={() => navigate('/administration/users')}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {isEditing ? 'Mettre à jour' : 'Enregistrer'}
+                </Button>
+              </>
+            }
+          >
+            <FormSection
+              title="Informations personnelles"
+              description="Identité et coordonnées du compte"
+              columns={2}
+              aside={
+                <PhotoUpload
+                  src={user?.photoUrl}
+                  firstName={user?.firstName}
+                  lastName={user?.lastName}
+                  onUpload={(file) => photoMutation.mutateAsync(file)}
+                  onDelete={() => deletePhotoMutation.mutateAsync()}
+                />
+              }
+            >
               <FormField
                 control={form.control}
                 name="lastName"
@@ -441,23 +468,33 @@ export function UserFormPage() {
                   // existant qui a déjà ce rôle, on le garde affichable pour ne pas
                   // vider silencieusement le sélecteur.
                   const currentRoleOption = ALL_ROLE_OPTIONS.find((o) => o.value === field.value)
+                  // En modification, « Enseignant » est proposé pour convertir un
+                  // compte créé par erreur comme admin/secrétaire (la fiche
+                  // enseignant est créée à l'enregistrement).
+                  const baseOptions = isEditing
+                    ? [...CREATE_ROLE_OPTIONS, { value: 'TEACHER', label: 'Enseignant' }]
+                    : CREATE_ROLE_OPTIONS
                   const roleOptions =
-                    currentRoleOption && !CREATE_ROLE_OPTIONS.some((o) => o.value === field.value)
-                      ? [...CREATE_ROLE_OPTIONS, currentRoleOption]
-                      : CREATE_ROLE_OPTIONS
+                    currentRoleOption && !baseOptions.some((o) => o.value === field.value)
+                      ? [...baseOptions, currentRoleOption]
+                      : baseOptions
                   return (
-                  <FormItem>
-                    <FormLabel>Rôle *</FormLabel>
-                    <FormControl>
-                      <Combobox
-                        options={roleOptions}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        placeholder="Sélectionner un rôle"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                    <FormItem>
+                      <FormLabel>Rôle *</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={roleOptions}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder="Sélectionner un rôle"
+                          disabled={isOwnAccount}
+                        />
+                      </FormControl>
+                      {isOwnAccount && (
+                        <p className="text-xs text-muted-foreground">Vous ne pouvez pas modifier votre propre rôle.</p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
                   )
                 }}
               />
@@ -491,36 +528,22 @@ export function UserFormPage() {
                   )}
                 </div>
               </div>
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{isEditing ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe *'}</FormLabel>
-                    <FormControl>
-                      <PasswordInput
-                        placeholder={isEditing ? 'Laisser vide pour conserver' : '••••••••'}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            </CardContent>
-          </Card>
+              {/* Pas de champ mot de passe : ce formulaire écrit un document
+                  local synchronisé — un mot de passe y serait répliqué en
+                  clair. Les identifiants se définissent en ligne. */}
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Le mot de passe du compte se définit en ligne (via le serveur) —
+                le compte créé ici ne peut pas se connecter tant qu'aucun mot de
+                passe n'a été défini.
+              </p>
+            </FormSection>
 
-          {isTeacher && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Informations enseignant</CardTitle>
-                <CardDescription>
-                  Configurez les informations spécifiques à l'enseignant
-                </CardDescription>
-              </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+            {isTeacher && (
+              <FormSection
+                title="Informations enseignant"
+                description="Configurez les informations spécifiques à l'enseignant"
+                columns={2}
+              >
                 <FormField
                   control={form.control}
                   name="specialty"
@@ -553,21 +576,12 @@ export function UserFormPage() {
                     placeholder="Sélectionner des matières"
                   />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate('/administration/users')}>
-              Annuler
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-              {isEditing ? 'Mettre à jour' : 'Créer l\'utilisateur'}
-            </Button>
-          </div>
+              </FormSection>
+            )}
+          </FormShell>
         </form>
       </Form>
+      <CredentialsDialog credentials={credentials} onClose={() => { setCredentials(null); navigate('/administration/users') }} />
     </div>
   )
 }

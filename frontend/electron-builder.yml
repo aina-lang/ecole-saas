@@ -1,5 +1,6 @@
-appId: com.electron.app
-productName: electron-app
+appId: mg.sekoliko.desktop
+productName: Sekoliko
+copyright: © Sekoliko
 directories:
   buildResources: build
 files:
@@ -9,35 +10,55 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!*.pdf'
 asarUnpack:
   - resources/**
 win:
-  executableName: electron-app
+  executableName: Sekoliko
+  icon: build/icon.ico
+  # Un seul installateur pour Windows 64 et 32 bits (l'installeur choisit).
+  target:
+    - target: nsis
+      arch: [x64, ia32]
+    - target: portable
+      arch: [x64]
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  # Bloque proprement l'installation sur Windows 7/8/8.1 (non supportés par Electron 28).
+  include: build/installer.nsh
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  artifactName: Sekoliko-${version}-installateur.${ext}
+  shortcutName: Sekoliko
+  uninstallDisplayName: Sekoliko
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerLanguages: [fr_FR]
+  language: 1036
+portable:
+  artifactName: Sekoliko-${version}-portable.${ext}
 mac:
-  entitlementsInherit: build/entitlements.mac.plist
-  extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  icon: build/icon.png
   notarize: false
-dmg:
-  artifactName: ${name}-${version}.${ext}
 linux:
+  icon: build/icon.png
   target:
     - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
+  category: Education
 appImage:
-  artifactName: ${name}-${version}.${ext}
-npmRebuild: false
+  artifactName: Sekoliko-${version}.${ext}
+# Dépôt lu par electron-updater au démarrage de l'app (src/main/updater.ts).
+# `npm run build:win` y génère latest.yml + l'installateur dans dist/ ; il
+# suffit de recopier ces deux fichiers dans le dossier UPDATES_PATH du serveur
+# (voir server/src/main.ts, route /updates).
+#
+# À passer en HTTPS dès qu'un domaine est en place : sur HTTP, un réseau
+# hostile peut substituer l'installateur téléchargé.
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  - provider: generic
+    url: http://51.178.50.63:3000/updates
+    channel: latest
+npmRebuild: false

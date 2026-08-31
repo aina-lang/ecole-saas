@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import client, { UNAUTHORIZED_EVENT } from '../api/client'
-import { setCurrentTenant } from '../lib/db/pouchdb'
+import client, { UNAUTHORIZED_EVENT, isOfflineError } from '../api/client'
+import { setCurrentTenant, getDocument, getAllDocuments } from '../lib/db/pouchdb'
 import { stopAllSyncs } from '../lib/db/sync-manager'
 import {
   saveSession,
@@ -23,6 +23,9 @@ interface User {
   tenantId: string
   isActive: boolean
   photoUrl?: string | null
+  /** Mot de passe temporaire remis par le support : le routeur impose son
+   *  changement avant tout accès. Renvoyé par /auth/login (auth.service.ts). */
+  mustChangePassword?: boolean
 }
 
 interface RegisterPayload {
@@ -77,6 +80,76 @@ function onboardingKey(tenantId: string | null | undefined): string {
 
 function readOnboardingCompleted(tenantId: string | null | undefined): boolean {
   return localStorage.getItem(onboardingKey(tenantId)) === 'true'
+}
+
+function markOnboardingCompleted(tenantId: string | null | undefined): void {
+  localStorage.setItem(onboardingKey(tenantId), 'true')
+}
+
+// Bloquer le login sur une requête réseau serait contraire au principe de
+// l'app. Ce plafond garde la question « établissement déjà configuré ? »
+// bornée dans le temps : le client axios n'a pas de timeout global (défaut
+// axios = infini), donc un serveur joignable mais muet — portail captif,
+// perte de paquets, VPS saturé — ferait attendre l'écran de connexion
+// indéfiniment, alors qu'on a une réponse locale acceptable.
+const SETUP_STATE_TIMEOUT_MS = 8000
+
+// « L'établissement est-il déjà configuré ? » — trois sources, de la plus
+// locale à la plus distante, parce que le drapeau localStorage seul ne suffit
+// pas : il vit sur le poste, il est donc absent d'une installation neuve,
+// d'un poste réinitialisé ou du deuxième ordinateur de l'école, et
+// l'assistant de configuration se rouvrait devant des écoles en service
+// depuis des mois.
+//
+//   1. le drapeau local            — instantané, hors ligne ;
+//   2. les données répliquées      — instantané, hors ligne : dès que la
+//      synchronisation a tourné une fois, l'année scolaire et les réglages
+//      du tenant sont dans PouchDB, et c'est une preuve suffisante ;
+//   3. le serveur                  — seulement si les deux premières sont
+//      muettes, c'est-à-dire en pratique à la toute première connexion sur
+//      un poste neuf, qui se fait forcément en ligne.
+async function resolveOnboardingCompleted(tenantId: string | null | undefined): Promise<boolean> {
+  if (readOnboardingCompleted(tenantId)) return true
+
+  if (await hasReplicatedSchoolConfig()) {
+    markOnboardingCompleted(tenantId)
+    return true
+  }
+
+  try {
+    const { data } = await client.get<{ configured: boolean }>('/tenants/me/setup-state', {
+      timeout: SETUP_STATE_TIMEOUT_MS,
+    })
+    if (data?.configured) {
+      markOnboardingCompleted(tenantId)
+      return true
+    }
+  } catch {
+    // Hors ligne, serveur lent, ou serveur pas encore à jour (route absente) :
+    // on retombe sur le comportement d'avant. Au pire l'assistant s'affiche
+    // une fois de trop — il est idempotent, il réutilise l'année scolaire déjà
+    // répliquée au lieu d'en créer une seconde.
+  }
+  return false
+}
+
+// Lecture purement locale (IndexedDB), sans réseau et sans moteur de synchro
+// démarré : createDatabase() ouvre la base du tenant courant, que
+// setCurrentTenant() vient de positionner. On cherche exactement ce que
+// l'assistant écrit à la fin — voir OnboardingPage.handleFinish.
+async function hasReplicatedSchoolConfig(): Promise<boolean> {
+  try {
+    const [periodSystem, academicYear] = await Promise.all([
+      getDocument('TenantSetting', 'period_system'),
+      getDocument('TenantSetting', 'academic_year'),
+    ])
+    if (periodSystem || academicYear) return true
+    const years = await getAllDocuments('AcademicYear')
+    return years.length > 0
+  } catch {
+    // Bases absentes ou illisibles : on laisse la question au serveur.
+    return false
+  }
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -150,6 +223,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Empreinte locale du mot de passe : seul moyen de déverrouiller l'app hors ligne ensuite.
       await saveLocalPasswordVerifier(normalizedEmail, password, resolvedTenantId)
 
+      // Résolu AVANT de passer isAuthenticated à true : le routeur redirige dès
+      // cet instant, et une réponse tardive ferait clignoter l'assistant de
+      // configuration devant un établissement déjà en service.
+      const onboardingCompleted = await resolveOnboardingCompleted(resolvedTenantId)
+
       set({
         user,
         accessToken,
@@ -157,7 +235,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         tenantId: resolvedTenantId,
         isAuthenticated: true,
         lockedSession: null,
-        onboardingCompleted: readOnboardingCompleted(resolvedTenantId),
+        onboardingCompleted,
       })
       persistUser(user)
 
@@ -165,7 +243,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ;(window as any).api.auth.setToken(accessToken).catch(() => {})
       }
     } catch (err: any) {
-      if (!navigator.onLine || err?.code === 'ERR_NETWORK') {
+      // isOfflineError couvre aussi le délai dépassé : depuis que le client
+      // porte un timeout, un serveur muet produit ECONNABORTED et non
+      // ERR_NETWORK — sans ça, l'utilisateur voyait une erreur brute au lieu
+      // de basculer sur le déverrouillage hors ligne.
+      if (isOfflineError(err)) {
         const session = await getSession()
         if (!session || session.email !== normalizedEmail) {
           throw new Error('Aucune session locale trouvée. Connectez-vous en ligne d\'abord.')
@@ -197,7 +279,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           tenantId: session.tenantId,
           isAuthenticated: true,
           lockedSession: null,
-          onboardingCompleted: readOnboardingCompleted(session.tenantId),
+          // Déverrouillage hors ligne : uniquement les deux sources locales,
+          // jamais le serveur.
+          onboardingCompleted:
+            readOnboardingCompleted(session.tenantId) || (await hasReplicatedSchoolConfig()),
         })
         persistUser(get().user)
         return
@@ -277,7 +362,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   completeOnboarding: () => {
-    localStorage.setItem(onboardingKey(get().tenantId), 'true')
+    markOnboardingCompleted(get().tenantId)
     set({ onboardingCompleted: true })
   }
 }))

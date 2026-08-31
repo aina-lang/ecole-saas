@@ -7,9 +7,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Cross2Icon } from '@radix-ui/react-icons'
 import { Send } from 'lucide-react'
-import client from '@/api/client'
 import { queryEntities, saveEntity } from '@/lib/db/pouchdb-compat'
-import type { User, ApiResponse, PaginatedResponse } from '@/types'
+import type { User } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -23,7 +22,7 @@ import {
   FormLabel,
   FormMessage
 } from '@/components/ui/form'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader, FormShell, FormSection } from '@/components/layout/page'
 import {
   Command,
   CommandEmpty,
@@ -32,7 +31,6 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
 
 const composeSchema = z.object({
   recipients: z.array(z.string()).min(1, 'Au moins un destinataire requis'),
@@ -53,8 +51,15 @@ function searchUsers(query: string): Promise<User[]> {
 }
 
 function sendMessage(data: ComposeValues & { attachments: File[] }) {
+  // senderId : sans lui, le message se réplique bien entre postes mais le
+  // serveur ne peut jamais le persister (colonne obligatoire côté Prisma).
+  let senderId: string | undefined
+  try {
+    senderId = JSON.parse(localStorage.getItem('auth-user') || 'null')?.id
+  } catch { /* pas de session locale */ }
   return saveEntity('Message', {
     id: crypto.randomUUID(),
+    senderId,
     subject: data.subject,
     body: data.body,
     recipients: data.recipients,
@@ -131,28 +136,35 @@ export function ComposeMessagePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Nouveau message</h2>
-        <p className="text-muted-foreground">
-          Composez un message à destination d'un ou plusieurs destinataires.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/communications/inbox"
+        title="Nouveau message"
+        description="Composez un message à destination d'un ou plusieurs destinataires."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Composer</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {/* Recipients */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FormShell
+            actions={
+              <>
+                <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={sendMutation.isPending} className="gap-2">
+                  <Send className="h-4 w-4" />
+                  {sendMutation.isPending ? 'Envoi en cours...' : 'Envoyer'}
+                </Button>
+              </>
+            }
+          >
+            <FormSection title="Destinataires et objet" description="À qui s'adresse ce message et sa priorité.">
               <FormField
                 control={form.control}
                 name="recipients"
                 render={() => (
-                  <FormItem>
-                    <FormLabel>Destinataires</FormLabel>
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Destinataires *</FormLabel>
                     <FormControl>
                       <Popover open={open} onOpenChange={setOpen}>
                         <PopoverTrigger asChild>
@@ -209,13 +221,12 @@ export function ComposeMessagePage() {
                 )}
               />
 
-              {/* Subject */}
               <FormField
                 control={form.control}
                 name="subject"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Sujet</FormLabel>
+                    <FormLabel>Sujet *</FormLabel>
                     <FormControl>
                       <Input placeholder="Objet du message" {...field} />
                     </FormControl>
@@ -224,7 +235,6 @@ export function ComposeMessagePage() {
                 )}
               />
 
-              {/* Priority */}
               <FormField
                 control={form.control}
                 name="priority"
@@ -245,14 +255,15 @@ export function ComposeMessagePage() {
                   </FormItem>
                 )}
               />
+            </FormSection>
 
-              {/* Body */}
+            <FormSection title="Contenu" description="Corps du message et pièces jointes.">
               <FormField
                 control={form.control}
                 name="body"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Message</FormLabel>
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Message *</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="Contenu du message..."
@@ -265,8 +276,7 @@ export function ComposeMessagePage() {
                 )}
               />
 
-              {/* Attachments */}
-              <div className="space-y-2">
+              <div className="sm:col-span-2 space-y-2">
                 <FormLabel>Pièces jointes</FormLabel>
                 <div className="flex items-center gap-4">
                   <Button
@@ -301,20 +311,10 @@ export function ComposeMessagePage() {
                   </div>
                 )}
               </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => navigate(-1)}>
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={sendMutation.isPending} className="gap-2">
-                  <Send className="h-4 w-4" />
-                  {sendMutation.isPending ? 'Envoi en cours...' : 'Envoyer'}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+            </FormSection>
+          </FormShell>
+        </form>
+      </Form>
     </div>
   )
 }

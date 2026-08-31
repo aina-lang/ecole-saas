@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { fr } from 'date-fns/locale'
-import { CalendarIcon, Users, TrendingUp, Award, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
+import { Users, TrendingUp, Award, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
@@ -12,10 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
 
 interface ClassOption {
   id: string
@@ -125,7 +121,6 @@ export function AttendanceStatsPage() {
         const stuId = record.studentId
         if (stuId) {
           const student = studentMap.get(stuId)
-          const name = student ? `${student.lastName} ${student.firstName}` : 'Inconnu'
           if (!byStudent.has(stuId)) {
             byStudent.set(stuId, { id: stuId, firstName: student?.firstName || '', lastName: student?.lastName || '', present: 0, absent: 0, late: 0, excused: 0, total: 0 })
           }
@@ -163,10 +158,10 @@ export function AttendanceStatsPage() {
   }
 
   const statusColors: Record<string, string> = {
-    present: 'bg-green-500',
+    present: 'bg-emerald-500',
     absent: 'bg-red-500',
-    late: 'bg-orange-500',
-    excused: 'bg-blue-500'
+    late: 'bg-amber-500',
+    excused: 'bg-primary/60'
   }
 
   const statusLabels: Record<string, string> = {
@@ -187,7 +182,7 @@ export function AttendanceStatsPage() {
     return (
       <div className="flex h-4 w-full overflow-hidden rounded-full">
         <div
-          className="bg-green-500 transition-all duration-500"
+          className="bg-emerald-500 transition-all duration-500"
           style={{ width: `${(data.present / total) * 100}%` }}
         />
         <div
@@ -195,11 +190,11 @@ export function AttendanceStatsPage() {
           style={{ width: `${(data.absent / total) * 100}%` }}
         />
         <div
-          className="bg-orange-500 transition-all duration-500"
+          className="bg-amber-500 transition-all duration-500"
           style={{ width: `${(data.late / total) * 100}%` }}
         />
         <div
-          className="bg-blue-500 transition-all duration-500"
+          className="bg-primary/60 transition-all duration-500"
           style={{ width: `${(data.excused / total) * 100}%` }}
         />
       </div>
@@ -235,96 +230,82 @@ export function AttendanceStatsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Statistiques de présence</h2>
-          <p className="text-muted-foreground">
-            Analysez les taux de présence par classe et par élève.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleRefresh}
-          disabled={isLoading}
-        >
-          <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-        </Button>
-      </div>
+      <PageHeader
+        title="Statistiques de présence"
+        description="Analysez les taux de présence par classe et par élève."
+        actions={
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            aria-label="Rafraîchir"
+          >
+            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="w-48">
-              <Label className="mb-1.5 block text-sm">Classe</Label>
-              <Combobox
-                value={classId}
-                onValueChange={(v) => {
-                  setClassId(v || 'all')
-                  setStudentId('')
-                }}
-                placeholder="Toutes"
-                searchPlaceholder="Rechercher une classe..."
-                options={[
-                  { value: 'all', label: 'Toutes les classes' },
-                  ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
-                ]}
-              />
-            </div>
-            <div className="w-48">
-              <Label className="mb-1.5 block text-sm">Élève</Label>
-              <Combobox
-                value={studentId}
-                onValueChange={(v) => setStudentId(v || 'all')}
-                disabled={!classId}
-                placeholder="Tous"
-                searchPlaceholder="Rechercher un élève..."
-                options={[
-                  { value: 'all', label: 'Tous les élèves' },
-                  ...(students ?? []).map((s) => ({
-                    value: s.id,
-                    label: `${s.lastName} ${s.firstName}`,
-                  })),
-                ]}
-              />
-            </div>
-            <div className="w-44">
-              <Label className="mb-1.5 block text-sm">Du</Label>
-              <DatePicker
-                value={dateFrom}
-                onChange={setDateFrom}
-                placeholder="Date début"
-              />
-            </div>
-            <div className="w-44">
-              <Label className="mb-1.5 block text-sm">Au</Label>
-              <DatePicker
-                value={dateTo}
-                onChange={setDateTo}
-                placeholder="Date fin"
-              />
-            </div>
-            {(dateFrom || dateTo || classId || studentId) && (
-              <div className="flex items-end">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setClassId('')
-                    setStudentId('')
-                    setDateFrom(undefined)
-                    setDateTo(undefined)
-                  }}
-                >
-                  Réinitialiser
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <Combobox
+          className="w-[200px]"
+          value={classId}
+          onValueChange={(v) => {
+            setClassId(v || 'all')
+            setStudentId('')
+          }}
+          placeholder="Toutes les classes"
+          searchPlaceholder="Rechercher une classe..."
+          options={[
+            { value: 'all', label: 'Toutes les classes' },
+            ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
+        <Combobox
+          className="w-[200px]"
+          value={studentId}
+          onValueChange={(v) => setStudentId(v || 'all')}
+          disabled={!classId}
+          placeholder="Tous les élèves"
+          searchPlaceholder="Rechercher un élève..."
+          options={[
+            { value: 'all', label: 'Tous les élèves' },
+            ...(students ?? []).map((s) => ({
+              value: s.id,
+              label: `${s.lastName} ${s.firstName}`,
+            })),
+          ]}
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Du</span>
+          <DatePicker
+            value={dateFrom}
+            onChange={setDateFrom}
+            placeholder="Date début"
+            className="w-[160px]"
+          />
+          <span className="text-xs font-medium text-muted-foreground">Au</span>
+          <DatePicker
+            value={dateTo}
+            onChange={setDateTo}
+            placeholder="Date fin"
+            className="w-[160px]"
+          />
+        </div>
+        {(dateFrom || dateTo || classId || studentId) && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setClassId('')
+              setStudentId('')
+              setDateFrom(undefined)
+              setDateTo(undefined)
+            }}
+          >
+            Réinitialiser
+          </Button>
+        )}
+      </FilterBar>
 
       {isLoading ? (
         <div className="text-center text-muted-foreground py-12">
@@ -338,13 +319,13 @@ export function AttendanceStatsPage() {
               label="Taux de présence global"
               value={`${stats.overallRate}%`}
               sub={`Sur ${stats.totalRecords} entrées`}
-              color="text-green-600"
+              color="text-emerald-600"
             />
             <StatCard
               icon={Users}
               label="Présents"
               value={stats.byStatus.present}
-              color="text-green-600"
+              color="text-emerald-600"
             />
             <StatCard
               icon={Award}
@@ -357,7 +338,7 @@ export function AttendanceStatsPage() {
               icon={Users}
               label="Total enregistrements"
               value={stats.totalRecords}
-              color="text-blue-600"
+              color="text-primary"
             />
           </div>
 
@@ -398,9 +379,9 @@ export function AttendanceStatsPage() {
                           className={cn(
                             'text-sm font-semibold',
                             cls.rate >= 80
-                              ? 'text-green-600'
+                              ? 'text-emerald-600'
                               : cls.rate >= 60
-                                ? 'text-yellow-600'
+                                ? 'text-amber-600'
                                 : 'text-red-600'
                           )}
                         >
@@ -471,9 +452,9 @@ export function AttendanceStatsPage() {
                               className={cn(
                                 'text-sm font-semibold w-12 text-right',
                                 student.rate >= 80
-                                  ? 'text-green-600'
+                                  ? 'text-emerald-600'
                                   : student.rate >= 60
-                                    ? 'text-yellow-600'
+                                    ? 'text-amber-600'
                                     : 'text-red-600'
                               )}
                             >
@@ -510,9 +491,7 @@ export function AttendanceStatsPage() {
           )}
         </>
       ) : (
-        <div className="text-center text-muted-foreground py-12">
-          Aucune donnée statistique disponible.
-        </div>
+        <EmptyState title="Aucune donnée statistique disponible" />
       )}
     </div>
   )

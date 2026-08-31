@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { fr } from 'date-fns/locale'
-import { CalendarIcon, Check, X, Ban, Users, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Ban, Check, Clock, RotateCw, Users, X } from 'lucide-react'
+import { MagnifyingGlassIcon } from '@radix-ui/react-icons'
 
 import { useLocalQuery } from '@/lib/db/hooks'
 import { queryEntities } from '@/lib/db/pouchdb-compat'
@@ -15,6 +15,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { PageHeader, FilterBar, EmptyState } from '@/components/layout/page'
 import {
   Pagination,
   PaginationContent,
@@ -24,7 +25,7 @@ import {
   PaginationNext,
 } from '@/components/ui/pagination'
 
-type AttendanceStatus = 'present' | 'absent' | 'excused'
+type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
 
 type StatusFilter = 'ALL' | AttendanceStatus | 'UNMARKED'
 
@@ -46,23 +47,30 @@ const STATUS_CONFIG: Record<
 > = {
   present: {
     label: 'Présent',
-    color: 'text-green-700',
-    bg: 'bg-green-100',
-    border: 'border-green-500',
+    color: 'text-emerald-700 dark:text-emerald-400',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500',
     icon: <Check className="h-4 w-4" />
   },
   absent: {
     label: 'Absent',
-    color: 'text-red-700',
-    bg: 'bg-red-100',
+    color: 'text-red-700 dark:text-red-400',
+    bg: 'bg-red-500/10',
     border: 'border-red-500',
     icon: <X className="h-4 w-4" />
   },
+  late: {
+    label: 'Retard',
+    color: 'text-amber-700 dark:text-amber-400',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500',
+    icon: <Clock className="h-4 w-4" />
+  },
   excused: {
     label: 'Excusé',
-    color: 'text-blue-700',
-    bg: 'bg-blue-100',
-    border: 'border-blue-500',
+    color: 'text-amber-700 dark:text-amber-400',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500',
     icon: <Ban className="h-4 w-4" />
   }
 }
@@ -94,9 +102,19 @@ export function AttendancePage() {
     queryKey: ['attendance', classId, dateStr],
     queryFn: async () => {
       if (!classId) return []
-      return queryEntities('Attendance', { classId, date: dateStr })
+      // Les documents créés sur ce poste portent date = 'yyyy-MM-dd' et un
+      // statut minuscule ; ceux relayés par le serveur (appel fait sur mobile)
+      // portent une date ISO complète et un statut en MAJUSCULES. On
+      // normalise ici pour que les deux s'affichent.
+      const all = await queryEntities<any>('Attendance', { classId })
+      return all
+        .filter((a) => !a.deletedAt && String(a.date ?? '').slice(0, 10) === dateStr)
+        .map((a) => ({ ...a, status: String(a.status ?? '').toLowerCase() }))
+        .filter((a) => ['present', 'absent', 'late', 'excused'].includes(a.status))
     },
-    enabled: !!classId
+    enabled: !!classId,
+    // Appel modifiable depuis le mobile : on relit la base locale toutes les 5 s.
+    refetchInterval: 5000,
   })
 
   useEffect(() => {
@@ -155,69 +173,60 @@ export function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Présences</h2>
-          <p className="text-muted-foreground">
-            Consultez la liste des présences par classe et par jour.
-          </p>
-        </div>
-        <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
-          <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-        </Button>
-      </div>
+      <PageHeader
+        title="Présences"
+        description="Consultez la liste des présences par classe et par jour."
+        actions={
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading} aria-label="Rafraîchir">
+            <RotateCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          </Button>
+        }
+      />
 
-      <div className="flex flex-wrap gap-4 items-end">
-        <div className="w-56 space-y-1.5">
-          <label className="text-sm font-medium">Date</label>
-          <DatePicker
-            value={date}
-            onChange={(d) => d && setDate(d)}
-            max={today}
-          />
-        </div>
-        <div className="w-48 space-y-1.5">
-          <label className="text-sm font-medium">Classe</label>
-          <Combobox
-            value={classId}
-            onValueChange={setClassId}
-            placeholder="Sélectionner"
-            searchPlaceholder="Rechercher une classe..."
-            options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4 items-end">
-        <div className="flex-1 min-w-[200px] space-y-1.5">
-          <label className="text-sm font-medium">Rechercher</label>
+      <FilterBar>
+        <DatePicker
+          value={date}
+          onChange={(d) => d && setDate(d)}
+          max={today}
+          className="w-[180px]"
+        />
+        <Combobox
+          className="w-[200px]"
+          value={classId}
+          onValueChange={setClassId}
+          placeholder="Classe"
+          searchPlaceholder="Rechercher une classe..."
+          options={(classes ?? []).map((c) => ({ value: c.id, label: c.name }))}
+        />
+        <div className="relative flex-1 min-w-[200px]">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Nom ou matricule..."
+            className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="w-48 space-y-1.5">
-          <label className="text-sm font-medium">Statut</label>
-          <Combobox
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as StatusFilter)}
-            placeholder="Tous"
-            options={[
-              { value: 'ALL', label: 'Tous' },
-              { value: 'present', label: 'Présent' },
-              { value: 'absent', label: 'Absent' },
-              { value: 'excused', label: 'Excusé' },
-              { value: 'UNMARKED', label: 'Non marqué' }
-            ]}
-          />
-        </div>
-      </div>
+        <Combobox
+          className="w-[160px]"
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+          placeholder="Statut"
+          options={[
+            { value: 'ALL', label: 'Tous' },
+            { value: 'present', label: 'Présent' },
+            { value: 'absent', label: 'Absent' },
+            { value: 'late', label: 'Retard' },
+            { value: 'excused', label: 'Excusé' },
+            { value: 'UNMARKED', label: 'Non marqué' }
+          ]}
+        />
+      </FilterBar>
 
       {markedCount > 0 && (
         <div className="flex flex-wrap gap-3">
           <Badge variant="secondary" className="gap-1">
-            <Check className="h-3 w-3 text-green-600" />
+            <Check className="h-3 w-3 text-emerald-600" />
             Présents: {presentCount}
           </Badge>
           <Badge variant="secondary" className="gap-1">
@@ -225,7 +234,7 @@ export function AttendancePage() {
             Absents: {absentCount}
           </Badge>
           <Badge variant="secondary" className="gap-1">
-            <Ban className="h-3 w-3 text-blue-600" />
+            <Ban className="h-3 w-3 text-amber-600" />
             Excusés: {excusedCount}
           </Badge>
           <span className="text-sm text-muted-foreground ml-2">
@@ -237,19 +246,17 @@ export function AttendancePage() {
       <Card>
         <CardContent className="p-4">
           {!classId ? (
-            <p className="text-center text-muted-foreground py-12">
-              Sélectionnez une classe pour consulter les présences.
-            </p>
+            <EmptyState
+              icon={<Users className="h-5 w-5" />}
+              title="Aucune classe sélectionnée"
+              description="Sélectionnez une classe pour consulter les présences."
+            />
           ) : loadingStudents ? (
             <p className="text-center text-muted-foreground py-12">Chargement des élèves...</p>
           ) : entries.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">
-              Aucun élève dans cette classe.
-            </p>
+            <EmptyState title="Aucun élève dans cette classe" />
           ) : filteredEntries.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">
-              Aucun résultat pour cette recherche ou ce filtre.
-            </p>
+            <EmptyState title="Aucun résultat" description="Aucun élève ne correspond à cette recherche ou à ce filtre." />
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">

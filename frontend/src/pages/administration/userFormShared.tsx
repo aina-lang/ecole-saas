@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 
 export const rolePermissions: Record<string, string[]> = {
   ADMIN: [

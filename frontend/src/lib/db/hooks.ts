@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import client from '../../api/client'
-import {
-  queryEntities,
-  saveEntity,
-  deleteEntity,
-} from './pouchdb-compat'
+import { queryEntities } from './pouchdb-compat'
 import { offlineSave, offlineDelete } from './offline-queue'
 import type { EntityType } from './pouchdb'
 import { useSyncStore } from '@/stores/sync-store'
+import { SYNC_PULLED_EVENT } from './sync-engine'
 import { getTenantSetting } from '@/lib/tenant-settings'
 
 export interface QueryResult<T> {
@@ -62,6 +59,19 @@ export function useLocalQuery<T = any>(
       mountedRef.current = false
     }
   }, [fetch, ...deps])
+
+  // Rafraîchissement automatique : à chaque réception de données de cette
+  // base (réplication) et après chaque synchro manuelle — l'écran suit sans F5.
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { entityType?: string } | undefined
+      if (!detail || detail.entityType === '_all' || detail.entityType === entityType) {
+        if (mountedRef.current) fetch()
+      }
+    }
+    window.addEventListener(SYNC_PULLED_EVENT, onSynced)
+    return () => window.removeEventListener(SYNC_PULLED_EVENT, onSynced)
+  }, [entityType, fetch])
 
   return { data, loading, error, refetch: fetch }
 }

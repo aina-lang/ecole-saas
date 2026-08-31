@@ -1,7 +1,11 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { TitleBar } from '@/components/layout/TitleBar'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { ChangePasswordPage } from '@/pages/auth/ChangePasswordPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 // import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -22,10 +26,24 @@ import { FinanceRoutes } from '@/pages/finances/FinanceRoutes'
 import { TeacherRoutes } from '@/pages/teachers/TeacherRoutes'
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 
+// Pages sans barre latérale : la barre de titre coiffe toute la fenêtre.
+function PublicLayout() {
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <TitleBar />
+      <div className="flex-1 overflow-hidden">
+        <Outlet />
+      </div>
+    </div>
+  )
+}
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const hydrated = useAuthStore((s) => s.hydrated)
   const onboardingCompleted = useAuthStore((s) => s.onboardingCompleted)
+  const mustChangePassword = useAuthStore((s) => !!s.user?.mustChangePassword)
+  const location = useLocation()
 
   if (!hydrated) {
     return <div className="flex h-screen items-center justify-center text-muted-foreground">Chargement...</div>
@@ -35,7 +53,13 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
-  if (!onboardingCompleted) {
+  // Mot de passe temporaire remis par le support : on impose son changement
+  // avant tout accès (la page reste dans AppLayout pour garder la barre).
+  if (mustChangePassword && location.pathname !== '/account/password') {
+    return <Navigate to="/account/password" replace />
+  }
+
+  if (!onboardingCompleted && !mustChangePassword) {
     return <Navigate to="/onboarding" replace />
   }
 
@@ -45,9 +69,13 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route element={<PublicLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+      </Route>
       <Route
         path="/"
         element={
@@ -58,6 +86,7 @@ export function AppRouter() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="account/password" element={<ChangePasswordPage />} />
         <Route path="students/*" element={<StudentRoutes />} />
         <Route path="parents" element={<ParentsPage />} />
         <Route path="parents/new" element={<ParentFormPage />} />

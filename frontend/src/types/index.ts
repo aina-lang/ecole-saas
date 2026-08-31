@@ -13,6 +13,8 @@ export interface User {
   tenantId: string
   isActive: boolean
   photoUrl?: string | null
+  /** Mot de passe temporaire (support) : changement forcé à la connexion. */
+  mustChangePassword?: boolean
 }
 
 export interface StudentParentLink {
@@ -30,6 +32,8 @@ export interface Student {
   birthDate: string
   gender: 'M' | 'F'
   classId: string
+  class?: { id: string; name: string } | null
+  enrollmentDate?: string
   status: 'active' | 'inactive' | 'graduated' | 'suspended'
   photoUrl?: string | null
   parentName?: string

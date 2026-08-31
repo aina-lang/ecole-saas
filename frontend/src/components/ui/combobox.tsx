@@ -56,8 +56,6 @@ export function Combobox({
 
   const selectedLabel = options.find((o) => o.value === value)?.label
 
-  const noMatch = allowCustom && search && !options.some((o) => o.value.toLowerCase() === search.toLowerCase())
-
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild disabled={disabled}>
