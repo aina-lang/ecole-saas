@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, protocol, session, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, protocol, session, dialog, Menu } from 'electron'
 import { join, extname, dirname, resolve, sep } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -16,6 +16,9 @@ import {
 } from './updater'
 
 let mainWindow: BrowserWindow | null = null
+
+/** Console de développement autorisée : en développement seulement. */
+const DEVTOOLS_ALLOWED = is.dev
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -36,6 +39,9 @@ function createWindow(): void {
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
+      // Hors développement, openDevTools() devient sans effet : aucun
+      // raccourci, menu ou appel de code ne peut ouvrir la console.
+      devTools: DEVTOOLS_ALLOWED,
     },
   })
 
@@ -245,7 +251,7 @@ function setupIPC() {
       show: false,
       width: 800,
       height: 600,
-      webPreferences: { contextIsolation: true, nodeIntegration: false },
+      webPreferences: { contextIsolation: true, nodeIntegration: false, devTools: DEVTOOLS_ALLOWED },
     })
 
     try {
@@ -329,11 +335,56 @@ app.commandLine.appendSwitch('lang', 'fr-FR')
 // On lève la limite pour le serveur de synchro (et localhost en développement).
 app.commandLine.appendSwitch('ignore-connections-limit', '51.178.50.63,localhost,127.0.0.1')
 
+// ─── Verrouillage de la console de développement (production) ──────────────
+// La console Chromium donne la main sur tout ce que l'app protège : lecture
+// du localStorage (jetons de session, cache de licence), appels à l'API avec
+// la session ouverte, contournement de la lecture seule d'une licence expirée.
+// Elle reste disponible en développement uniquement.
+//
+// Quatre verrous, chacun couvrant une porte différente :
+//   1. `devTools: false` sur chaque fenêtre — le verrou de fond ;
+//   2. suppression du menu par défaut d'Electron, dont l'accélérateur
+//      Ctrl+Maj+I fonctionne même quand la barre de menu est masquée ;
+//   3. interception clavier de F12 et Ctrl+Maj+I/J/C (Cmd+Alt+I/J/C sur Mac) ;
+//   4. refus de démarrer avec --remote-debugging-port/-pipe, qui ouvrirait la
+//      page à un client DevTools externe sans aucun raccourci.
+if (!DEVTOOLS_ALLOWED) {
+  if (app.commandLine.hasSwitch('remote-debugging-port') || app.commandLine.hasSwitch('remote-debugging-pipe')) {
+    // Avant 'ready' : aucune fenêtre n'a encore été créée, il n'y a rien à inspecter.
+    process.exit(1)
+  }
+}
+
+/** Raccourcis qui ouvrent la console Chromium. */
+function isDevToolsShortcut(input: Electron.Input): boolean {
+  if (input.type !== 'keyDown') return false
+  if (input.code === 'F12') return true
+  // Code physique ET caractère : couvre aussi bien QWERTY qu'AZERTY.
+  const inspect =
+    ['KeyI', 'KeyJ', 'KeyC'].includes(input.code) || ['i', 'j', 'c'].includes(input.key.toLowerCase())
+  if (!inspect) return false
+  return (input.control && input.shift) || (input.meta && input.alt)
+}
+
+app.on('web-contents-created', (_event, contents) => {
+  if (DEVTOOLS_ALLOWED) return
+  contents.on('before-input-event', (event, input) => {
+    if (isDevToolsShortcut(input)) event.preventDefault()
+  })
+  // Filet de sécurité : si une console s'ouvrait malgré tout, on la referme.
+  contents.on('devtools-opened', () => contents.closeDevTools())
+})
+
 app.whenReady().then(async () => {
   // Doit être identique à l'`appId` d'electron-builder : c'est cette valeur qui
   // relie la fenêtre à son raccourci Windows (icône de la barre des tâches,
   // épinglage, notifications).
   electronApp.setAppUserModelId('mg.sekoliko.desktop')
+
+  // Sans menu, plus d'accélérateurs par défaut (Ctrl+Maj+I, rechargement,
+  // zoom). Les raccourcis d'édition — copier, coller, annuler — sont gérés
+  // par Chromium lui-même sous Windows et continuent de fonctionner.
+  if (!DEVTOOLS_ALLOWED) Menu.setApplicationMenu(null)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

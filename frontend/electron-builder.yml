@@ -11,8 +11,18 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!*.pdf'
+  # Exports de test et fichiers d'outillage qui traînaient à la racine et
+  # partaient dans app.asar — l'installateur publié embarquait notamment un
+  # export Excel d'élèves. Seuls out/, resources/ et node_modules servent à
+  # l'exécution.
+  - '!*.{xlsx,docx,csv}'
+  - '!*.tsbuildinfo'
+  - '!{components.json,shadcn.md,postcss.config.js,tailwind.config.js,yarn.lock}'
 asarUnpack:
   - resources/**
+# Pose les fuses Electron sur l'exécutable (RunAsNode, --inspect, NODE_OPTIONS
+# désactivés) — voir build/after-pack.cjs.
+afterPack: build/after-pack.cjs
 win:
   executableName: Sekoliko
   icon: build/icon.ico

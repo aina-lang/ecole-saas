@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, useNavigate } from 'react-router-dom'
+import { HashRouter, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SYNC_PULLED_EVENT } from '@/lib/db/sync-engine'
 import { Toaster } from '../../components/ui/sonner'
@@ -77,7 +77,14 @@ function SyncLifecycle(): null {
 function App(): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      {/* HashRouter et non BrowserRouter : en production la page est chargée
+          en file:// (loadFile). Sous Windows, le chemin garde la lettre de
+          lecteur (/C:/Program Files/…/index.html, puis /C:/dashboard après
+          une redirection) : aucune route ne correspondait jamais, et l'app
+          s'ouvrait sur une fenêtre vide. En développement le problème restait
+          invisible, l'app étant servie par http://localhost. Avec le hash
+          (#/dashboard), la route est indépendante du chemin du fichier. */}
+      <HashRouter>
         <div className="flex h-screen flex-col overflow-hidden rounded-[14px] bg-background shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
           <div className="flex-1 overflow-hidden">
             <AppRouter />
@@ -87,7 +94,7 @@ function App(): JSX.Element {
           </div>
         </div>
         <Toaster position="top-right" richColors />
-      </BrowserRouter>
+      </HashRouter>
     </QueryClientProvider>
   )
 }

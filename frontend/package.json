@@ -1,6 +1,6 @@
 {
   "name": "sekoliko",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sekoliko — gestion scolaire hors ligne",
   "main": "./out/main/index.js",
   "author": "Sekoliko",
@@ -93,6 +93,7 @@
     "@electron-toolkit/eslint-config-prettier": "^2.0.0",
     "@electron-toolkit/eslint-config-ts": "^1.0.1",
     "@electron-toolkit/tsconfig": "^1.0.1",
+    "@electron/fuses": "^2.1.3",
     "@electron/rebuild": "^4.2.0",
     "@types/node": "^18.19.9",
     "@types/react": "^18.2.48",

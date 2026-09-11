@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -85,10 +85,14 @@ async function exportCsv(
 
 export function PaymentListPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   // Filtre initial depuis l'URL (ex. /finances/payments?status=overdue depuis le tableau de bord).
-  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get('status') || 'all')
+  // Lu via le routeur et non window.location.search : avec HashRouter, la
+  // requête vit dans le hash (#/finances/payments?status=overdue) et
+  // window.location.search est vide — le filtre était silencieusement ignoré.
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sortBy, setSortBy] = useState<string>('')
