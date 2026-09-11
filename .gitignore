@@ -5,7 +5,10 @@ server/node_modules/
 
 # Build outputs
 frontend/out/
-frontend/build/
+# Pas frontend/build/ : pour electron-builder c'est le dossier des ressources
+# SOURCES (buildResources) — icônes, installer.nsh, after-pack.cjs — et non une
+# sortie. Ignoré, il n'avait jamais été versionné : un clone propre produisait
+# un exe sans icône ni garde-fou Windows 7/8, et le build échouait sur le hook.
 frontend/dist/
 frontend/release/
 server/dist/
