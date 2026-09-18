@@ -184,3 +184,10 @@ export const NAV = [
   { href: '/licence', label: 'Licence' },
   { href: '/support', label: 'Assistance' },
 ] as const
+
+/** Manuel d'utilisation du logiciel, servi par le site (public/manuels). */
+export const MANUAL = {
+  href: '/manuels/Sekoliko-manuel-logiciel.pdf',
+  label: "Manuel d'utilisation du logiciel",
+  detail: 'PDF · 32 pages · 3,8 Mo',
+} as const

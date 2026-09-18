@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Sekoliko — Manuel d'utilisation du logiciel</title>
+<link rel="stylesheet" href="style.css">
+<style>@page { @bottom-left { content: "Sekoliko · Manuel d'utilisation du logiciel"; } }</style>
+</head><body>
+
+<!-- ═════════ COUVERTURE ═════════ -->
+<section class="couverture">
+  <div class="marque"><div class="logo">S</div><div><b>Sekoliko</b><span>Gestion scolaire hors ligne</span></div></div>
+  <div class="surtitre">Manuel d'utilisation</div>
+  <h1>Le logiciel de gestion de votre établissement</h1>
+  <p class="sous-titre">Le guide complet pour la direction, le secrétariat et la comptabilité : de l'installation jusqu'au bulletin de fin d'année, pas à pas.</p>
+  <div class="badges"><span class="badge">Version 1.0.2</span><span class="badge">Windows 10 et 11</span><span class="badge">Fonctionne sans Internet</span></div>
+  <div class="visuel"><img src="assets/desktop/tableau-de-bord-sombre.jpg" alt=""></div>
+  <div class="pied"><span>sekoliko.netlify.app</span><span>Assistance : +261 32 57 153 47</span></div>
+</section>
+
+<!-- ═════════ AVANT DE COMMENCER ═════════ -->
+<section class="intro">
+  <h2 class="titre-page">Avant de commencer</h2>
+  <p class="lead">Ce manuel s'adresse aux personnes qui font vivre l'établissement au quotidien : direction, secrétariat, comptabilité. Aucune connaissance en informatique n'est nécessaire — chaque tâche est expliquée pas à pas, avec l'écran correspondant.</p>
+
+  <div class="grille-2">
+    <div class="carte"><div class="ico">1</div><h4>Suivez les étapes numérotées</h4><p>Chaque tâche est découpée en étapes courtes, à réaliser dans l'ordre.</p></div>
+    <div class="carte"><div class="ico">›</div><h4>Repérez les chemins de menu</h4><p>Une étiquette comme <span class="chemin">École <i>›</i> Élèves</span> indique où cliquer dans le menu de gauche.</p></div>
+    <div class="carte"><div class="ico">!</div><h4>Lisez les encadrés</h4><p>« Astuce » pour gagner du temps, « Important » pour éviter une erreur, « Bon à savoir » pour comprendre.</p></div>
+    <div class="carte"><div class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h4>Regardez les captures</h4><p>Chaque écran important est montré tel qu'il apparaît dans le logiciel, avec une légende.</p></div>
+  </div>
+
+  <h3>Qui fait quoi dans Sekoliko ?</h3>
+  <table class="simple">
+    <tr><th style="width:32mm">Profil</th><th>Ce qu'il peut faire</th><th style="width:45mm">Comment le compte est créé</th></tr>
+    <tr><td><b>Administrateur</b></td><td>Tout : élèves, pédagogie, finances, paramètres, utilisateurs, licence.</td><td>À la création de l'établissement, puis dans <span class="chemin">Paramètres <i>›</i> Utilisateurs</span></td></tr>
+    <tr><td><b>Secrétaire</b></td><td>La gestion quotidienne de l'établissement.</td><td><span class="chemin">Paramètres <i>›</i> Utilisateurs</span></td></tr>
+    <tr><td><b>Enseignant</b></td><td>Sa fiche, ses classes, ses matières et son emploi du temps.</td><td><span class="chemin">École <i>›</i> Enseignants</span></td></tr>
+    <tr><td><b>Parent</b></td><td>Est rattaché à ses enfants ; ses coordonnées servent au suivi.</td><td><span class="chemin">École <i>›</i> Parents</span></td></tr>
+  </table>
+
+  <div class="encadre savoir"><b class="titre">Bon à savoir</b><p>Sekoliko enregistre tout <strong>sur votre ordinateur d'abord</strong>. Une coupure d'Internet n'empêche jamais de travailler : les données partent vers le serveur et les autres postes dès que la connexion revient.</p></div>
+</section>
+
+<!-- ═════════ SOMMAIRE ═════════ -->
+<section class="sommaire">
+  <h2 class="titre-page">Sommaire</h2>
+  <ol>
+    <li><span class="num">01</span><span class="titre">Bienvenue dans Sekoliko <span class="desc">— ce que fait le logiciel</span></span><span class="fil"></span><span class="pg" data-ch="1">·</span></li>
+    <li><span class="num">02</span><span class="titre">Installer Sekoliko <span class="desc">— et le garder à jour</span></span><span class="fil"></span><span class="pg" data-ch="2">·</span></li>
+    <li><span class="num">03</span><span class="titre">Créer votre établissement</span><span class="fil"></span><span class="pg" data-ch="3">·</span></li>
+    <li><span class="num">04</span><span class="titre">Se connecter et verrouiller <span class="desc">— postes partagés</span></span><span class="fil"></span><span class="pg" data-ch="4">·</span></li>
+    <li><span class="num">05</span><span class="titre">L'assistant de configuration</span><span class="fil"></span><span class="pg" data-ch="5">·</span></li>
+    <li><span class="num">06</span><span class="titre">Se repérer dans l'écran principal</span><span class="fil"></span><span class="pg" data-ch="6">·</span></li>
+    <li><span class="num">07</span><span class="titre">Les élèves</span><span class="fil"></span><span class="pg" data-ch="7">·</span></li>
+    <li><span class="num">08</span><span class="titre">Les parents</span><span class="fil"></span><span class="pg" data-ch="8">·</span></li>
+    <li><span class="num">09</span><span class="titre">Niveaux et classes</span><span class="fil"></span><span class="pg" data-ch="9">·</span></li>
+    <li><span class="num">10</span><span class="titre">Les enseignants</span><span class="fil"></span><span class="pg" data-ch="10">·</span></li>
+    <li><span class="num">11</span><span class="titre">Les matières</span><span class="fil"></span><span class="pg" data-ch="11">·</span></li>
+    <li><span class="num">12</span><span class="titre">L'emploi du temps</span><span class="fil"></span><span class="pg" data-ch="12">·</span></li>
+    <li><span class="num">13</span><span class="titre">Les présences</span><span class="fil"></span><span class="pg" data-ch="13">·</span></li>
+    <li><span class="num">14</span><span class="titre">Notes et bulletins</span><span class="fil"></span><span class="pg" data-ch="14">·</span></li>
+    <li><span class="num">15</span><span class="titre">Le passage de classe <span class="desc">— fin d'année</span></span><span class="fil"></span><span class="pg" data-ch="15">·</span></li>
+    <li><span class="num">16</span><span class="titre">Écolages et paiements</span><span class="fil"></span><span class="pg" data-ch="16">·</span></li>
+    <li><span class="num">17</span><span class="titre">Paramètres et utilisateurs</span><span class="fil"></span><span class="pg" data-ch="17">·</span></li>
+    <li><span class="num">18</span><span class="titre">Travailler sans Internet</span><span class="fil"></span><span class="pg" data-ch="18">·</span></li>
+    <li><span class="num">19</span><span class="titre">La licence</span><span class="fil"></span><span class="pg" data-ch="19">·</span></li>
+    <li><span class="num">20</span><span class="titre">Questions fréquentes</span><span class="fil"></span><span class="pg" data-ch="20">·</span></li>
+    <li><span class="num">—</span><span class="titre">Assistance</span><span class="fil"></span><span class="pg" data-ch="21">·</span></li>
+  </ol>
+</section>
+
+<!-- ═════════ 1 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">1</div><div><div class="etiquette">Chapitre 1</div><h2>Bienvenue dans Sekoliko</h2><p>Un seul logiciel pour toute la vie de l'établissement.</p></div></div>
+  <p>Sekoliko réunit au même endroit tout ce qu'une école gère au quotidien : les élèves et leurs familles, les classes, les enseignants, l'emploi du temps, les présences, les notes et les bulletins, les écolages et les reçus. Il a été pensé pour les écoles de Madagascar : simple, rapide, et fiable même quand la connexion ne l'est pas.</p>
+  <div class="grille-2">
+    <div class="carte"><div class="ico">É</div><h4>Scolarité</h4><p>Dossiers d'élèves, parents, classes, niveaux, passage de classe en fin d'année.</p></div>
+    <div class="carte"><div class="ico">P</div><h4>Pédagogie</h4><p>Matières et coefficients, emploi du temps, présences, notes, moyennes et bulletins.</p></div>
+    <div class="carte"><div class="ico">Ar</div><h4>Finances</h4><p>Frais par niveau, encaissements (même partiels), reçus, suivi des retards de paiement.</p></div>
+    <div class="carte"><div class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-15-6.7L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/><path d="M16 16h5v5"/></svg></div><h4>Plusieurs postes, sans Internet</h4><p>Chaque ordinateur travaille seul et se synchronise avec les autres dès que le réseau revient.</p></div>
+  </div>
+  <h3>Les documents que vous pouvez produire</h3>
+  <ul class="puces">
+    <li><strong>Bulletins</strong> par classe, en PDF ou Word, prêts à imprimer.</li>
+    <li><strong>Listes</strong> d'élèves, de parents, d'enseignants et de classes, en PDF, Word ou Excel.</li>
+    <li><strong>Fiches</strong> élève et parent, <strong>emplois du temps</strong> et <strong>reçus</strong> de paiement.</li>
+  </ul>
+  <div class="encadre astuce"><b class="titre">Astuce</b><p>Les exports reprennent les filtres de l'écran : pour imprimer la liste d'une seule classe, filtrez d'abord la liste des élèves sur cette classe, puis exportez.</p></div>
+</section>
+
+<!-- ═════════ 2 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">2</div><div><div class="etiquette">Chapitre 2</div><h2>Installer Sekoliko</h2><p>Dix minutes, téléchargement compris. Puis le logiciel se met à jour tout seul.</p></div></div>
+  <h3>Ce qu'il vous faut</h3>
+  <table class="simple">
+    <tr><td style="width:35mm"><b>Système</b></td><td>Windows 10 ou Windows 11, en 64 ou 32 bits.</td></tr>
+    <tr><td><b>Mémoire</b></td><td>4 Go minimum, 8 Go conseillés.</td></tr>
+    <tr><td><b>Disque</b></td><td>1 Go libre, plus la place des photos et documents.</td></tr>
+    <tr><td><b>Internet</b></td><td>Nécessaire pour créer l'établissement et activer la licence, puis seulement pour synchroniser.</td></tr>
+  </table>
+  <div class="encadre attention"><b class="titre">Important</b><p>Windows 7, 8 et 8.1 ne sont pas pris en charge : l'installateur le détecte et s'arrête avec un message, plutôt que d'installer un logiciel qui ne démarrerait pas.</p></div>
+  <h3>Installer pas à pas</h3>
+  <ol class="etapes">
+    <li>Ouvrez le site <strong>sekoliko.netlify.app</strong> et cliquez sur <span class="bouton">Télécharger pour Windows</span>. Le fichier pèse environ 200 Mo : sur une connexion lente, laissez-le se télécharger tranquillement.</li>
+    <li>Double-cliquez sur le fichier téléchargé, <strong>Sekoliko-1.0.2-installateur.exe</strong>.</li>
+    <li>Windows peut afficher « <em>Windows a protégé votre ordinateur — Éditeur inconnu</em> ». Cliquez sur <strong>Informations complémentaires</strong>, puis sur <strong>Exécuter quand même</strong>. Ce message apparaît tant que le certificat de signature du logiciel est en cours d'acquisition.</li>
+    <li>Choisissez le dossier d'installation (celui proposé convient) et laissez faire.</li>
+    <li>Un raccourci <strong>Sekoliko</strong> est créé sur le bureau et dans le menu Démarrer. Double-cliquez dessus pour lancer le logiciel.</li>
+  </ol>
+  <div class="encadre attention"><b class="titre">Important</b><p>Ne téléchargez Sekoliko que depuis le site officiel ou un lien envoyé par notre équipe.</p></div>
+  <h3>La version portable</h3>
+  <p>Le site propose aussi une <strong>version portable</strong> : un seul fichier à lancer depuis une clé USB, sans installation. Elle dépanne sur un poste où l'on ne peut rien installer, mais elle <strong>ne se met pas à jour toute seule</strong> : préférez l'installateur pour un usage quotidien.</p>
+  <h3>Garder Sekoliko à jour</h3>
+  <p>Quand il est connecté à Internet, Sekoliko vérifie de lui-même s'il existe une nouvelle version, au démarrage puis toutes les six heures.</p>
+  <ol class="etapes">
+    <li>Un bandeau bleu annonce : « <em>La version … de Sekoliko est disponible</em> ». Cliquez sur <span class="bouton">Télécharger</span> — ou sur <strong>Plus tard</strong> si la connexion est chargée.</li>
+    <li>Une barre de progression suit le téléchargement ; vous pouvez continuer à travailler.</li>
+    <li>Le bandeau devient vert : cliquez sur <strong>Redémarrer maintenant</strong>, ou laissez la mise à jour s'installer à la prochaine fermeture du logiciel.</li>
+  </ol>
+  <div class="encadre astuce"><b class="titre">Astuce</b><p>Pour vérifier vous-même, ouvrez <span class="chemin">Paramètres <i>›</i> Configuration</span> : la carte <strong>Mises à jour</strong> affiche la version installée et propose <strong>Vérifier maintenant</strong>.</p></div>
+</section>
+
+<!-- ═════════ 3 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">3</div><div><div class="etiquette">Chapitre 3</div><h2>Créer votre établissement</h2><p>À faire une seule fois, par la personne qui dirige l'établissement.</p></div></div>
+  <p>Au tout premier lancement, l'écran de connexion propose <strong>Nouvel établissement ? Créer un compte</strong>. Cette étape demande une connexion Internet.</p>
+  <ol class="etapes">
+    <li>Cliquez sur <strong>Créer un compte</strong>.</li>
+    <li>Saisissez le <strong>nom de l'école</strong>, puis le <strong>prénom</strong>, le <strong>nom</strong> et l'<strong>adresse e-mail</strong> de l'administrateur. Cette adresse deviendra votre identifiant de connexion.</li>
+    <li>Choisissez un <strong>mot de passe</strong> d'au moins 8 caractères et recopiez-le dans la case de confirmation.</li>
+    <li>Cliquez sur <span class="bouton">Créer l'établissement</span>, puis connectez-vous avec l'e-mail et le mot de passe choisis.</li>
+  </ol>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/creation-compte.jpg" alt=""></div><figcaption>La création de l'établissement et de son compte administrateur.</figcaption></figure>
+  <div class="encadre savoir"><b class="titre">Bon à savoir — l'essai gratuit</b><p>La création ouvre un <strong>essai gratuit de 14 jours</strong>, sans carte bancaire ni engagement, avec tous les modules, jusqu'à 200 élèves et 30 enseignants. Voir le chapitre 19 pour la licence.</p></div>
+  <div class="encadre attention"><b class="titre">Important — un établissement par ordinateur</b><p>Un ordinateur ne peut créer qu'<strong>un seul établissement</strong>, et une adresse e-mail ne sert qu'à un seul compte. Les autres membres de l'équipe ne créent pas de compte : l'administrateur leur en ouvre un (chapitre 17). Pour un second établissement, contactez-nous.</p></div>
+</section>
+
+<!-- ═════════ 4 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">4</div><div><div class="etiquette">Chapitre 4</div><h2>Se connecter et verrouiller</h2><p>Un poste partagé entre plusieurs collègues, en toute sécurité.</p></div></div>
+  <h3>Se connecter</h3>
+  <ol class="etapes">
+    <li>Saisissez votre <strong>adresse e-mail</strong> et votre <strong>mot de passe</strong>.</li>
+    <li>Cliquez sur <span class="bouton">Se connecter</span>.</li>
+  </ol>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/connexion.jpg" alt=""></div><figcaption>L'écran de connexion.</figcaption></figure>
+  <p>Mot de passe oublié ? Cliquez sur <strong>Mot de passe oublié ?</strong> et suivez les instructions reçues par e-mail. Si l'administration vous a remis un <strong>mot de passe provisoire</strong>, Sekoliko vous demande d'en choisir un nouveau dès la première connexion.</p>
+  <h3>Verrouiller quand vous quittez le poste</h3>
+  <p>Le bouton de déconnexion, en bas du menu de gauche à côté de votre nom, <strong>verrouille</strong> le logiciel. Votre nom reste affiché ; il suffit de retaper votre mot de passe pour reprendre exactement là où vous en étiez — <strong>même sans Internet</strong>. Fermer puis rouvrir Sekoliko redemande aussi le mot de passe.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/session-verrouillee.jpg" alt=""></div><figcaption>La session verrouillée : seul le mot de passe permet de reprendre.</figcaption></figure>
+  <h3>Laisser la place à un collègue</h3>
+  <ol class="etapes">
+    <li>Sur l'écran verrouillé, cliquez sur <strong>Ce n'est pas vous ? Se connecter avec un autre compte</strong>.</li>
+    <li>Votre collègue saisit son propre e-mail et son mot de passe.</li>
+  </ol>
+  <div class="encadre savoir"><b class="titre">Bon à savoir</b><p>Sans Internet, un compte ne peut se connecter que s'il l'a déjà fait au moins une fois en ligne sur ce même ordinateur. Pensez-y avant une coupure prévue.</p></div>
+</section>
+
+<!-- ═════════ 5 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">5</div><div><div class="etiquette">Chapitre 5</div><h2>L'assistant de configuration</h2><p>Trois étapes, à la première connexion d'un nouvel établissement.</p></div></div>
+  <ol class="etapes">
+    <li><strong>Bienvenue</strong> — un aperçu des modules du logiciel. Cliquez sur <span class="bouton">Suivant</span>.</li>
+    <li><strong>Année scolaire</strong> — donnez son nom (par exemple <em>2026-2027</em>), ses dates de début et de fin, puis choisissez le <strong>système de périodes</strong> : trimestres, semestres ou bimestres. Un aperçu affiche aussitôt les périodes obtenues.</li>
+    <li><strong>Terminé</strong> — un récapitulatif s'affiche ; le logiciel est prêt.</li>
+  </ol>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/assistant-configuration.jpg" alt=""></div><figcaption>La première étape de l'assistant de configuration.</figcaption></figure>
+  <div class="encadre savoir"><b class="titre">Bon à savoir</b><p>L'assistant n'apparaît qu'une fois par établissement. Tous ces choix restent modifiables ensuite dans <span class="chemin">Paramètres <i>›</i> Configuration</span>.</p></div>
+  <h3>Par où continuer ?</h3>
+  <p>Pour démarrer une année dans le bon ordre : créez les <strong>niveaux</strong> et les <strong>classes</strong> (chapitre 9), les <strong>matières</strong> (chapitre 11), les <strong>enseignants</strong> (chapitre 10), les <strong>frais par niveau</strong> (chapitre 16), puis inscrivez les <strong>élèves</strong> (chapitre 7).</p>
+</section>
+
+<!-- ═════════ 6 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">6</div><div><div class="etiquette">Chapitre 6</div><h2>Se repérer dans l'écran principal</h2><p>Le menu à gauche, la barre du haut, et le tableau de bord.</p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/tableau-de-bord.jpg" alt=""></div><figcaption>Le tableau de bord, premier écran après la connexion.</figcaption></figure>
+  <h3>Le menu de gauche</h3>
+  <table class="simple">
+    <tr><th style="width:30mm">Rubrique</th><th>Ce qu'elle contient</th></tr>
+    <tr><td><b>Accueil</b></td><td>Tableau de bord</td></tr>
+    <tr><td><b>École</b></td><td>Élèves, Parents, Classes, Niveaux, Enseignants, Promotions</td></tr>
+    <tr><td><b>Pédagogie</b></td><td>Notes, Présences, Matières, Emploi du temps</td></tr>
+    <tr><td><b>Finance</b></td><td>Paiements, Frais par niveau</td></tr>
+    <tr><td><b>Paramètres</b></td><td>Utilisateurs, Configuration, Licence, Synchronisation</td></tr>
+  </table>
+  <p>La petite flèche en haut du menu le <strong>réduit</strong> à une colonne d'icônes, pour gagner de la place. Les pastilles grises indiquent le nombre d'élèves, de parents, de classes et d'enseignants.</p>
+  <h3>La barre du haut</h3>
+  <ul class="puces">
+    <li><strong>En ligne / Hors ligne</strong> : l'état de la connexion avec le serveur.</li>
+    <li>Les <strong>deux flèches</strong> : lancer une synchronisation immédiate (rarement nécessaire).</li>
+    <li>Le <strong>soleil / la lune</strong> : passer du thème clair au thème sombre.</li>
+  </ul>
+  <h3>Le tableau de bord</h3>
+  <p>Il résume l'établissement en un coup d'œil : nombre d'élèves, d'enseignants et de classes, taux de présence du jour, puis les <strong>finances</strong> — montants collectés, en attente et en retard, taux de recouvrement et collecte mois par mois. Plus bas : effectifs par classe, paiements récents et <strong>paiements en retard</strong>. Le bouton <span class="bouton">Inscrire un élève</span> ouvre directement le formulaire d'inscription.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/tableau-de-bord-sombre.jpg" alt=""></div><figcaption>Le même écran en thème sombre, plus reposant en fin de journée.</figcaption></figure>
+</section>
+
+<!-- ═════════ 7 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">7</div><div><div class="etiquette">Chapitre 7</div><h2>Les élèves</h2><p><span class="chemin">École <i>›</i> Élèves</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/eleves.jpg" alt=""></div><figcaption>La liste des élèves, avec recherche et filtres.</figcaption></figure>
+  <h3>Trouver un élève</h3>
+  <p>Tapez un nom, un prénom ou un matricule dans la barre de recherche. Les deux listes à droite filtrent par <strong>classe</strong> et par <strong>statut</strong> (actif, inactif, diplômé, suspendu). Un clic sur le titre d'une colonne trie la liste.</p>
+  <h3>Inscrire un élève</h3>
+  <ol class="etapes">
+    <li>Cliquez sur <span class="bouton">Ajouter un élève</span>.</li>
+    <li>Renseignez son identité, sa date et son lieu de naissance, sa classe, et si besoin ses informations médicales (groupe sanguin, allergies, contact d'urgence).</li>
+    <li>Ajoutez sa photo si vous l'avez, puis enregistrez.</li>
+  </ol>
+  <div class="encadre savoir"><b class="titre">Bon à savoir</b><p>Le <strong>matricule</strong> est attribué automatiquement (par exemple <em>STU-2026-000074</em>) : vous n'avez rien à inventer.</p></div>
+  <h3>La fiche d'un élève</h3>
+  <p>Cliquez sur une ligne pour ouvrir la fiche. Ses onglets rassemblent tout : <strong>informations</strong>, <strong>notes</strong>, <strong>présences</strong>, <strong>paiements</strong> — où vous pouvez encaisser directement — et <strong>documents</strong>. Le bouton <strong>Exporter la fiche</strong> la produit en PDF ou Word.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/fiche-eleve.jpg" alt=""></div><figcaption>La fiche d'un élève et ses onglets.</figcaption></figure>
+  <h3>Exporter, modifier, supprimer</h3>
+  <ul class="puces">
+    <li><strong>Exporter</strong> produit la liste en PDF, Word ou Excel, avec les filtres en cours.</li>
+    <li>Le <strong>crayon</strong> d'une ligne modifie l'élève ; la <strong>corbeille</strong> le supprime.</li>
+    <li>Cochez plusieurs lignes pour les supprimer en une fois.</li>
+  </ul>
+</section>
+
+<!-- ═════════ 8 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">8</div><div><div class="etiquette">Chapitre 8</div><h2>Les parents</h2><p><span class="chemin">École <i>›</i> Parents</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/parents.jpg" alt=""></div><figcaption>Les parents et tuteurs, avec leurs enfants rattachés.</figcaption></figure>
+  <p>Chaque parent ou tuteur a une fiche, reliée à <strong>un ou plusieurs enfants</strong>. Depuis la fiche d'un parent, on voit toute la fratrie ; depuis la fiche d'un élève, on retrouve les personnes à contacter.</p>
+  <ol class="etapes">
+    <li>Cliquez sur <span class="bouton">Ajouter un parent</span>.</li>
+    <li>Saisissez son nom, son e-mail et jusqu'à trois numéros de téléphone.</li>
+    <li>Choisissez le ou les enfants à rattacher, puis enregistrez.</li>
+  </ol>
+  <div class="encadre astuce"><b class="titre">Astuce</b><p>Un clic sur le nom d'un enfant, dans la colonne <strong>Enfants</strong>, ouvre directement sa fiche. La liste des parents s'exporte aussi en PDF, Word ou Excel.</p></div>
+</section>
+
+<!-- ═════════ 9 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">9</div><div><div class="etiquette">Chapitre 9</div><h2>Niveaux et classes</h2><p><span class="chemin">École <i>›</i> Niveaux</span> puis <span class="chemin">École <i>›</i> Classes</span></p></div></div>
+  <h3>D'abord les niveaux</h3>
+  <p>Les niveaux (<em>T1</em>, <em>6ème</em>, <em>Terminale</em>…) sont la référence de tout le logiciel : classes, matières et frais s'y rattachent. Sur un établissement neuf, le bouton <strong>Créer les niveaux standards (Madagascar)</strong> remplit en un clic toute la nomenclature, de T1 à la Terminale, avec le passage automatique d'un niveau au suivant. Vous pouvez ensuite en ajouter ou en modifier.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/niveaux.jpg" alt=""></div><figcaption>La liste des niveaux de l'établissement.</figcaption></figure>
+  <h3>Puis les classes</h3>
+  <ol class="etapes">
+    <li>Cliquez sur <span class="bouton">Ajouter une classe</span>.</li>
+    <li>Donnez-lui un nom (<em>6ème A</em>), choisissez son niveau, sa salle et sa capacité d'accueil.</li>
+    <li>Enregistrez : la classe apparaît avec son effectif et son taux de remplissage.</li>
+  </ol>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/classes.jpg" alt=""></div><figcaption>Les classes et leur taux de remplissage.</figcaption></figure>
+  <h3>La fiche d'une classe</h3>
+  <p>Ouvrez une classe pour voir ses élèves, ses matières, ses enseignants et son emploi du temps. C'est aussi d'ici que l'on <strong>exporte la liste</strong> de la classe et que l'on produit les <strong>bulletins</strong> (chapitre 14).</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/classe-detail.jpg" alt=""></div><figcaption>La fiche d'une classe, d'où partent les bulletins.</figcaption></figure>
+</section>
+
+<!-- ═════════ 10 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">10</div><div><div class="etiquette">Chapitre 10</div><h2>Les enseignants</h2><p><span class="chemin">École <i>›</i> Enseignants</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/enseignants.jpg" alt=""></div><figcaption>La liste des enseignants.</figcaption></figure>
+  <h3>Ajouter un enseignant</h3>
+  <ol class="etapes">
+    <li>Cliquez sur <span class="bouton">Ajouter un enseignant</span>.</li>
+    <li>Saisissez son identité, son <strong>adresse e-mail</strong>, ses téléphones et sa spécialité.</li>
+    <li>Affectez-lui ses <strong>classes</strong> et ses <strong>matières</strong>, puis enregistrez.</li>
+  </ol>
+  <div class="encadre savoir"><b class="titre">Bon à savoir</b><p>L'e-mail de l'enseignant devient son identifiant de connexion. Sans mot de passe saisi, un mot de passe provisoire est généré et lui est communiqué ; il le changera à sa première connexion.</p></div>
+  <h3>Présences, paie et contrats</h3>
+  <p>Les onglets de la rubrique suivent aussi la <strong>présence des enseignants</strong>, leur <strong>paie</strong> (horaire, mensuelle ou forfaitaire) et leurs <strong>contrats</strong>, avec les numéros CNaPS et OSTIE exigés pour un contrat de travail à Madagascar.</p>
+</section>
+
+<!-- ═════════ 11 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">11</div><div><div class="etiquette">Chapitre 11</div><h2>Les matières</h2><p><span class="chemin">Pédagogie <i>›</i> Matières</span></p></div></div>
+  <p>Chaque matière a un <strong>nom</strong>, un <strong>code</strong> court (<em>MATH</em>, <em>FR</em>, <em>MLG</em>…), un <strong>niveau</strong> et un <strong>coefficient</strong>. Le coefficient pèse dans le calcul des moyennes et des bulletins.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/matieres.jpg" alt=""></div><figcaption>Les matières, leur niveau et leur coefficient.</figcaption></figure>
+  <div class="encadre attention"><b class="titre">Important</b><p>Le coefficient se règle <strong>uniquement ici</strong>. Modifiez-le avant la saisie des notes : il s'applique à toutes les moyennes de la matière.</p></div>
+</section>
+
+<!-- ═════════ 12 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">12</div><div><div class="etiquette">Chapitre 12</div><h2>L'emploi du temps</h2><p><span class="chemin">Pédagogie <i>›</i> Emploi du temps</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/emploi-du-temps.jpg" alt=""></div><figcaption>La semaine de la 6ème A, avec les récréations et la pause.</figcaption></figure>
+  <ol class="etapes">
+    <li>Choisissez la <strong>classe</strong> dans la liste en haut à droite.</li>
+    <li>Cliquez dans la grille pour ajouter un cours : jour, heure de début et de fin, matière, enseignant et salle.</li>
+    <li>Ajoutez de la même façon les <strong>récréations</strong>, qui apparaissent en pointillés.</li>
+  </ol>
+  <p>En haut de chaque jour : le nombre de cours et d'heures. Le bouton <strong>Exporter en PDF</strong> produit la grille, prête à afficher dans la classe.</p>
+</section>
+
+<!-- ═════════ 13 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">13</div><div><div class="etiquette">Chapitre 13</div><h2>Les présences</h2><p><span class="chemin">Pédagogie <i>›</i> Présences</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/presences.jpg" alt=""></div><figcaption>Les présences d'une classe pour une journée.</figcaption></figure>
+  <p>Choisissez une <strong>date</strong> et une <strong>classe</strong> : chaque élève apparaît avec son statut du jour. La recherche retrouve un élève par nom ou matricule ; la liste de droite ne montre qu'un statut à la fois.</p>
+  <table class="simple">
+    <tr><th>Statut</th><th>Signification</th></tr>
+    <tr><td><span class="pastille" style="background:#d1fae5;color:#047857">Présent</span></td><td>L'élève était en classe.</td></tr>
+    <tr><td><span class="pastille" style="background:#fee2e2;color:#b91c1c">Absent</span></td><td>L'élève n'est pas venu.</td></tr>
+    <tr><td><span class="pastille" style="background:#fef3c7;color:#b45309">Retard</span></td><td>L'élève est arrivé après le début du cours.</td></tr>
+    <tr><td><span class="pastille" style="background:#e2e8f0;color:#334155">Excusé</span></td><td>Absence justifiée.</td></tr>
+  </table>
+  <div class="encadre astuce"><b class="titre">Astuce</b><p>Filtrez sur <strong>Absent</strong> pour obtenir d'un coup la liste des élèves à signaler aux familles.</p></div>
+</section>
+
+<!-- ═════════ 14 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">14</div><div><div class="etiquette">Chapitre 14</div><h2>Notes et bulletins</h2><p><span class="chemin">Pédagogie <i>›</i> Notes</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/notes.jpg" alt=""></div><figcaption>Les notes, filtrées par classe, matière et période.</figcaption></figure>
+  <h3>Consulter et saisir les notes</h3>
+  <p>L'onglet <strong>Notes</strong> liste toutes les notes, filtrables par classe, matière et période. Une note en rouge est sous la moyenne, en orange tout juste au-dessus.</p>
+  <ol class="etapes">
+    <li>Cliquez sur <span class="bouton">Saisie de notes</span>.</li>
+    <li>Choisissez la classe, la matière, la période et le type d'évaluation (devoir, contrôle, examen…).</li>
+    <li>Saisissez la note de chaque élève, puis enregistrez.</li>
+  </ol>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/saisie-notes.jpg" alt=""></div><figcaption>La saisie des notes d'une évaluation.</figcaption></figure>
+  <h3>Régler le calcul des moyennes</h3>
+  <p>L'onglet <strong>Configuration</strong> choisit les types d'évaluation qui comptent dans la moyenne générale. Les <strong>examens blancs</strong> peuvent être mis à part, hors moyenne. On y fixe aussi les seuils de passage utilisés en fin d'année (chapitre 15).</p>
+  <h3>Produire les bulletins</h3>
+  <ol class="etapes">
+    <li>Ouvrez <span class="chemin">École <i>›</i> Classes</span> et cliquez sur la classe voulue.</li>
+    <li>Cliquez sur <strong>Bulletins</strong> et choisissez PDF ou Word.</li>
+  </ol>
+  <p>Chaque bulletin présente la moyenne générale, pondérée par les coefficients, et le <strong>rang</strong> de l'élève dans sa classe (par exemple <em>5/32</em>). Un élève sans aucune note n'est pas classé.</p>
+</section>
+
+<!-- ═════════ 15 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">15</div><div><div class="etiquette">Chapitre 15</div><h2>Le passage de classe</h2><p><span class="chemin">École <i>›</i> Promotions</span> — en fin d'année scolaire</p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/promotions.jpg" alt=""></div><figcaption>Les quatre étapes du passage de classe.</figcaption></figure>
+  <p>Le passage d'une année à l'autre est guidé en quatre étapes, à faire dans l'ordre :</p>
+  <ol class="etapes">
+    <li><strong>Délibération</strong> — pour chaque classe, Sekoliko calcule les moyennes et propose une décision. Vous pouvez la corriger élève par élève.</li>
+    <li><strong>Clôture annuelle</strong> — ferme l'année en cours et prépare la suivante.</li>
+    <li><strong>Ré-inscriptions</strong> — confirme l'inscription de chaque élève pour la nouvelle année. Les dossiers avec un solde impayé sont signalés et bloqués.</li>
+    <li><strong>Répartition</strong> — affecte les élèves dans leurs nouvelles classes.</li>
+  </ol>
+  <table class="simple">
+    <tr><th>Moyenne annuelle</th><th>Décision proposée</th></tr>
+    <tr><td>10 ou plus</td><td><span class="pastille" style="background:#d1fae5;color:#047857">Admis</span></td></tr>
+    <tr><td>de 9,50 à 9,99</td><td><span class="pastille" style="background:#fef3c7;color:#b45309">À délibérer</span></td></tr>
+    <tr><td>moins de 9,50</td><td><span class="pastille" style="background:#fee2e2;color:#b91c1c">Redoublant</span></td></tr>
+  </table>
+  <div class="encadre attention"><b class="titre">Important</b><p>Ces seuils se règlent dans l'onglet Configuration des Notes. Vérifiez-les <strong>avant</strong> la délibération.</p></div>
+</section>
+
+<!-- ═════════ 16 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">16</div><div><div class="etiquette">Chapitre 16</div><h2>Écolages et paiements</h2><p><span class="chemin">Finance <i>›</i> Frais par niveau</span> et <span class="chemin">Finance <i>›</i> Paiements</span></p></div></div>
+  <h3>Définir les frais</h3>
+  <p>Commencez par les frais de chaque niveau : droits d'inscription, écolage mensuel, frais annuels. Chaque frais a un <strong>montant en Ariary</strong> et peut être désactivé sans être supprimé.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/frais.jpg" alt=""></div><figcaption>La structure des frais, niveau par niveau.</figcaption></figure>
+  <h3>Encaisser un paiement</h3>
+  <ol class="etapes">
+    <li>Ouvrez la fiche de l'élève, onglet <strong>Paiements</strong>.</li>
+    <li>Choisissez le frais concerné et saisissez le montant reçu — il peut être <strong>partiel</strong>.</li>
+    <li>Indiquez le mode de paiement : <strong>Espèces, Mvola, Orange Money, Airtel Money, Virement</strong> ou <strong>Chèque</strong>, et la référence si besoin.</li>
+    <li>Enregistrez, puis imprimez le <strong>reçu</strong>.</li>
+  </ol>
+  <h3>Suivre les paiements</h3>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/paiements.jpg" alt=""></div><figcaption>Le suivi des paiements : payés et partiels.</figcaption></figure>
+  <p>La liste regroupe tous les paiements. Filtrez par statut ou par période ; le bouton <strong>+</strong> d'un paiement <em>Partiel</em> enregistre le complément. Les impayés apparaissent aussi sur le tableau de bord, dans <strong>Paiements en retard</strong>.</p>
+</section>
+
+<!-- ═════════ 17 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">17</div><div><div class="etiquette">Chapitre 17</div><h2>Paramètres et utilisateurs</h2><p><span class="chemin">Paramètres <i>›</i> Configuration</span> et <span class="chemin">Paramètres <i>›</i> Utilisateurs</span></p></div></div>
+  <h3>La configuration de l'établissement</h3>
+  <ul class="puces">
+    <li><strong>Général</strong> : nom et logo de l'établissement — le logo figure sur les bulletins, les reçus et les exports.</li>
+    <li><strong>Année scolaire</strong> : nom, dates et système de périodes.</li>
+    <li><strong>Sécurité</strong> : changer votre mot de passe.</li>
+  </ul>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/parametres-general.jpg" alt=""></div><figcaption>Les informations générales de l'établissement.</figcaption></figure>
+  <h3>Ouvrir un compte à un collègue</h3>
+  <ol class="etapes">
+    <li>Ouvrez <span class="chemin">Paramètres <i>›</i> Utilisateurs</span> et cliquez sur <span class="bouton">Ajouter un utilisateur</span>.</li>
+    <li>Saisissez son nom, son e-mail, et choisissez son rôle : <strong>Administrateur</strong> ou <strong>Secrétaire</strong>.</li>
+    <li>Sans mot de passe saisi, un mot de passe provisoire est généré : communiquez-le à votre collègue, qui le changera à sa première connexion.</li>
+  </ol>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/utilisateurs.jpg" alt=""></div><figcaption>Les comptes du personnel.</figcaption></figure>
+  <div class="encadre savoir"><b class="titre">Bon à savoir</b><p>Les comptes <strong>enseignant</strong> se créent dans <span class="chemin">École <i>›</i> Enseignants</span> et les fiches <strong>parent</strong> dans <span class="chemin">École <i>›</i> Parents</span>.</p></div>
+</section>
+
+<!-- ═════════ 18 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">18</div><div><div class="etiquette">Chapitre 18</div><h2>Travailler sans Internet</h2><p>La coupure de réseau n'arrête plus le travail.</p></div></div>
+  <p>Toutes vos saisies sont enregistrées <strong>sur ce poste d'abord</strong>. Sans Internet, vous continuez à inscrire, encaisser, saisir des notes et imprimer. Dès que la connexion revient, les changements partent vers le serveur et ceux des autres postes arrivent, <strong>en continu</strong>, sans que vous ayez rien à faire.</p>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/synchronisation.jpg" alt=""></div><figcaption>La page Synchronisation : tout est synchronisé.</figcaption></figure>
+  <h3>La page Synchronisation</h3>
+  <p><span class="chemin">Paramètres <i>›</i> Synchronisation</span> indique si le poste est en ligne, la date du dernier échange, le nombre de modifications <strong>en attente</strong> d'envoi, et l'état de chaque type de données. <span class="bouton">Synchroniser maintenant</span> force un échange immédiat — ce n'est pas nécessaire en usage normal.</p>
+  <h3>Plusieurs postes en même temps</h3>
+  <p>Le secrétariat peut encaisser pendant que la direction consulte les notes : chaque poste travaille de son côté. Si la même fiche est modifiée sur deux postes pendant une coupure, Sekoliko retient la <strong>modification la plus récente</strong> au retour du réseau.</p>
+  <div class="encadre attention"><b class="titre">Important</b><p>Connectez chaque poste à Internet <strong>au moins une fois par jour</strong> : c'est ce qui met les postes d'accord entre eux et sauvegarde vos données sur le serveur.</p></div>
+</section>
+
+<!-- ═════════ 19 ═════════ -->
+<section class="chapitre">
+  <div class="entete-chapitre"><div class="num">19</div><div><div class="etiquette">Chapitre 19</div><h2>La licence</h2><p><span class="chemin">Paramètres <i>›</i> Licence</span></p></div></div>
+  <figure class="capture"><div class="cadre"><div class="barre"><span></span><span></span><span></span></div><img src="assets/desktop/licence.jpg" alt=""></div><figcaption>Une licence active : jours restants, date d'échéance et activation d'un code.</figcaption></figure>
+  <h3>Pendant l'essai</h3>
+  <p>À la création, l'établissement dispose de <strong>14 jours d'essai gratuit</strong>, avec tous les modules, jusqu'à 200 élèves et 30 enseignants.</p>
+  <h3>Obtenir et activer une licence</h3>
+  <ol class="etapes">
+    <li>Contactez-nous par téléphone, WhatsApp ou e-mail en indiquant l'<strong>adresse e-mail de l'administrateur</strong> de l'établissement.</li>
+    <li>Après règlement, vous recevez un <strong>code de 16 caractères</strong> (<em>XXXX-XXXX-XXXX-XXXX</em>), par SMS, e-mail ou dicté au téléphone.</li>
+    <li>Saisissez-le dans <strong>Code de licence</strong> et cliquez sur <span class="bouton">Activer</span>. Cette étape demande Internet, une seule fois.</li>
+  </ol>
+  <p>La licence est <strong>annuelle</strong>, <strong>sans limite</strong> d'élèves ni d'enseignants, valable sur tous les postes de l'établissement. Sa date d'échéance est affichée sur la page.</p>
+  <div class="encadre savoir"><b class="titre">Bon à savoir — à l'échéance</b><p>Sans licence valide, Sekoliko passe en <strong>lecture seule</strong> : tout reste consultable, exportable et imprimable, mais plus rien ne peut être créé ni modifié. Un bandeau rouge l'indique. <strong>Rien n'est jamais supprimé</strong> : tout redevient modifiable dès l'activation d'un nouveau code.</p></div>
+</section>
+
+<!-- ═════════ 20 ═════════ -->
+<section class="chapitre faq">
+  <div class="entete-chapitre"><div class="num">20</div><div><div class="etiquette">Chapitre 20</div><h2>Questions fréquentes</h2><p>Les réponses aux questions qu'on nous pose le plus.</p></div></div>
+  <div class="q"><b>Je ne peux plus rien modifier. Pourquoi ?</b><p>L'essai ou la licence a probablement expiré : le logiciel est en lecture seule. Vérifiez <span class="chemin">Paramètres <i>›</i> Licence</span> (chapitre 19).</p></div>
+  <div class="q"><b>Un collègue peut-il utiliser mon poste avec son propre compte ?</b><p>Oui : sur l'écran verrouillé, <strong>Se connecter avec un autre compte</strong>. Sans Internet, il faut qu'il se soit déjà connecté une fois en ligne sur ce poste.</p></div>
+  <div class="q"><b>J'ai changé de mot de passe : dois-je faire quelque chose sur les autres postes ?</b><p>Connectez-vous une fois en ligne sur chacun d'eux : ils retiendront le nouveau mot de passe pour le déverrouillage hors ligne.</p></div>
+  <div class="q"><b>Pourquoi ne puis-je pas créer un second établissement ?</b><p>Un ordinateur ne peut créer qu'un seul établissement. Pour en ouvrir un autre, contactez-nous.</p></div>
+  <div class="q"><b>« Cet e-mail est déjà utilisé par un autre compte » : que faire ?</b><p>Une adresse e-mail ne sert qu'à un seul compte. Utilisez une autre adresse pour ce collègue, ou vérifiez qu'il n'a pas déjà un compte.</p></div>
+  <div class="q"><b>Un élève n'apparaît pas dans une classe.</b><p>Vérifiez sa fiche : sa classe est-elle bien renseignée, et son statut <em>Actif</em> ? Vérifiez aussi le filtre de classe de la liste.</p></div>
+  <div class="q"><b>Mes niveaux n'apparaissent pas dans les matières ou les frais.</b><p>Ils doivent être créés dans <span class="chemin">École <i>›</i> Niveaux</span> : c'est la seule liste de référence du logiciel.</p></div>
+  <div class="q"><b>Les données d'un autre poste n'arrivent pas.</b><p>Vérifiez que les deux postes sont <strong>En ligne</strong> (en haut à droite), puis ouvrez <span class="chemin">Paramètres <i>›</i> Synchronisation</span> et cliquez sur Synchroniser maintenant.</p></div>
+  <div class="q"><b>Windows affiche « Éditeur inconnu » à l'installation.</b><p>C'est normal pour l'instant : cliquez sur Informations complémentaires, puis Exécuter quand même (chapitre 2).</p></div>
+</section>
+
+<!-- ═════════ ASSISTANCE ═════════ -->
+<section class="assistance">
+  <div class="entete-chapitre"><div class="num">?</div><div><div class="etiquette">Chapitre 21 · Assistance</div><h2>Une question ? On répond.</h2><p>L'équipe qui écrit le logiciel est celle qui décroche. Pas de ticket, pas de file d'attente.</p></div></div>
+  <div class="contact">
+    <div class="carte"><h4>Téléphone</h4><p>+261 32 57 153 47</p></div>
+    <div class="carte"><h4>WhatsApp</h4><p>+261 32 57 153 47</p></div>
+    <div class="carte"><h4>E-mail</h4><p>merciaaina@gmail.com</p></div>
+  </div>
+  <h3>Nous pouvons vous aider à</h3>
+  <ul class="puces">
+    <li><strong>installer</strong> le logiciel et créer votre établissement ;</li>
+    <li><strong>reprendre vos données</strong> existantes (listes d'élèves sous Excel, par exemple) ;</li>
+    <li><strong>former</strong> la direction et le secrétariat — une séance suffit généralement ;</li>
+    <li>obtenir ou renouveler votre <strong>licence</strong>.</li>
+  </ul>
+  <div class="encadre astuce"><b class="titre">Astuce</b><p>Sur WhatsApp, une photo de l'écran qui vous pose problème nous fait souvent gagner beaucoup de temps.</p></div>
+  <p style="margin-top:12mm;color:#94a3b8;font-size:8pt">Sekoliko · Manuel d'utilisation du logiciel · version 1.0.2 · Le téléchargement et la documentation sont disponibles sur sekoliko.netlify.app.</p>
+</section>
+
+</body></html>

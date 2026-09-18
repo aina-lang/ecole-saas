@@ -8,10 +8,11 @@ import {
   KeyRound,
   RefreshCw,
   ArrowRight,
+  BookOpen,
 } from 'lucide-react'
 import { Reveal } from '@/components/animate'
 import { SectionHeading, SpecRow } from '@/components/ui'
-import { DOWNLOADS, PRODUCT, REQUIREMENTS, SUPPORT } from '@/lib/site'
+import { DOWNLOADS, MANUAL, PRODUCT, REQUIREMENTS, SUPPORT } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Télécharger',
@@ -173,6 +174,24 @@ export default function DownloadPage() {
           <Reveal from="left" delay={0.1}>
             <SectionHeading align="left" eyebrow="Après l’installation" title="Licence et assistance" />
             <div className="mt-8 space-y-4">
+              <a
+                href={MANUAL.href}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-xl border border-brand-200 bg-brand-50 p-6 transition hover:border-brand-400"
+              >
+                <h3 className="flex items-center gap-2 font-semibold text-ink-900">
+                  <BookOpen className="h-5 w-5 text-brand-700" />
+                  {MANUAL.label}
+                </h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-ink-600">
+                  Tout le logiciel expliqué pas à pas, avec les écrans. {MANUAL.detail}.
+                </p>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-700">
+                  <Download className="h-4 w-4" />
+                  Télécharger le PDF
+                </span>
+              </a>
               <div className="rounded-xl border border-ink-200 bg-white p-6">
                 <h3 className="font-semibold text-ink-900">Licence annuelle</h3>
                 <p className="mt-2 text-[15px] leading-relaxed text-ink-600">

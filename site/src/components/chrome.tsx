@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Download, Menu, X, Phone, Mail, MessageCircle } from 'lucide-react'
-import { NAV, PRODUCT, SUPPORT } from '@/lib/site'
+import { MANUAL, NAV, PRODUCT, SUPPORT } from '@/lib/site'
 
 function Wordmark({ light = false }: { light?: boolean }) {
   return (
@@ -146,6 +146,11 @@ export function Footer() {
                 <Link href="/telecharger" className="text-ink-300 transition hover:text-white">
                   Télécharger
                 </Link>
+              </li>
+              <li>
+                <a href={MANUAL.href} target="_blank" rel="noreferrer" className="text-ink-300 transition hover:text-white">
+                  Manuel d’utilisation (PDF)
+                </a>
               </li>
             </ul>
           </div>

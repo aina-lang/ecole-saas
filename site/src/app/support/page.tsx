@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import { Phone, MessageCircle, Mail, LifeBuoy, Database, Wrench, GraduationCap } from 'lucide-react'
+import { Phone, MessageCircle, Mail, LifeBuoy, Database, Wrench, GraduationCap, BookOpen, Download } from 'lucide-react'
 import { Reveal } from '@/components/animate'
 import { SectionHeading } from '@/components/ui'
-import { FAQ, PRODUCT, SUPPORT } from '@/lib/site'
+import { FAQ, MANUAL, PRODUCT, SUPPORT } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Assistance',
@@ -91,6 +91,35 @@ export default function SupportPage() {
                 </a>
               </li>
             ))}
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="border-b border-ink-200 bg-white py-16">
+        <div className="mx-auto max-w-5xl px-5">
+          <Reveal>
+            <a
+              href={MANUAL.href}
+              target="_blank"
+              rel="noreferrer"
+              className="flex flex-col gap-5 rounded-2xl border border-ink-200 bg-ink-50 p-7 transition hover:border-brand-200 hover:bg-brand-50 sm:flex-row sm:items-center"
+            >
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-brand-700 text-white">
+                <BookOpen className="h-7 w-7" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">Documentation</p>
+                <h2 className="mt-1 text-xl font-bold text-ink-900">{MANUAL.label}</h2>
+                <p className="mt-1 text-[15px] leading-relaxed text-ink-600">
+                  De l’installation au bulletin de fin d’année, pas à pas et avec les écrans du
+                  logiciel. {MANUAL.detail}.
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white">
+                <Download className="h-4 w-4" />
+                Télécharger le PDF
+              </span>
+            </a>
           </Reveal>
         </div>
       </section>
