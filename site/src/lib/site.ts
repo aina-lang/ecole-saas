@@ -13,7 +13,7 @@ export const PRODUCT = {
   headline: 'Toute la vie de votre établissement, au même endroit.',
   pitch:
     "Une application pensée pour les écoles de Madagascar : simple, rapide et fiable même quand la connexion ne l'est pas.",
-  version: '1.0.1',
+  version: '1.0.2',
 } as const
 
 export const SUPPORT = {
