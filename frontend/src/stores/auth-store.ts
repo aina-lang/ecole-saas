@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import client, { UNAUTHORIZED_EVENT, isOfflineError } from '../api/client'
-import { setCurrentTenant, getDocument, getAllDocuments } from '../lib/db/pouchdb'
+import { setCurrentTenant, getDocument, createDatabase } from '../lib/db/pouchdb'
 import { stopAllSyncs } from '../lib/db/sync-manager'
 import {
   saveSession,
@@ -109,8 +109,8 @@ const SETUP_STATE_TIMEOUT_MS = 8000
 //
 //   1. le drapeau local            — instantané, hors ligne ;
 //   2. les données répliquées      — instantané, hors ligne : dès que la
-//      synchronisation a tourné une fois, l'année scolaire et les réglages
-//      du tenant sont dans PouchDB, et c'est une preuve suffisante ;
+//      synchronisation a tourné une fois, les réglages posés par l'assistant
+//      — ou des classes et élèves déjà saisis — sont dans PouchDB ;
 //   3. le serveur                  — seulement si les deux premières sont
 //      muettes, c'est-à-dire en pratique à la toute première connexion sur
 //      un poste neuf, qui se fait forcément en ligne.
@@ -150,8 +150,13 @@ async function hasReplicatedSchoolConfig(): Promise<boolean> {
       getDocument('TenantSetting', 'academic_year'),
     ])
     if (periodSystem || academicYear) return true
-    const years = await getAllDocuments('AcademicYear')
-    return years.length > 0
+    // Une année scolaire ne prouve rien : l'inscription en crée une d'office.
+    // Des classes ou des élèves, si : l'établissement est déjà en service.
+    const [classes, students] = await Promise.all([
+      createDatabase('Class').info(),
+      createDatabase('Student').info(),
+    ])
+    return classes.doc_count > 0 || students.doc_count > 0
   } catch {
     // Bases absentes ou illisibles : on laisse la question au serveur.
     return false

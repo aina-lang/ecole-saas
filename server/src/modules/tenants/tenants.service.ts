@@ -29,13 +29,19 @@ export class TenantsService {
   // Accessible à tous les rôles : un enseignant qui installe l'app sur son
   // portable doit aussi éviter l'assistant.
   async getSetupState(tenantId: string) {
-    const [academicYears, settings] = await Promise.all([
-      this.prisma.academicYear.count({ where: { tenantId } }),
+    // Une année scolaire ne prouve rien : registerTenant en crée une d'office
+    // à l'inscription. La compter faisait sauter l'assistant à TOUS les
+    // nouveaux établissements. Font foi : les réglages que pose l'assistant,
+    // ou des classes / élèves déjà saisis (établissements antérieurs aux
+    // réglages répliqués).
+    const [settings, classes, students] = await Promise.all([
       this.prisma.tenantSetting.count({
         where: { tenantId, key: { in: ['academic_year', 'period_system'] } },
       }),
+      this.prisma.class.count({ where: { tenantId } }),
+      this.prisma.student.count({ where: { tenantId } }),
     ]);
-    return { configured: academicYears > 0 || settings > 0 };
+    return { configured: settings > 0 || classes > 0 || students > 0 };
   }
 
   async findById(id: string) {
