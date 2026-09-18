@@ -204,12 +204,20 @@ export class SyncWorkerService implements OnModuleInit {
   }
 
   private async resolveTeacherUser(data: any, tenantId: string): Promise<string> {
-    const email = data.user_email || data.email;
-    if (!email) {
+    const rawEmail = data.user_email || data.email;
+    if (!rawEmail) {
       throw new Error(`Cannot sync Teacher without email (id=${data.id})`);
     }
+    const email = String(rawEmail).trim().toLowerCase();
     let user = await this.prisma.user.findFirst({ where: { email, tenantId } });
     if (!user) {
+      // L'e-mail est unique sur toute la plateforme (common/email.ts) : un
+      // enseignant saisi hors ligne avec l'e-mail d'un compte d'un autre
+      // établissement ne doit pas créer de doublon.
+      const elsewhere = await this.prisma.user.findFirst({ where: { email }, select: { id: true } });
+      if (elsewhere) {
+        throw new Error(`Teacher/${data.id}: l'e-mail ${email} appartient déjà à un compte d'un autre établissement`);
+      }
       const id = crypto.randomUUID();
       user = await this.prisma.user.create({
         data: {
@@ -463,6 +471,15 @@ export class SyncWorkerService implements OnModuleInit {
           this.logger.log(`[sync-worker] User/${change.id}: e-mail ${email} déjà porté par ${dup.id} — compte existant mis à jour, pas de doublon`);
           this.retryCounts.delete(`${entity}/${change.id}`);
           return;
+        }
+        // Même e-mail dans un AUTRE établissement : la connexion se fait par
+        // e-mail seul, un doublon rendrait l'un des deux comptes injoignable.
+        const elsewhere = await this.prisma.user.findFirst({
+          where: { email, NOT: { tenantId } },
+          select: { id: true },
+        });
+        if (elsewhere) {
+          throw new Error(`User/${change.id}: l'e-mail ${email} appartient déjà à un compte d'un autre établissement`);
         }
         clean.email = email;
       }

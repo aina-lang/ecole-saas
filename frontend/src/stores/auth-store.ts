@@ -53,6 +53,12 @@ interface AuthState {
   onboardingCompleted: boolean
   hydrated: boolean
   lockedSession: LockedSession | null
+  /** Ce poste est déjà rattaché à un établissement : la création d'un autre
+   *  n'y est plus proposée (un seul essai gratuit par ordinateur). */
+  deviceLinked: boolean
+  /** Écran de verrouillage : laisse un collègue se connecter avec son propre
+   *  compte, sans toucher à la session locale. */
+  forgetLockedSession: () => void
   login: (email: string, password: string) => Promise<void>
   register: (payload: RegisterPayload) => Promise<void>
   logout: () => void
@@ -164,6 +170,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onboardingCompleted: false,
   hydrated: false,
   lockedSession: null,
+  deviceLinked: false,
 
   // Volontairement, une session locale trouvée au démarrage NE reconnecte PAS
   // automatiquement l'utilisateur : sur un poste partagé entre collègues, rouvrir
@@ -181,6 +188,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           lastName: session.lastName,
           tenantId: session.tenantId,
         },
+        deviceLinked: true,
         hydrated: true,
       })
     } else {
@@ -306,6 +314,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       refreshToken: null,
       tenantId: null,
       isAuthenticated: false,
+      deviceLinked: true,
       lockedSession: current
         ? { email: current.email, firstName: current.firstName, lastName: current.lastName, tenantId: current.tenantId }
         : get().lockedSession,
@@ -314,10 +323,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async (payload: RegisterPayload) => {
+    // Empreinte de la machine : le serveur n'ouvre qu'un essai gratuit par
+    // ordinateur, et refuse une création sans elle.
+    const deviceId = await window.api?.device?.id().catch(() => undefined)
     await client.post('/auth/register', {
       ...payload,
-      adminEmail: payload.adminEmail.trim().toLowerCase()
+      adminEmail: payload.adminEmail.trim().toLowerCase(),
+      deviceId,
     })
+  },
+
+  forgetLockedSession: () => {
+    // La session locale (empreinte du mot de passe, déverrouillage hors
+    // ligne) est conservée : on ne fait que libérer l'écran de connexion.
+    set({ lockedSession: null, deviceLinked: true })
   },
 
   refreshAuth: async () => {

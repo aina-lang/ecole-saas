@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '../lib/db/token-cache'
 import { learnServerTime } from '../lib/trusted-clock'
+import { hideServerAddress } from '../lib/redact'
 
 // Serveur API : celui déployé sur le VPS (pm2 « ecole-api », redéployé à
 // chaque push). Pour viser une API locale en développement :
@@ -75,7 +76,12 @@ client.interceptors.request.use(
 
 export const UNAUTHORIZED_EVENT = 'auth:unauthorized'
 
-export function extractErrorMessage(
+/** Message d'erreur affichable — jamais d'adresse de serveur dedans. */
+export function extractErrorMessage(error: unknown, fallback = 'Une erreur est survenue'): string {
+  return hideServerAddress(rawErrorMessage(error, fallback))
+}
+
+function rawErrorMessage(
   error: unknown,
   fallback = 'Une erreur est survenue'
 ): string {

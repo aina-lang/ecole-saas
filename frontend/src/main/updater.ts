@@ -60,7 +60,12 @@ function humanize(error: unknown): string {
   if (/sha512|checksum|signature/i.test(raw)) {
     return "Le fichier téléchargé est corrompu ou n'a pas pu être vérifié. Réessayez plus tard."
   }
+  // Dernier recours : le message brut, mais jamais l'adresse du dépôt de
+  // mises à jour qu'electron-updater y glisse volontiers. (Le processus
+  // principal ne peut pas importer lib/redact.ts, hors de son tsconfig.)
   return raw
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>)]+/gi, 'le serveur')
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?\b/g, 'le serveur')
 }
 
 // Contextes où electron-updater ne peut rien faire d'utile. On le détecte une

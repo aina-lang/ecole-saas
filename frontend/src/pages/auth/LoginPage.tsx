@@ -31,6 +31,8 @@ export function LoginPage() {
   const login = useAuthStore((s) => s.login)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const lockedSession = useAuthStore((s) => s.lockedSession)
+  const deviceLinked = useAuthStore((s) => s.deviceLinked)
+  const forgetLockedSession = useAuthStore((s) => s.forgetLockedSession)
   const [error, setError] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
 
@@ -87,13 +89,25 @@ export function LoginPage() {
           : 'Connectez-vous à votre espace de gestion scolaire.'
       }
       footer={
+        // Sur un poste partagé, « Ce n'est pas vous ? » mène à la connexion
+        // d'un collègue du même établissement — plus à la création d'un autre
+        // établissement : un seul par ordinateur.
         lockedSession ? (
           <>
             Ce n'est pas vous ?{' '}
-            <Link to="/register" className="font-medium text-primary hover:underline">
-              Créer un autre établissement
-            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                form.reset({ email: '', password: '' })
+                forgetLockedSession()
+              }}
+              className="font-medium text-primary hover:underline"
+            >
+              Se connecter avec un autre compte
+            </button>
           </>
+        ) : deviceLinked ? (
+          <>Un seul établissement par ordinateur — pour en ouvrir un autre, contactez-nous.</>
         ) : (
           <>
             Nouvel établissement ?{' '}

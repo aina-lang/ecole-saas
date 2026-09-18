@@ -25,6 +25,24 @@ export class AuthService {
       throw new ConflictException('Cet email est déjà utilisé');
     }
 
+    // Un seul établissement — donc un seul essai gratuit — par ordinateur.
+    // L'empreinte vient de l'identifiant machine de l'OS : réinstaller
+    // l'application ou effacer ses données ne la change pas.
+    if (!dto.deviceId) {
+      throw new BadRequestException(
+        'Mettez à jour Sekoliko depuis le site officiel pour créer un établissement.',
+      );
+    }
+    const deviceTaken = await this.prisma.tenant.findUnique({
+      where: { registrationDeviceId: dto.deviceId },
+      select: { id: true },
+    });
+    if (deviceTaken) {
+      throw new ConflictException(
+        'Cet ordinateur est déjà rattaché à un établissement. Connectez-vous avec votre compte, ou contactez-nous pour en ouvrir un autre.',
+      );
+    }
+
     const passwordHash = await bcrypt.hash(dto.adminPassword, 12);
 
     // Essai gratuit de 14 jours avec les limites du plan STARTER — pas
@@ -41,6 +59,7 @@ export class AuthService {
           plan: 'STARTER',
           status: 'TRIAL',
           trialEndsAt,
+          registrationDeviceId: dto.deviceId,
           maxStudents: 200,
           maxTeachers: 30,
           maxStorageMb: 1000,

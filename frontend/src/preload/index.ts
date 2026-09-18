@@ -48,6 +48,9 @@ const api = {
     saveFile: (buffer: ArrayBuffer, defaultName: string, filterName: string, extension: string) =>
       ipcRenderer.invoke('documents:save-file', { buffer, defaultName, filterName, extension }),
   },
+  device: {
+    id: () => ipcRenderer.invoke('device:id'),
+  },
   updates: {
     getState: () => ipcRenderer.invoke('updates:get-state'),
     check: () => ipcRenderer.invoke('updates:check'),

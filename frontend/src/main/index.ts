@@ -14,6 +14,7 @@ import {
   downloadUpdate,
   installUpdate,
 } from './updater'
+import { getDeviceId } from './device'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -316,6 +317,10 @@ function setupIPC() {
   // Mise à jour automatique. Le renderer peut se monter après l'annonce d'une
   // mise à jour : `updates:get-state` lui donne l'état courant, puis il suit
   // les changements via l'événement `updates:state`.
+  // Empreinte de la machine, exigée par le serveur à la création d'un
+  // établissement (un seul essai gratuit par ordinateur).
+  ipcMain.handle('device:id', async () => getDeviceId())
+
   ipcMain.handle('updates:get-state', async () => getUpdateState())
   ipcMain.handle('updates:check', async () => checkForUpdates(true))
   ipcMain.handle('updates:download', async () => downloadUpdate())

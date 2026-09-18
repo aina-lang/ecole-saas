@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { assertEmailAvailable, normalizeEmail } from '../../common/email';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -86,10 +87,10 @@ export class UsersService {
 
   async create(tenantId: string, dto: CreateUserDto) {
     if (dto.email) {
-      const existing = await this.prisma.user.findFirst({
-        where: { tenantId, email: dto.email },
-      });
-      if (existing) throw new ConflictException('Cet email existe déjà');
+      // Vérifié sur toute la plateforme, pas seulement dans l'établissement
+      // (voir common/email.ts).
+      dto.email = normalizeEmail(dto.email);
+      await assertEmailAvailable(this.prisma, dto.email);
     }
 
     const phones = this.normalizePhones(dto.phones);
@@ -186,7 +187,10 @@ export class UsersService {
     const data: any = {};
     if (dto.firstName) data.firstName = dto.firstName;
     if (dto.lastName) data.lastName = dto.lastName;
-    if (dto.email) data.email = dto.email;
+    if (dto.email) {
+      data.email = normalizeEmail(dto.email);
+      await assertEmailAvailable(this.prisma, data.email, id);
+    }
     if (dto.role) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.photoUrl !== undefined) data.photoUrl = dto.photoUrl;

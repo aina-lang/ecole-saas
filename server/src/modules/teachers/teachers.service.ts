@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { assertEmailAvailable, normalizeEmail } from '../../common/email';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -68,10 +69,10 @@ export class TeachersService {
 
   async create(tenantId: string, dto: CreateTeacherDto, userId?: string) {
     if (dto.email) {
-      const existing = await this.prisma.user.findFirst({
-        where: { tenantId, email: dto.email },
-      });
-      if (existing) throw new ConflictException('Cet email existe déjà');
+      // Vérifié sur toute la plateforme, pas seulement dans l'établissement
+      // (voir common/email.ts).
+      dto.email = normalizeEmail(dto.email);
+      await assertEmailAvailable(this.prisma, dto.email);
     }
 
     const phones = this.normalizePhones(dto.phones);
@@ -155,7 +156,10 @@ export class TeachersService {
       const data: any = {};
       if (dto.firstName) data.firstName = dto.firstName;
       if (dto.lastName) data.lastName = dto.lastName;
-      if (dto.email) data.email = dto.email;
+      if (dto.email) {
+        data.email = normalizeEmail(dto.email);
+        await assertEmailAvailable(this.prisma, data.email, teacher.userId);
+      }
       if (dto.phones !== undefined) {
         const phones = this.normalizePhones(dto.phones);
         data.phones = {

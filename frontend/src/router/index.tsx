@@ -66,12 +66,24 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Un seul établissement par ordinateur : une fois ce poste rattaché, la
+// création n'est plus accessible, même en tapant l'adresse de la page. Le
+// serveur applique la même règle (auth.service.registerTenant), y compris
+// après une réinstallation qui aurait effacé cette information locale.
+function RegisterRoute() {
+  const hydrated = useAuthStore((s) => s.hydrated)
+  const deviceLinked = useAuthStore((s) => s.deviceLinked || !!s.lockedSession)
+  if (!hydrated) return null
+  if (deviceLinked) return <Navigate to="/login" replace />
+  return <RegisterPage />
+}
+
 export function AppRouter() {
   return (
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register" element={<RegisterRoute />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />

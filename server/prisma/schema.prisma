@@ -28,6 +28,9 @@ model Tenant {
   couchDbPasswordEnc String?
   /// Code de la licence active (cf. model License). Nul pendant l'essai.
   licenseKey           String?
+  /// Empreinte SHA-256 de l'identifiant de la machine qui a créé l'établissement.
+  /// Unique : un seul essai gratuit par ordinateur (auth.service.registerTenant).
+  registrationDeviceId String?             @unique
   currentPeriodEnd     DateTime?
   academicYears      AcademicYear[]
   attendances        Attendance[]
@@ -128,7 +131,7 @@ model Holiday {
 model User {
   id               String             @id @default(cuid())
   tenantId         String
-  email            String
+  email            String    @unique
   passwordHash     String
   firstName        String?
   lastName         String

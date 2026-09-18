@@ -64,6 +64,10 @@ interface Api {
     close: () => void
     isMaximized: () => Promise<boolean>
   }
+  device: {
+    /** Empreinte SHA-256 de l'identifiant de la machine. */
+    id: () => Promise<string>
+  }
   updates: {
     getState: () => Promise<UpdateState>
     check: () => Promise<UpdateState>

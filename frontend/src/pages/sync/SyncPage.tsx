@@ -5,6 +5,7 @@ import { fr } from 'date-fns/locale'
 import { RefreshCw, Wifi, WifiOff, CloudUpload, AlertTriangle, CheckCircle2, Clock, Database, Info } from 'lucide-react'
 import { getSyncStatus, performSync } from '@/lib/db/sync-manager'
 import { getCouchDBInfo } from '@/lib/db/pouchdb'
+import { hideServerAddress } from '@/lib/redact'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -147,7 +148,7 @@ export function SyncPage() {
                             {st === 'ok' ? 'À jour' : st === 'pending' ? `${p.count} en attente` : st === 'inactive' ? 'Réplication inactive' : 'Erreur'}
                           </Badge>
                         </div>
-                        {p.error && <p className="mt-0.5 break-words text-xs text-red-600 dark:text-red-400" title={p.error}>{p.error}</p>}
+                        {p.error && <p className="mt-0.5 break-words text-xs text-red-600 dark:text-red-400" title={hideServerAddress(p.error)}>{hideServerAddress(p.error)}</p>}
                       </div>
                     </li>
                   )
@@ -177,8 +178,12 @@ export function SyncPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               {(() => { const i = getCouchDBInfo(); return (
-                <p className={cn('rounded-md border px-2.5 py-1.5 font-mono text-xs', i.user ? 'bg-muted/40' : 'border-red-200 bg-red-50 text-red-700')}>
-                  {i.user ? `${i.url} · ${i.user}` : `Identifiants non reçus${i.error ? ` (${i.error})` : ''} — aucune réplication possible`}
+                // Ni l'adresse du serveur ni l'identifiant CouchDB : l'infrastructure
+                // n'a pas à apparaître dans l'application.
+                <p className={cn('rounded-md border px-2.5 py-1.5 text-xs', i.user ? 'bg-muted/40' : 'border-red-200 bg-red-50 text-red-700')}>
+                  {i.user
+                    ? 'Connecté au service de synchronisation.'
+                    : `Service de synchronisation injoignable${i.error ? ` (${hideServerAddress(i.error)})` : ''} — aucune réplication possible.`}
                 </p>
               ) })()}
               <p>Toutes vos saisies sont enregistrées <strong className="text-foreground">sur ce poste</strong> d'abord — l'application fonctionne sans Internet.</p>
